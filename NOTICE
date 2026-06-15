@@ -1,0 +1,12 @@
+KB Factory
+Copyright 2026 KB Factory contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+KB Factory is an original, clean-room implementation built on the Python
+standard library and SQLite. It contains no third-party source code.
+
+Design influences (ideas adapted and cited, not code copied) are credited in
+ACKNOWLEDGMENTS.md — notably Andrej Karpathy's LLM-wiki / context-engineering
+ideas and Carlos Perez's (@IntuitMachine) harness-engineering and memory-layer
+ideas.

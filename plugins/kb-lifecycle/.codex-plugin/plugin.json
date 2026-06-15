@@ -1,0 +1,34 @@
+{
+  "name": "kb-lifecycle",
+  "version": "0.2.1",
+  "description": "Distribute KB Factory memory lifecycle and wiki maintenance across Codex workspaces.",
+  "author": {
+    "name": "KB Factory"
+  },
+  "homepage": "https://github.com/regismvargas/kb-factory/tree/main/plugins/kb-lifecycle",
+  "repository": "https://github.com/regismvargas/kb-factory",
+  "license": "MIT",
+  "keywords": [
+    "knowledge-base",
+    "wiki",
+    "memory"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "KB Lifecycle",
+    "shortDescription": "Knowledge-base workflow for Codex",
+    "longDescription": "Install a reusable skill that keeps Codex sessions grounded in the workspace .kb runtime, derived wiki, and lifecycle rules.",
+    "developerName": "KB Factory",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use KB Lifecycle to ingest a new source into my project KB.",
+      "Use KB Lifecycle to answer from the KB and file a durable analysis.",
+      "Use KB Lifecycle to run a maintenance pass on NOW, HOT, and the wiki."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

@@ -1,0 +1,8 @@
+#!/bin/sh
+# KB Factory pre-commit gate.
+# Blocks a commit if the workbench KB is not in a shippable, trustworthy state
+# (db integrity, zero source hash drift, zero wiki-lint issues, runtime parity).
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Bypass for one commit:  git commit --no-verify
+exec python tools/gate.py

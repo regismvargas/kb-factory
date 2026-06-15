@@ -1,0 +1,18 @@
+{
+  "name": "session-gate",
+  "version": "0.2.4",
+  "description": "Thin Cowork session-boundary wrapper for KB-lifecycle and a companion workflow plugin. Operational workaround for missing automatic plugin hooks.",
+  "author": {
+    "name": "KB Factory"
+  },
+  "homepage": "https://github.com/regismvargas/kb-factory/tree/main/plugins/session-gate",
+  "repository": "https://github.com/regismvargas/kb-factory",
+  "license": "MIT",
+  "keywords": [
+    "cowork",
+    "session",
+    "kb",
+    "wrapper"
+  ],
+  "skills": "./skills/"
+}

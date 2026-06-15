@@ -1,0 +1,59 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kb-factory-tools",
+  "version": "0.3.1",
+  "description": "KB Factory plugins for local-first, append-only knowledge-base workflows. Distributes kb-lifecycle (KB runtime + wiki maintenance), session-gate (session boundary wrapper), and kb-wiki-vnext (thin-memory harness) for Claude Code and Claude Cowork.",
+  "owner": {
+    "name": "KB Factory"
+  },
+  "plugins": [
+    {
+      "name": "kb-lifecycle",
+      "source": "./plugins/kb-lifecycle",
+      "description": "KB lifecycle and wiki maintenance plugin. Use when a project has a `.kb/` directory and needs session bootstrap, source ingestion, or wiki refresh.",
+      "version": "0.2.0",
+      "author": {
+        "name": "KB Factory"
+      },
+      "category": "Productivity",
+      "tags": [
+        "knowledge-base",
+        "wiki",
+        "memory",
+        "claude-code"
+      ]
+    },
+    {
+      "name": "session-gate",
+      "source": "./plugins/session-gate",
+      "description": "Thin session-boundary wrapper for Claude Cowork workspaces. Operational workaround for Cowork's missing automatic plugin hooks; provides explicit /session-start and /session-end commands that route to KB-lifecycle canonical surfaces.",
+      "version": "0.2.1",
+      "author": {
+        "name": "KB Factory"
+      },
+      "category": "Productivity",
+      "tags": [
+        "cowork",
+        "session",
+        "kb",
+        "wrapper"
+      ]
+    },
+    {
+      "name": "kb-wiki-vnext",
+      "source": "./plugins/kb-wiki-vnext",
+      "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Starts with session-start, loads only .kb-next/memory/NOW.md by default, and keeps .kb canonical.",
+      "version": "0.1.0",
+      "author": {
+        "name": "KB Factory"
+      },
+      "category": "Productivity",
+      "tags": [
+        "knowledge-base",
+        "wiki",
+        "memory",
+        "semantic-hygiene"
+      ]
+    }
+  ]
+}

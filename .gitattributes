@@ -1,0 +1,9 @@
+# Normalize line endings: store AND check out text as LF on every platform.
+# (Tests assert files begin with "---\n"; a CRLF checkout on Windows would break
+# them, and the pre-commit hook must be LF to run under /bin/sh.)
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gif binary
+*.zip binary
+*.db  binary

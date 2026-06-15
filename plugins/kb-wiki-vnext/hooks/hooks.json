@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo KB/Wiki vNext: use the vnext-session-start plugin command when exposed; in shell run python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json, then read only .kb-next/memory/NOW.md by default."
+          }
+        ]
+      }
+    ]
+  }
+}

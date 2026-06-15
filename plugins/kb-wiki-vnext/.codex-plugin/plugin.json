@@ -1,0 +1,38 @@
+{
+  "name": "kb-wiki-vnext",
+  "version": "0.1.3",
+  "description": "KB/Wiki vNext thin-memory harness for Codex.",
+  "author": {
+    "name": "KB Factory"
+  },
+  "homepage": "https://github.com/regismvargas/kb-factory/tree/main/plugins/kb-wiki-vnext",
+  "repository": "https://github.com/regismvargas/kb-factory",
+  "license": "MIT",
+  "keywords": [
+    "knowledge-base",
+    "wiki",
+    "vnext",
+    "memory",
+    "semantic-hygiene"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "KB/Wiki vNext",
+    "shortDescription": "Thin session memory and governed .kb-next flows for Codex.",
+    "longDescription": "Guides Codex through KB/Wiki vNext session-start, targeted lookup, semantic hygiene, governed proposals, wiki draft review, and fallback without loading the full KB by default.",
+    "developerName": "KB Factory",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Use the KB/Wiki vNext vnext-session-start plugin command when it is exposed; in PowerShell/PATH shells run python core\\versions\\kb-wiki-vnext\\runtime\\kb_next.py session-start --json instead.",
+      "Use KB/Wiki vNext existing/new project setup commands for deployment.",
+      "Use KB/Wiki vNext targeted lookup before opening broad memory.",
+      "Run read-only python .kb/kb.py hygiene-audit --json before HOT overflow proposal flows.",
+      "Review a .kb-next proposal without mutating .kb directly."
+    ],
+    "brandColor": "#155E75"
+  }
+}
