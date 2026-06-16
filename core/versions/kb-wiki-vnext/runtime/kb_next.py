@@ -269,9 +269,20 @@ def proposal_allowed_dirs(root: Path) -> tuple[Path, ...]:
     )
 
 
+def path_within(child: Path, parent: Path) -> bool:
+    # `Path.is_relative_to` is Python 3.9+; this keeps the runtime 3.8-compatible.
+    if child == parent:
+        return True
+    try:
+        child.relative_to(parent)
+        return True
+    except ValueError:
+        return False
+
+
 def is_inside_any(path: Path, roots: tuple[Path, ...]) -> bool:
     resolved = path.resolve()
-    return any(resolved == root or resolved.is_relative_to(root) for root in roots)
+    return any(path_within(resolved, root) for root in roots)
 
 
 def parse_json_payload(raw: str | None, label: str) -> dict[str, Any] | None:
@@ -1125,7 +1136,7 @@ def reset_derived_vault(root: Path) -> Path:
     vault = obsidian_vault_root(root)
     adapter_resolved = adapter.resolve()
     vault_resolved = vault.resolve() if vault.exists() else vault.absolute().resolve()
-    if not (vault_resolved == adapter_resolved or vault_resolved.is_relative_to(adapter_resolved)):
+    if not path_within(vault_resolved, adapter_resolved):
         raise RuntimeError(f"refusing to replace output outside adapter root: {vault}")
     if vault.exists():
         if path_is_link_or_junction(vault):

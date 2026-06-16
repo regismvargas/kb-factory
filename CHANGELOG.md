@@ -36,8 +36,12 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   (kb-lifecycle 0.2.1, session-gate 0.2.4, kb-wiki-vnext 0.1.3).
 - Made the test suite stdlib-only again: a vNext runtime test parsed
   generated-page frontmatter with PyYAML, which broke CI in `pytest`-only
-  environments. It now parses with the standard library, so CI passes with no
+  environments. It now parses with the standard library, so the suite needs no
   third-party test dependency.
+- Restored real **Python 3.8** support: the vNext runtime used
+  `Path.is_relative_to` (added in 3.9), so the documented "3.8+" claim failed on
+  3.8. Replaced it with a 3.8-safe containment check; the full CI matrix
+  (Linux/macOS/Windows × Python 3.8/3.11/3.13) now passes.
 
 ## [0.1.0] - 2026-06-16
 
