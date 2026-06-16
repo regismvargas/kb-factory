@@ -4,9 +4,35 @@ This page covers the common setup and usage problems you'll hit with KB Factory,
 the two built-in diagnostics (`doctor` and `wiki-lint`), the optional
 cleanliness gate, and an honest FAQ about what the tool does and does *not* do.
 
-The entry point for every command is `python .kb/kb.py`. See
-[commands](commands.md) for the full surface and [comparison](comparison.md) for
-how KB Factory compares to other memory systems.
+The entry point for the CLI is `python .kb/kb.py`. If you use KB Factory through
+a plugin in Claude Code / Cowork, see the **chat session** issues just below and
+[agent-sessions.md](agent-sessions.md). See [commands](commands.md) for the full
+surface and [comparison](comparison.md) for how KB Factory compares.
+
+---
+
+## Using KB Factory in a chat session
+
+**The slash menu shows only generic session commands, not the KB ones.** The
+plugin isn't loaded for this workspace. Confirm it's installed (Claude Code:
+`claude plugin list`; Cowork: **Customize → Plugins**), then reopen the workspace
+so the command/skill index refreshes — see [installation.md](installation.md).
+
+**Nothing happens at session start.** In **Cowork**, session hooks don't fire
+automatically — start explicitly with `/gate-session-start` (the `session-gate`
+plugin) or say "start a KB session" to trigger the skill. In **Claude Code**, the
+hook only injects context when the workspace has a `.kb/` directory.
+
+**The skill didn't trigger from my wording.** Skill triggering is probabilistic
+(especially in Cowork). Invoke the command explicitly (`/vnext-session-start`,
+`/gate-session-start`) or name the action ("ingest this source", "answer from the
+KB").
+
+**Can I mix the CLI and the plugin?** Yes — both read and write the same `.kb/`.
+A record filed in chat is visible from `python .kb/kb.py search …` and
+vice-versa.
+
+See [agent-sessions.md](agent-sessions.md) and [plugins.md](plugins.md).
 
 ---
 

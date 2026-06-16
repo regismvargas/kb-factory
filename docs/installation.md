@@ -84,14 +84,24 @@ You can stop here. The plugins below just automate this step.
 > you want every superseded decision kept and source-attributed. See
 > [comparison.md](comparison.md).
 
-## Part 2 — Install the agent plugin (optional)
+## Part 2 — Install the agent plugins (optional)
 
-The plugin doesn't store anything itself. It carries a skill that tells the
-agent to run `lifecycle session-start`, read `NOW.md`, and use the core
-commands — so the canonical store stays the `.kb/` you created in Part 1.
+KB Factory ships **three plugins** — `kb-lifecycle` (the everyday workflow),
+`kb-wiki-vnext` (thin-session model + governed proposals), and `session-gate`
+(reliable session boundaries for Cowork). For what each does and which to
+install, see **[plugins.md](plugins.md)**; for how a session flows once
+installed, see **[agent-sessions.md](agent-sessions.md)**. Most users start with
+`kb-lifecycle`.
 
-> The plugin is a convenience. The `.kb/` directory remains the single source
-> of truth; the plugin never becomes a second memory.
+A plugin doesn't store anything itself. It carries skills/commands that tell the
+agent to run `lifecycle session-start`, read `NOW.md`, and use the core commands
+— so the canonical store stays the `.kb/` you created in Part 1.
+
+> Plugins are a convenience. The `.kb/` directory remains the single source of
+> truth; a plugin never becomes a second memory.
+>
+> **After install:** type `/` in the chat to see the plugin's slash commands, and
+> ask the agent to "start a KB session" to trigger its skill.
 
 ### Claude Code
 
@@ -137,10 +147,25 @@ Cowork installs plugins from a folder or marketplace through the UI:
 agent to start a KB session reads only `.kb/memory/NOW.md` by default.
 
 > **Session boundaries in Cowork.** Cowork doesn't run automatic session-start
-> hooks the way Claude Code can. If you want explicit start/end prompts, this
-> repo also ships a small `session-gate` plugin that provides `/session-start`
-> and `/session-end` commands routing to the same `.kb/` surfaces. Treat it as
-> an explicit command, not an automatic trigger.
+> hooks the way Claude Code can. If you want explicit start/end prompts, install
+> the `session-gate` plugin: it provides `/gate-session-start` and
+> `/gate-session-end`, which detect and route to whichever KB plugins are present
+> (`.kb/` and/or `.kb-next/`). Treat it as an explicit command, not an automatic
+> trigger. See [plugins.md](plugins.md).
+
+### KB/Wiki vNext (optional)
+
+To use the thin-session model and the project setup/migration commands, install
+`kb-wiki-vnext` the same way as `kb-lifecycle`:
+
+```bash
+claude plugin install kb-wiki-vnext@kb-factory-tools   # Claude Code
+```
+
+(or upload `plugins/kb-wiki-vnext` via **Customize → Plugins** in Cowork). It
+adds 12 slash commands (`/vnext-session-start`, `/new-project-wizard`,
+`/existing-project-*`, …) and keeps `.kb/` canonical while using `.kb-next/` for
+proposals. See [plugins.md](plugins.md).
 
 ## Troubleshooting
 

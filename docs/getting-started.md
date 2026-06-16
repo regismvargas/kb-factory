@@ -28,6 +28,13 @@ If both print successfully, you're ready.
 > earns its keep when you want every superseded decision kept as a linked,
 > source-attributed record. See the [comparison](comparison.md) to decide.
 
+> **Prefer to use it inside Claude Code or Cowork?** Most people drive KB Factory
+> from an agent conversation — you install a [plugin](plugins.md) and just ask
+> the agent to record and recall things; it runs the commands below for you. If
+> that's you, skim this page for the model, then jump to
+> [Using KB Factory in a session](agent-sessions.md). The steps below set up the
+> `.kb/` the plugins use, so they apply either way.
+
 ## 1. Install the scaffold into your project
 
 KB Factory lives in a single `.kb/` folder. Copy the template from this repo

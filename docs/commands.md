@@ -43,6 +43,31 @@ tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
 ---
 
+## Slash commands (in a chat session)
+
+If you drive KB Factory through a [plugin](plugins.md) in Claude Code or Cowork,
+you use **slash commands** (and an auto-triggering skill) instead of typing the
+CLI — but they run exactly the CLI verbs documented on this page. See
+[agent-sessions.md](agent-sessions.md) for the workflow.
+
+- **kb-lifecycle** — no slash commands; its `kb-wiki-maintainer` skill auto-runs
+  session-start, `ingest`, `create`/`file`, `search`, and `wiki-sync` when you
+  ask in plain language.
+- **kb-wiki-vnext** — 12 commands:
+
+  | Command(s) | Does |
+  |---|---|
+  | `/vnext-session-start`, `/vnext-session-end` | start a thin session / close it |
+  | `/new-project-wizard`, `/new-project-init-kb-alone`, `/new-project-init-kb-wiki`, `/new-project-verify-install` | bootstrap a new project |
+  | `/existing-project-diagnose`, `/existing-project-activate-vnext`, `/existing-project-configure-vnext`, `/existing-project-verify-install`, `/existing-project-upgrade-vnext`, `/existing-project-rollback-vnext` | set up / migrate an existing project |
+
+- **session-gate** — `/gate-session-start`, `/gate-session-end` (Cowork session
+  boundaries; routes to whichever KB plugins are present).
+
+Full per-plugin detail and when to use each: [plugins.md](plugins.md).
+
+---
+
 ## Records
 
 The typed knowledge store. This is the canonical group.

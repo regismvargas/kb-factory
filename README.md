@@ -97,14 +97,21 @@ changes only routing metadata (tier/tags); when *meaning* changes you
 
 ## Documentation
 
+**Two ways to use it:** in a Claude Code / Cowork chat (install a
+[plugin](docs/plugins.md)) or via the CLI. On an agent, start with
+[agent-sessions](docs/agent-sessions.md) + [plugins](docs/plugins.md); from a
+terminal, start with [getting-started](docs/getting-started.md).
+
 **Start here**
 
 | Doc | What it covers |
 |---|---|
 | [docs/getting-started.md](docs/getting-started.md) | Install and create your first KB record in under 5 minutes |
+| [docs/agent-sessions.md](docs/agent-sessions.md) | Using KB Factory inside a Claude Code / Cowork conversation |
+| [docs/plugins.md](docs/plugins.md) | The three plugins: what each does, differences, and combining them |
 | [docs/installation.md](docs/installation.md) | Scaffold + plugin installation (Claude Code / Cowork) |
 | [docs/concepts.md](docs/concepts.md) | The model: typed records, tiers, supersession, provenance, glossary |
-| [docs/commands.md](docs/commands.md) | Authoritative CLI command reference |
+| [docs/commands.md](docs/commands.md) | Slash commands + the authoritative CLI reference |
 | [docs/use-cases.md](docs/use-cases.md) | When KB Factory earns its keep — and when not to use it |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Diagnostics, common problems, and FAQ |
 

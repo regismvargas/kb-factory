@@ -7,6 +7,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Added
+- Conversational/chat usage docs: `docs/agent-sessions.md` (using KB Factory in a
+  Claude Code / Cowork session) and `docs/plugins.md` (the three plugins — what
+  each does, their differences, and how to combine them).
+- Slash-command coverage in `docs/commands.md`; a chat-first track in
+  `docs/getting-started.md`; `kb-wiki-vnext` install + "what becomes available"
+  in `docs/installation.md`; a chat/plugin FAQ in `docs/troubleshooting.md`.
+
 ## [0.1.0] - 2026-06-16
 
 First public release of KB Factory — the initial open-source extraction from a
