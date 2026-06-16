@@ -11,7 +11,7 @@
       "name": "kb-lifecycle",
       "source": "./plugins/kb-lifecycle",
       "description": "KB lifecycle and wiki maintenance plugin. Use when a project has a `.kb/` directory and needs session bootstrap, source ingestion, or wiki refresh. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "author": {
         "name": "KB Factory"
       },
@@ -27,7 +27,7 @@
       "name": "session-gate",
       "source": "./plugins/session-gate",
       "description": "Thin session-boundary wrapper for Claude Cowork workspaces. Operational workaround for Cowork's missing automatic plugin hooks; provides explicit /gate-session-start and /gate-session-end commands that route to KB-lifecycle canonical surfaces. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.2.1",
+      "version": "0.2.4",
       "author": {
         "name": "KB Factory"
       },
@@ -43,7 +43,7 @@
       "name": "kb-wiki-vnext",
       "source": "./plugins/kb-wiki-vnext",
       "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Starts with /vnext-session-start, loads only .kb-next/memory/NOW.md by default, and keeps .kb canonical. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.1.0",
+      "version": "0.1.3",
       "author": {
         "name": "KB Factory"
       },

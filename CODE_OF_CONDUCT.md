@@ -35,12 +35,11 @@ Maintainers are responsible for clarifying and enforcing these standards and
 will take appropriate, fair corrective action in response to behavior they deem
 inappropriate.
 
-Instances of unacceptable behavior may be reported confidentially to the project
-maintainers. Reports will be reviewed and investigated promptly and fairly, and
-the privacy and security of the reporter will be respected.
-
-<!-- Maintainers: before public release, set a real reporting contact here
-     (a dedicated email or a private reporting form) so this policy is actionable. -->
+Instances of unacceptable behavior may be reported **privately to the project
+maintainer, [@regismvargas](https://github.com/regismvargas), through GitHub**
+(for example, via the contact details on their GitHub profile). Reports will be
+reviewed and investigated promptly and fairly, and the privacy and security of
+the reporter will be respected.
 
 ## Attribution
 

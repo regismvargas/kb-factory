@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,11 +34,60 @@ def file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _decode_frontmatter_scalar(token: str):
+    token = token.strip()
+    if token.startswith('"'):
+        return json.loads(token)
+    if token == "true":
+        return True
+    if token == "false":
+        return False
+    if token == "null":
+        return None
+    try:
+        return int(token)
+    except ValueError:
+        pass
+    try:
+        return float(token)
+    except ValueError:
+        return token
+
+
 def markdown_frontmatter(path: Path) -> dict:
+    # Parse the YAML-style frontmatter that kb_next emits (`yaml_frontmatter` and
+    # the simple wiki-draft headers) without a third-party dependency, so the
+    # test suite stays stdlib-only. The writer JSON-quotes every string, so an
+    # unquoted token is only ever true/false/null or a number; block lists are
+    # `key:` followed by `  - item` lines, and empty lists render as `key: []`.
     text = path.read_text(encoding="utf-8")
     assert text.startswith("---\n")
     _start, raw, _body = text.split("---", 2)
-    parsed = yaml.safe_load(raw)
+    parsed: dict = {}
+    current_key = None
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        if line.startswith("  - ") and current_key is not None:
+            parsed.setdefault(current_key, []).append(
+                _decode_frontmatter_scalar(line[4:])
+            )
+            continue
+        if ":" not in line:
+            current_key = None
+            continue
+        key, _, value = line.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if value == "[]":
+            parsed[key] = []
+            current_key = None
+        elif value == "":
+            parsed[key] = []
+            current_key = key
+        else:
+            parsed[key] = _decode_frontmatter_scalar(value)
+            current_key = None
     assert isinstance(parsed, dict)
     return parsed
 

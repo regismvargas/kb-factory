@@ -7,7 +7,7 @@
   },
   "homepage": "https://github.com/regismvargas/kb-factory/tree/main/plugins/session-gate",
   "repository": "https://github.com/regismvargas/kb-factory",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "cowork",
     "session",

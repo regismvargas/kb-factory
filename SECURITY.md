@@ -9,9 +9,6 @@ feature (Security → Advisories) on this repository. If that is unavailable, op
 a minimal public issue asking a maintainer to open a private channel — without
 disclosing details.
 
-<!-- Maintainers: before public release, enable GitHub private vulnerability
-     reporting and/or add a dedicated security contact here. -->
-
 We aim to acknowledge a report within a few business days and to keep you
 informed as we investigate and prepare a fix. Please give us reasonable time to
 remediate before any public disclosure.

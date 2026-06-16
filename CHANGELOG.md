@@ -30,6 +30,14 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 ### Fixed
 - Corrected a stale `session-gate` command name in the marketplace description
   (`/gate-session-start` / `/gate-session-end`, not `/session-start`).
+- Set the plugin manifests' `license` to **Apache-2.0** (matching the project
+  `LICENSE`); they previously declared MIT.
+- Synced the marketplace plugin versions to the canonical plugin manifests
+  (kb-lifecycle 0.2.1, session-gate 0.2.4, kb-wiki-vnext 0.1.3).
+- Made the test suite stdlib-only again: a vNext runtime test parsed
+  generated-page frontmatter with PyYAML, which broke CI in `pytest`-only
+  environments. It now parses with the standard library, so CI passes with no
+  third-party test dependency.
 
 ## [0.1.0] - 2026-06-16
 
