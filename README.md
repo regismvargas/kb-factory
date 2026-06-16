@@ -97,10 +97,13 @@ changes only routing metadata (tier/tags); when *meaning* changes you
 
 ## Documentation
 
-**Two ways to use it:** in a Claude Code / Cowork chat (install a
-[plugin](docs/plugins.md)) or via the CLI. On an agent, start with
-[agent-sessions](docs/agent-sessions.md) + [plugins](docs/plugins.md); from a
-terminal, start with [getting-started](docs/getting-started.md).
+**New to KB Factory? → the [User Guide](docs/guide/index.md).** A friendly,
+task-oriented walkthrough for using it inside a Claude Code / Cowork conversation
+(what to say, how sessions work, which plugins to pick, recipes). The pages below
+are the deeper technical reference.
+
+**Two ways to use it:** in an agent chat (install a [plugin](docs/plugins.md)) or
+via the CLI — both read and write the same `.kb/`.
 
 **Start here**
 

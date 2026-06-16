@@ -14,6 +14,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - Slash-command coverage in `docs/commands.md`; a chat-first track in
   `docs/getting-started.md`; `kb-wiki-vnext` install + "what becomes available"
   in `docs/installation.md`; a chat/plugin FAQ in `docs/troubleshooting.md`.
+- A dedicated end-user **User Guide** under `docs/guide/` (index, what-and-why,
+  install-and-first-session, everyday-use, how-it-works, plugins, recipes,
+  troubleshooting): task-oriented, accessible-by-default, with technical/CLI
+  detail in collapsible blocks; surfaced from the README.
 
 ## [0.1.0] - 2026-06-16
 
