@@ -2,6 +2,12 @@
 
 Cross-tool distribution package for KB Factory memory lifecycle and derived wiki workflows.
 
+> **Using it (start here).** This README is about *packaging and distributing* the
+> plugin. If you just want to *use* KB Factory in a chat, start with the
+> [No-code guide](../../docs/guide/no-code/index.md) (for non-developers) or the
+> [User Guide](../../docs/guide/index.md), and see
+> [Using KB Factory in a session](../../docs/agent-sessions.md).
+
 ## Purpose
 
 This plugin packages a knowledge-base workflow for:

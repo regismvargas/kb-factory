@@ -1,7 +1,7 @@
 {
   "name": "kb-wiki-vnext",
   "version": "0.1.3",
-  "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork.",
+  "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
   "author": {
     "name": "KB Factory"
   },

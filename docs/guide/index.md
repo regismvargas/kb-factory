@@ -9,6 +9,11 @@ You don't need to be a programmer to use it. Most of the time you just **talk to
 your assistant** in plain language — "record this decision", "what did we decide
 about X?", "that changed, update it" — and it handles the rest.
 
+> **Brand new, or not a developer at all?** There's an even gentler, zero-command
+> path: the **[No-code track](no-code/index.md)**. It covers the same ground as
+> this guide but takes it slower and skips the jargon — come back here when you
+> want more depth.
+
 ## Who this guide is for
 
 You'll feel at home here if you want a project where:
@@ -76,6 +81,7 @@ Read top to bottom the first time, or jump to whatever you need:
 
 | Page | What it covers |
 |---|---|
+| [No-code track](no-code/index.md) | The gentlest path — for non-developers who'll only ever chat. Plain words, no commands. |
 | [What and why](what-and-why.md) | What a durable project memory buys you, in plain terms — and when *not* to bother. |
 | [Install and first session](install-and-first-session.md) | Get a plugin running and record your first thing — in Claude Code or in Cowork. |
 | [Everyday use](everyday-use.md) | The day-to-day rhythm: recording, recalling, changing your mind, wrapping up. |

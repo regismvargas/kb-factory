@@ -29,10 +29,13 @@ chat.
 You have two easy paths:
 
 - **Already have a `.kb/`?** Great — skip to [Step 2](#step-2--install-a-plugin).
-- **Starting fresh?** You can let the agent set it up for you in chat (once a
-  plugin is installed): just say **"set up a knowledge base for this project."**
-  If you installed `kb-wiki-vnext`, you can instead run
-  **`/new-project-wizard`**, which walks you through it.
+- **Starting fresh?** The simplest order is to do
+  [Step 2](#step-2--install-a-plugin) **first** (install a plugin), then come back
+  here and just say **"set up a knowledge base for this project."** If you
+  installed `kb-wiki-vnext`, you can instead run **`/new-project-wizard`**, which
+  walks you through it. (Prefer to set it up by hand? The "Under the hood" block
+  below has the one-time steps — and if the agent can't create files in your
+  workspace, that's the fallback.)
 
 <details><summary>Under the hood / for the CLI</summary>
 

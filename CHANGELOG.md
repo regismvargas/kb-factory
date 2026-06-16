@@ -18,6 +18,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   install-and-first-session, everyday-use, how-it-works, plugins, recipes,
   troubleshooting): task-oriented, accessible-by-default, with technical/CLI
   detail in collapsible blocks; surfaced from the README.
+- A **no-code track** for non-developers under `docs/guide/no-code/` (index,
+  what-this-is, first-session, words, when-stuck): a zero-command, Cowork-first
+  walkthrough with confirmation checkpoints, a plain-language glossary, and a
+  non-technical FAQ.
+- User-doc discoverability: a chat-first "start here" callout atop the `README`,
+  a `docs/` landing page (`docs/README.md`) that routes by audience, a
+  "Using it (start here)" block in each of the three plugin READMEs, and a docs
+  pointer added to the marketplace/plugin descriptions.
+
+### Fixed
+- Corrected a stale `session-gate` command name in the marketplace description
+  (`/gate-session-start` / `/gate-session-end`, not `/session-start`).
 
 ## [0.1.0] - 2026-06-16
 

@@ -6,6 +6,13 @@ classic `kb-lifecycle` and `session-gate`.
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
 
+> **Using it (start here).** This README covers packaging and validation. To
+> *use* the plugin in a chat, see the [User Guide](../../docs/guide/index.md) (or
+> the [No-code guide](../../docs/guide/no-code/index.md) if you're not a
+> developer) and [Using KB Factory in a session](../../docs/agent-sessions.md).
+> For what all three plugins do and how they combine, see
+> [the plugins](../../docs/plugins.md).
+
 Prerequisites:
 
 - The target workspace has `.kb-next/` or is explicitly piloting vNext.

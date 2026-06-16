@@ -34,6 +34,9 @@ If both print successfully, you're ready.
 > that's you, skim this page for the model, then jump to
 > [Using KB Factory in a session](agent-sessions.md). The steps below set up the
 > `.kb/` the plugins use, so they apply either way.
+>
+> **Not a developer, and would rather not open a terminal at all?** Start with the
+> [No-code guide](guide/no-code/index.md) — it walks the whole thing by chat.
 
 ## 1. Install the scaffold into your project
 

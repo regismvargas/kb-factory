@@ -4,6 +4,13 @@ Thin session-boundary wrapper for Cowork workspaces that may use KB/Wiki
 vNext, KB-lifecycle, a companion workflow plugin, or a combination of those
 surfaces.
 
+> **Using it (start here).** To *use* KB Factory in a chat, see the
+> [User Guide](../../docs/guide/index.md) (or the
+> [No-code guide](../../docs/guide/no-code/index.md) for non-developers) and
+> [Using KB Factory in a session](../../docs/agent-sessions.md). For how
+> `session-gate` fits with the other plugins, see
+> [the plugins](../../docs/plugins.md).
+
 ## Purpose
 
 This plugin is an operational workaround for Cowork's missing automatic plugin

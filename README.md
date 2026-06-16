@@ -37,6 +37,20 @@ vector database, no API key, works offline, and backs up as a single file.
 See [docs/comparison.md](docs/comparison.md) for an honest, sourced comparison
 against Anthropic's memory tools and the OSS field.
 
+## Two ways to use it — start here
+
+**Most people install a plugin and just talk to the assistant** in Claude Code or
+Cowork — no terminal required:
+
+- **New here, or not a developer?** → the
+  **[No-code guide](docs/guide/no-code/index.md)** — a gentle, zero-command
+  walkthrough.
+- **Comfortable in a chat?** → the **[User Guide](docs/guide/index.md)** — the
+  full, task-oriented walkthrough (what to say, sessions, plugins, recipes).
+
+Prefer a terminal? The 60-second CLI quickstart is right below. Both paths read
+and write the same `.kb/`.
+
 ## Quickstart (≈60 seconds)
 
 The core is a single stdlib-only CLI. Add a knowledge base to any project by
@@ -97,9 +111,12 @@ changes only routing metadata (tier/tags); when *meaning* changes you
 
 ## Documentation
 
-**New to KB Factory? → the [User Guide](docs/guide/index.md).** A friendly,
-task-oriented walkthrough for using it inside a Claude Code / Cowork conversation
-(what to say, how sessions work, which plugins to pick, recipes). The pages below
+**New to KB Factory?** Start with the
+**[No-code guide](docs/guide/no-code/index.md)** (a gentle, zero-command path for
+non-developers) or the **[User Guide](docs/guide/index.md)** (a friendly,
+task-oriented walkthrough for using it inside a Claude Code / Cowork
+conversation — what to say, how sessions work, which plugins to pick, recipes).
+Not sure where the docs live? See the [docs map](docs/README.md). The pages below
 are the deeper technical reference.
 
 **Two ways to use it:** in an agent chat (install a [plugin](docs/plugins.md)) or

@@ -11,6 +11,10 @@ KB Factory installs in two parts, and you can use either or both:
 
 The scaffold is the product. The plugins are a convenience layer on top of it.
 
+> **Not a developer / prefer chat?** If you'd rather not use a terminal, the
+> [No-code guide](guide/no-code/index.md) walks you through installing a plugin
+> and getting a working knowledge base entirely by chatting in Cowork.
+
 ## Requirements
 
 - **Python 3.8+** with SQLite built for **FTS5** (bundled with standard
