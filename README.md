@@ -2,6 +2,7 @@
 
 **An append-only, source-attributed memory for AI coding agents — local-first, zero-dependency, auditable.**
 
+[![CI](https://github.com/regismvargas/kb-factory/actions/workflows/ci.yml/badge.svg)](https://github.com/regismvargas/kb-factory/actions/workflows/ci.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![Dependencies](https://img.shields.io/badge/runtime%20deps-none%20(stdlib%20only)-brightgreen)

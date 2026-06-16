@@ -7,6 +7,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-06-16
+
 ### Added
 - Conversational/chat usage docs: `docs/agent-sessions.md` (using KB Factory in a
   Claude Code / Cowork session) and `docs/plugins.md` (the three plugins — what
