@@ -129,8 +129,11 @@ These are honest weaknesses surfaced by lining KB Factory up against the field.
 They feed feature add/cut decisions for v1:
 
 1. **No semantic retrieval out of the box.** FTS5 is lexical; competitors lean
-   on embeddings. Decide whether to document this as a deliberate choice
-   (offline, zero-dep) or offer an optional embeddings adapter.
+   on embeddings. This is a **deliberate trade-off** to keep the core
+   zero-dependency, local, and offline — paraphrase/relational recall is the known
+   ceiling (the mitigation is agent-side: ask the agent to rephrase the query or
+   browse by category/domain). An **optional embeddings adapter** may land later
+   as an *opt-in* extension, but it will never be required by the core.
 2. **No automatic extraction.** KB Factory expects the agent to *file* records;
    Mem0/Zep auto-extract. This is a feature (curation, not noise) but must be
    framed as such, not hidden.

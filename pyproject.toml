@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kb-factory"
+version = "0.1.2"
+description = "Append-only, source-attributed memory for AI coding agents — local-first, stdlib-only (Python + SQLite)."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [{ name = "KB Factory contributors" }]
+keywords = ["knowledge-base", "memory", "ai-agents", "claude-code", "sqlite", "llm", "provenance"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Utilities",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/regismvargas/kb-factory"
+Repository = "https://github.com/regismvargas/kb-factory"
+Documentation = "https://github.com/regismvargas/kb-factory/tree/main/docs"
+Changelog = "https://github.com/regismvargas/kb-factory/blob/main/CHANGELOG.md"
+
+[project.scripts]
+kb-factory = "kb_factory.cli:main"
+
+[tool.setuptools]
+packages = ["kb_factory"]
+
+[tool.setuptools.package-data]
+kb_factory = ["_scaffold/*", "_scaffold/**/*"]

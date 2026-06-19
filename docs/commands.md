@@ -334,7 +334,22 @@ python .kb/kb.py doctor [--json]
 ```
 
 Schema and integrity check (FTS index, links, store health). Run it if search or
-schema behaves unexpectedly.
+schema behaves unexpectedly. The JSON output includes `append_only_hardening`
+(`enabled`/`disabled`).
+
+### `harden`
+
+```bash
+python .kb/kb.py harden [--off] [--json]
+```
+
+Opt in to **database-level** append-only enforcement. Installs SQLite triggers
+that block direct `UPDATE` of a record's title/content and direct `DELETE` of
+`records` / `audit_log` / `operations` — turning the CLI's interface discipline
+into a real invariant that even a direct SQLite session can't bypass. The normal
+`supersede` / `resolve` / `update` workflow keeps working (those change only
+status/tier/links, never content). `--off` removes the triggers. See the
+[integrity model](concepts.md#integrity-model-how-append-only-is-enforced).
 
 ### `consolidate`
 
@@ -413,8 +428,10 @@ Imports many records from a file in one pass.
 python .kb/kb.py raw-query "SELECT category, COUNT(*) FROM records GROUP BY category"
 ```
 
-Runs a read-style SQL query against the store directly. For inspection and
-reporting; prefer the typed commands above for routine work.
+Runs a SQL query against the store directly, for inspection and reporting;
+prefer the typed commands above for routine work. **Read-only by default** — the
+connection is opened with `PRAGMA query_only`, so a stray `UPDATE`/`DELETE` is
+rejected. Pass `--allow-write` only if you deliberately need to issue a write.
 
 ---
 

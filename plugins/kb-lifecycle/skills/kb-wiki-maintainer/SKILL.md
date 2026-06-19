@@ -15,6 +15,19 @@ Use this skill when a project has a `.kb/` directory or when the user wants to i
 - The wiki is derived and may be refreshed, linted, or recompiled.
 - Plugin, export, and handoff notes stay thin.
 
+## Bootstrapping a new project (no `.kb/` yet)
+
+If the project has no `.kb/` directory, create one before the session flows
+below. Two reliable ways:
+
+- **If `kb-factory` is installed** (`pip install kb-factory`): run `kb-factory
+  init` in the project root — it scaffolds `.kb/` and initializes the store.
+- **Offline / no pip:** this plugin bundles the scaffold under its own
+  `scaffold/` directory. Copy that `scaffold/` into the project as `.kb/`, then
+  run `python .kb/kb.py init`.
+
+Confirm with `python .kb/kb.py stats`, then continue with Session Start below.
+
 ## Session Start
 
 Use the bootstrap mode that matches the session purpose. When in doubt, start thin.

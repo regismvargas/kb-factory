@@ -370,6 +370,30 @@ def test_codex_package_rejects_hooks_manifest_field(
     assert any("must not declare unsupported 'hooks'" in e for e in errors)
 
 
+# -- KB-lifecycle scaffold bundle ---------------------------------------------
+
+
+def test_kb_lifecycle_plugin_bundles_scaffold(tmp_path: Path) -> None:
+    artifacts = build_artifacts(REPO_ROOT, tmp_path, scope="kb")
+    kb_lifecycle = [
+        a for a in artifacts if a.archive_path.name.startswith("kb-lifecycle-")
+    ]
+    assert kb_lifecycle, "expected kb-lifecycle plugin artifacts"
+    for artifact in kb_lifecycle:
+        write_zip(artifact)
+        assert validate_artifact(artifact, artifact.archive_path) == []
+        with ZipFile(artifact.archive_path, "r") as archive:
+            names = set(archive.namelist())
+        # The .kb/ scaffold (engine + config) is bundled so an agent can set up
+        # a project KB without a repo checkout.
+        assert "scaffold/kb.py" in names
+        assert "scaffold/runtime/records.py" in names
+        assert "scaffold/runtime/schema.py" in names
+        assert "scaffold/kb.config.json" in names
+        # The plugin's own surfaces remain intact.
+        assert ".claude-plugin/plugin.json" in names
+
+
 # -- KB/Wiki vNext packages ---------------------------------------------------
 
 

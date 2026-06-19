@@ -80,6 +80,34 @@ that decision from WARM to HOT is an update. Open items have a third path:
 
 The rule in one line: **never delete, never overwrite — supersede.**
 
+## Integrity model: how "append-only" is enforced
+
+Be precise about what "append-only" means here, because it's the heart of the
+pitch. By default it is enforced by **interface discipline**: the CLI has no
+delete verb, `update` refuses to touch title/content, and `supersede` only ever
+*adds* a row. There is no command that destroys history. (Even `raw-query` is
+read-only by default; it needs an explicit `--allow-write` to issue any write.)
+
+What that does **not** mean: a determined user with direct SQLite access to the
+file can still run `DELETE`/`UPDATE` and rewrite history — the discipline lives
+in the application layer, not (by default) in the database. For most users that
+is the right trade-off: zero ceremony, and the audit/operations logs still record
+what the tool itself did.
+
+If you want append-only to be a **true database invariant** — so that *nothing*,
+not even a direct SQLite session, can edit a record's title/content or delete
+records and the logs — opt in with:
+
+```bash
+python .kb/kb.py harden          # install the integrity triggers
+python .kb/kb.py harden --off    # remove them
+```
+
+This installs SQLite triggers that `RAISE` on content `UPDATE` and on `DELETE` of
+`records` / `audit_log` / `operations`, while leaving the normal
+`supersede`/`resolve`/`update` workflow fully working (they only change
+status/tier/links, never content). `doctor` reports whether hardening is on.
+
 ## Provenance: source → record → surface
 
 Every record can point back to the **source** it came from, and every surface an

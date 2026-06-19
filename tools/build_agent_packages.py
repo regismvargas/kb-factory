@@ -15,6 +15,10 @@ class Artifact:
     exclude_top_level: tuple[str, ...] = ()
     exclude_relative_paths: tuple[str, ...] = ()
     exclude_relative_suffixes: tuple[str, ...] = ()
+    # Extra (source_dir, archive_prefix) trees injected into the zip at build
+    # time — used to bundle the `.kb/` scaffold into the kb-lifecycle plugin
+    # without keeping a committed second copy of the runtime under plugins/.
+    extra_trees: tuple[tuple[Path, str], ...] = ()
 
 
 def repo_root() -> Path:
@@ -59,6 +63,15 @@ def write_zip(artifact: Artifact) -> None:
             if artifact.archive_root:
                 archive_name = f"{artifact.archive_root}/{archive_name}"
             archive.write(file_path, archive_name)
+        for extra_root, prefix in artifact.extra_trees:
+            for file_path in iter_files(extra_root):
+                if file_path.name in ("kb.db", "kb.db-shm", "kb.db-wal"):
+                    continue
+                rel_posix = file_path.relative_to(extra_root).as_posix()
+                archive_name = f"{prefix}/{rel_posix}"
+                if artifact.archive_root:
+                    archive_name = f"{artifact.archive_root}/{archive_name}"
+                archive.write(file_path, archive_name)
 
 
 ANTHROPIC_SKILL_AGENT_SUFFIXES: tuple[str, ...] = ("agents/openai.yaml",)
@@ -365,23 +378,31 @@ def build_artifacts(
 
     case_out = case_output_dir if case_output_dir is not None else output_dir
 
+    # The kb-lifecycle plugin bundles the .kb/ scaffold (engine + config) so an
+    # agent can scaffold a project's KB without a repo checkout. Injected at
+    # build time from the single canonical template — no committed copy here.
+    scaffold_tree = ((root / "core" / "templates" / "kb", "scaffold"),)
+
     # KB-owned artifacts (kb-factory)
     kb_artifacts: list[Artifact] = [
         Artifact(
             source_root=kb_root,
             archive_path=output_dir / f"kb-lifecycle-plugin-{kb_version}.zip",
+            extra_trees=scaffold_tree,
         ),
         Artifact(
             source_root=kb_root,
             archive_path=output_dir / f"kb-lifecycle-claude-plugin-{kb_version}.zip",
             exclude_top_level=(".codex-plugin",),
             exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
+            extra_trees=scaffold_tree,
         ),
         Artifact(
             source_root=kb_root,
             archive_path=output_dir / f"kb-lifecycle-cowork-plugin-{kb_version}.zip",
             exclude_top_level=(".codex-plugin",),
             exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
+            extra_trees=scaffold_tree,
         ),
         # Companion artifacts live in the sibling repo; build them with
         # --scope case or from that repo's own build tooling.

@@ -36,10 +36,13 @@ sources  →  typed records  →  derived surfaces
    `HOT.md` (the active working set, on demand), and `INDEX.md` (the broad map,
    on demand). These are *derived* from the records: `NOW`/`HOT` are bounded so
    the always-loaded context stays cheap in tokens.
-4. **Wiki surfaces** *(optional)* — a machine wiki (granular structured memory
-   for agents) and a human wiki (narrative docs for onboarding and audit).
-   Neither is canonical; both are regenerated from records and carry citation
-   blocks and stale checks.
+4. **Wiki surfaces** *(optional — off by default)* — a machine wiki (granular
+   structured memory for agents) and a human wiki (narrative docs for onboarding
+   and audit). Neither is canonical; both are regenerated from records and carry
+   citation blocks and stale checks. The wiki is gated by `wiki.enabled` (false by
+   default); with it off, the core — records, supersession, provenance, search,
+   session surfaces — runs fully on its own. Treat the wiki as an opt-in layer for
+   projects that want narrative/onboarding docs, not a prerequisite.
 5. **Exports / context packs** — point-in-time Markdown bundles for surfaces that
    can't read the SQLite store directly, such as Cowork and claude.ai. These are
    **snapshots, not a live sync**, and go stale until regenerated.

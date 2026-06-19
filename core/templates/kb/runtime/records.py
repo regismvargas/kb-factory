@@ -10,6 +10,7 @@ from pathlib import Path
 from .constants import CATEGORIES, STATUSES, TIERS
 from .config import load_config
 from .db import connect
+from .schema import disable_hardening, enable_hardening, hardening_enabled
 from .filing_policy import evaluate_filing, get_filing_policy
 from .helpers import log_action, now_iso, record_exists, row_to_dict, upsert_fts
 from .paths import KB_ROOT, ensure_dirs
@@ -23,6 +24,7 @@ __all__ = [
     "cmd_file",
     "cmd_filing_status",
     "cmd_get",
+    "cmd_harden",
     "cmd_init",
     "cmd_list",
     "cmd_pending",
@@ -499,8 +501,34 @@ def cmd_filing_status(args: argparse.Namespace, *, emit) -> None:
 
 def cmd_raw_query(args: argparse.Namespace, *, emit) -> None:
     conn = connect()
+    if not getattr(args, "allow_write", False):
+        # Read-only by default: arbitrary SQL cannot mutate the store unless the
+        # caller explicitly opts in with --allow-write.
+        conn.execute("PRAGMA query_only = ON")
     rows = conn.execute(args.sql).fetchall()
     emit([dict(row) for row in rows], True)
+
+
+def cmd_harden(args: argparse.Namespace, *, emit) -> None:
+    conn = connect()
+    if getattr(args, "off", False):
+        disable_hardening(conn)
+    else:
+        enable_hardening(conn)
+    conn.commit()
+    state = "enabled" if hardening_enabled(conn) else "disabled"
+    if getattr(args, "json", False):
+        emit({"append_only_hardening": state}, True)
+        return
+    msg = f"Append-only DB hardening {state}."
+    if state == "enabled":
+        msg += (
+            " Direct UPDATE of a record's title/content and DELETE of "
+            "records / audit_log / operations now raise an error."
+        )
+    else:
+        msg += " The optional integrity triggers have been removed."
+    emit({"__plain__": True, "text": msg}, False)
 
 
 def cmd_bulk_import(args: argparse.Namespace, *, emit) -> None:

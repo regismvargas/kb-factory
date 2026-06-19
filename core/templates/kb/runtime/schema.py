@@ -169,3 +169,88 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         (str(config.get("schema_version", 5)),),
     )
     conn.commit()
+
+
+# ---------------------------------------------------------------------------
+# Optional append-only hardening (opt-in DB invariant; see `kb.py harden`).
+#
+# By default, append-only is enforced by the CLI's interface discipline only —
+# `update` refuses content edits and there is no delete verb. These triggers
+# turn that convention into a real database invariant: even a direct SQLite
+# session cannot edit a record's title/content or delete records / the logs.
+# They are deliberately NOT installed by `ensure_schema` (opt-in), and they are
+# designed to leave every legitimate operation working: `supersede`/`resolve`
+# only mutate status/replacement_id/tier/timestamps (never title/content), and
+# nothing in the runtime deletes from `records`.
+# ---------------------------------------------------------------------------
+
+HARDENING_TRIGGERS = {
+    "kbf_records_no_content_update": """
+        CREATE TRIGGER kbf_records_no_content_update
+        BEFORE UPDATE ON records
+        FOR EACH ROW WHEN NEW.title IS NOT OLD.title OR NEW.content IS NOT OLD.content
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: record title/content is immutable; use supersede to create a new version');
+        END;
+    """,
+    "kbf_records_no_delete": """
+        CREATE TRIGGER kbf_records_no_delete
+        BEFORE DELETE ON records
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: records cannot be deleted; supersede or resolve instead');
+        END;
+    """,
+    "kbf_audit_log_no_update": """
+        CREATE TRIGGER kbf_audit_log_no_update
+        BEFORE UPDATE ON audit_log
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: audit_log is immutable');
+        END;
+    """,
+    "kbf_audit_log_no_delete": """
+        CREATE TRIGGER kbf_audit_log_no_delete
+        BEFORE DELETE ON audit_log
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: audit_log is immutable');
+        END;
+    """,
+    "kbf_operations_no_update": """
+        CREATE TRIGGER kbf_operations_no_update
+        BEFORE UPDATE ON operations
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: operations log is immutable');
+        END;
+    """,
+    "kbf_operations_no_delete": """
+        CREATE TRIGGER kbf_operations_no_delete
+        BEFORE DELETE ON operations
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: operations log is immutable');
+        END;
+    """,
+}
+
+
+def hardening_enabled(conn: sqlite3.Connection) -> bool:
+    """True if the optional append-only triggers are installed."""
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = 'kbf_records_no_delete'"
+    ).fetchone()
+    return row is not None
+
+
+def enable_hardening(conn: sqlite3.Connection) -> None:
+    """Install the append-only triggers (idempotent)."""
+    script = "\n".join(
+        f"DROP TRIGGER IF EXISTS {name};\n{sql}"
+        for name, sql in HARDENING_TRIGGERS.items()
+    )
+    conn.executescript(script)
+
+
+def disable_hardening(conn: sqlite3.Connection) -> None:
+    """Remove the append-only triggers (idempotent)."""
+    script = "\n".join(
+        f"DROP TRIGGER IF EXISTS {name};" for name in HARDENING_TRIGGERS
+    )
+    conn.executescript(script)

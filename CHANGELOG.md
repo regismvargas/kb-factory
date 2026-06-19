@@ -7,6 +7,34 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-06-16
+
+Acted on an external technical review (validated point-by-point against the code).
+
+### Added
+- **`pip install kb-factory`** — the engine is now pip-installable with a
+  `kb-factory` CLI: `kb-factory init` scaffolds a project's `.kb/` and
+  initializes the store; `kb-factory update` refreshes the vendored runtime to
+  the installed version (preserving your data), so core fixes can propagate.
+- The **kb-lifecycle plugin now bundles the `.kb/` scaffold** (under `scaffold/`),
+  so an agent can set up a project KB without a repo checkout.
+- Opt-in **append-only database hardening** — `kb.py harden` installs SQLite
+  triggers that block direct content `UPDATE` and `DELETE` of
+  `records` / `audit_log` / `operations`, turning the CLI's interface discipline
+  into a true database invariant (`harden --off` removes them). `doctor` reports
+  the state.
+- A published **`docs/merit-evaluation.md`** — the adversarial/hostile/moderated
+  merit debate that `docs/comparison.md` references (fixes the only broken link).
+
+### Changed
+- `raw-query` is now **read-only by default** (`PRAGMA query_only`); pass
+  `--allow-write` to deliberately issue writes.
+- Docs state the integrity model precisely ("append-only **by interface
+  discipline**", with the opt-in DB enforcement via `harden`); the wiki layer is
+  documented as optional/off-by-default; the lexical-search trade-off and a
+  possible future *opt-in* embeddings adapter are spelled out; the README "Use
+  this if" sharpens the audience (regulated / long-lived / high-context-rotation).
+
 ## [0.1.1] - 2026-06-16
 
 ### Added

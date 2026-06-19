@@ -32,9 +32,21 @@ If that prints `FTS5 OK`, you are ready.
 
 ## Part 1 — Scaffold a project
 
-Copy the `.kb/` scaffold from this repo into your target project, then
-initialize the store. The commands below work on macOS, Linux, and Windows
-(PowerShell understands forward slashes in paths).
+The fastest way is the published CLI:
+
+```bash
+pip install kb-factory
+cd /path/to/your-project
+kb-factory init        # scaffolds .kb/ and initializes the SQLite store
+```
+
+`kb-factory update` later refreshes the vendored runtime in `.kb/` to the
+installed version, leaving your data (`kb.db`, `memory/`, config) untouched —
+this is how core fixes reach a project scaffolded from an older version.
+
+**No pip?** Copy the `.kb/` scaffold from a checkout of this repo and initialize
+it directly. The commands below work on macOS, Linux, and Windows (PowerShell
+understands forward slashes in paths).
 
 ```bash
 # from a checkout of this repo:

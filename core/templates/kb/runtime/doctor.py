@@ -4,6 +4,7 @@ from pathlib import Path
 
 from .config import load_config
 from .db import connect
+from .schema import hardening_enabled
 from .paths import DB_PATH, ensure_dirs
 from .sources import compute_file_hash
 
@@ -40,6 +41,7 @@ def get_doctor_checks(config: dict | None = None) -> dict:
     ).fetchone()[0]
     return {
         "db_exists": DB_PATH.exists(),
+        "append_only_hardening": "enabled" if hardening_enabled(conn) else "disabled",
         "integrity_check": conn.execute("PRAGMA integrity_check").fetchone()[0],
         "schema_version": conn.execute(
             "SELECT value FROM schema_meta WHERE key = 'schema_version'"

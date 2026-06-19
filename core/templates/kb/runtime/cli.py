@@ -138,6 +138,12 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
 
     raw = sub.add_parser("raw-query")
     raw.add_argument("sql")
+    raw.add_argument(
+        "--allow-write",
+        dest="allow_write",
+        action="store_true",
+        help="Permit write statements (default: read-only via PRAGMA query_only)",
+    )
     raw.set_defaults(func=command_handlers["raw-query"])
 
     bulk = sub.add_parser("bulk-import")
@@ -221,6 +227,13 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     doctor = sub.add_parser("doctor")
     doctor.add_argument("--json", action="store_true")
     doctor.set_defaults(func=command_handlers["doctor"])
+
+    harden_p = sub.add_parser("harden")
+    harden_p.add_argument(
+        "--off", action="store_true", help="Remove the optional append-only triggers"
+    )
+    harden_p.add_argument("--json", action="store_true")
+    harden_p.set_defaults(func=command_handlers["harden"])
 
     wiki_check = sub.add_parser("wiki-check")
     wiki_check.add_argument("--json", action="store_true")

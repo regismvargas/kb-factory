@@ -1,0 +1,8 @@
+recursive-include kb_factory/_scaffold *
+include LICENSE
+include NOTICE
+include README.md
+include CHANGELOG.md
+global-exclude __pycache__/*
+global-exclude *.pyc
+global-exclude kb.db

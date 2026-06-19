@@ -27,6 +27,10 @@ vector database, no API key, works offline, and backs up as a single file.
   a memory service.
 - You value **discipline over magic**: typed records, supersession instead of
   overwrite, source provenance, and a thin, token-cheap startup context.
+- You work on a **long-lived or audit-sensitive codebase** — regulated or
+  compliance-adjacent work, or a project with high context turnover — where
+  *"when did this stop being true, and what overturned it?"* is a question worth
+  being able to answer precisely.
 
 ## Don't use this if…
 
@@ -54,29 +58,32 @@ and write the same `.kb/`.
 
 ## Quickstart (≈60 seconds)
 
-The core is a single stdlib-only CLI. Add a knowledge base to any project by
-dropping in the scaffold:
+The core is a single stdlib-only CLI. Install it from PyPI and scaffold a
+project — or copy the scaffold folder directly if you'd rather not use pip:
 
 ```bash
-# 1. Add a .kb/ to your project (copy the scaffold from this repo)
-cp -r core/templates/kb /path/to/your-project/.kb
+# 1. Install the CLI and create a .kb/ in your project (initializes SQLite)
+pip install kb-factory
 cd /path/to/your-project
+kb-factory init
+#   No pip? Copy the scaffold instead:
+#   cp -r core/templates/kb .kb && python .kb/kb.py init
 
-# 2. Initialize the SQLite store
-python .kb/kb.py init
-
-# 3. Record a decision (typed; HOT = always surfaced at session start)
+# 2. Record a decision (typed; HOT = always surfaced at session start)
 python .kb/kb.py create --category DECISAO --domain architecture \
   --title "Use SQLite for storage" \
   --content "Local-first, single file, no external services." --tier HOT
 
-# 4. Find it again — in any later session, by any agent
+# 3. Find it again — in any later session, by any agent
 python .kb/kb.py search "storage"
 
-# 5. When the decision changes, SUPERSEDE it (the old record is kept + linked)
+# 4. When the decision changes, SUPERSEDE it (the old record is kept + linked)
 python .kb/kb.py supersede <record_id> \
   --title "Use SQLite + FTS5" --content "Added full-text search."
 ```
+
+(`kb-factory update` later refreshes the vendored `.kb/` runtime to the installed
+version, leaving your data untouched.)
 
 At the start of an agent session:
 
@@ -93,7 +100,9 @@ changes only routing metadata (tier/tags); when *meaning* changes you
 ## What you get
 
 - **Typed, append-only records** in SQLite — supersede, never overwrite; full
-  audit trail.
+  audit trail. Append-only is enforced by interface discipline by default, with
+  **opt-in database-level enforcement** (`kb.py harden`) for those who want a hard
+  invariant — see the [integrity model](docs/concepts.md#integrity-model-how-append-only-is-enforced).
 - **Provenance** — records link to the sources they came from; `doctor` and
   source-verification catch drift.
 - **Thin startup context** — `NOW.md` (and `HOT.md` on demand) keep the
