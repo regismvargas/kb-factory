@@ -145,10 +145,17 @@ to start a KB session. The `kb-wiki-maintainer` skill should run
 **Update / remove:**
 
 ```bash
-claude plugin marketplace update kb-factory-tools
-claude plugin update kb-lifecycle@kb-factory-tools
-claude plugin disable kb-lifecycle   # disable before removing when diagnosing
+claude plugin marketplace update kb-factory-tools         # refresh from the repo
+claude plugin uninstall kb-lifecycle@kb-factory-tools     # then reinstall to update
+claude plugin install   kb-lifecycle@kb-factory-tools
+claude plugin disable   kb-lifecycle                       # disable without removing
 ```
+
+There is no single `plugin update` verb — refresh the marketplace, then reinstall
+(or enable the marketplace's auto-update so plugins refresh at startup). Run
+`/reload-plugins` to apply changes within a running session. An update is only
+picked up when the plugin's `version` in its manifest changes, so content-only
+edits ship with a patch bump.
 
 ### Claude Cowork
 

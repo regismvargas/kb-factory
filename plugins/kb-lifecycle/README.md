@@ -102,5 +102,5 @@ This builds:
 
 By default the artifacts are saved under:
 
-- `dist/agent-packages/kb-lifecycle-plugin-0.2.1.zip`
-- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.1.zip`
+- `dist/agent-packages/kb-lifecycle-plugin-0.2.2.zip`
+- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.2.zip`

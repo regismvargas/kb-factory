@@ -18,6 +18,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   developer / releasing / architecture / CONTRIBUTING docs now document the pip
   package, the scaffold-mirror sync tool + parity test, and the PyPI
   build/publish flow.
+- Bumped plugin patch versions so the v0.1.2 plugin changes (Apache license
+  metadata, the `kb-wiki-maintainer` "Bootstrapping a new project" guidance, the
+  bundled `.kb/` scaffold) propagate cleanly via `marketplace update` +
+  reinstall: **kb-lifecycle 0.2.1→0.2.2, session-gate 0.2.4→0.2.5, kb-wiki-vnext
+  0.1.3→0.1.4** (marketplace catalog 0.3.1→0.3.2). Corrected the Claude Code
+  update commands in `installation.md` (there is no `plugin update` verb — use
+  `uninstall` + `install`, or marketplace auto-update).
 
 ## [0.1.2] - 2026-06-16
 
