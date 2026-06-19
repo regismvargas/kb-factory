@@ -116,6 +116,23 @@ only ever changes by creating or superseding a record in `.kb/` through the CLI.
 If you only need a knowledge base, you only need `.kb/`. `.kb-next/` exists for
 projects running the fuller session/wiki/adapter lifecycle.
 
+## Packaging & runtime mirrors
+
+The runtime has a single canonical home, `core/runtime/`, mirrored byte-for-byte
+into two delivery copies:
+
+- `core/templates/kb/runtime/` — the scaffold a project vendors as `.kb/runtime/`
+  (via `kb-factory init` or by copying the template).
+- `kb_factory/_scaffold/runtime/` — bundled into the pip wheel so
+  `pip install kb-factory` ships the engine offline. It is generated from the
+  template by `tools/sync_package_scaffold.py` and kept honest by
+  `tests/test_packaging.py`.
+
+The thin `kb_factory/` package adds only the `kb-factory` CLI (`init` / `update`);
+all real work stays in the vendored `.kb/` runtime. The kb-lifecycle plugin ZIP
+bundles the same scaffold under `scaffold/`, so the engine reaches a project three
+ways — pip, plugin, or a direct template copy — always as the same code.
+
 ## LLM-curated, mechanically-governed
 
 KB Factory deliberately splits responsibility between the LLM and the runtime.

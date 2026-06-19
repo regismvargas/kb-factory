@@ -132,6 +132,26 @@ mirror. Use `--check` to verify the mirror matches the flat directory without
 copying, and `--archive-legacy` to move recognized non-current plugin ZIPs into
 `dist/agent-packages/legacy/`.
 
+### 5. Build & publish the pip package (PyPI)
+
+The `kb-factory` pip package is separate from the plugin/standalone ZIPs. Its
+version lives in `pyproject.toml` (bump it to match the release); its payload is
+the `kb_factory/` package plus the generated scaffold mirror
+`kb_factory/_scaffold/` (kept in sync by `tools/sync_package_scaffold.py` —
+`pytest` fails if it is stale). `MANIFEST.in` governs what ships in the sdist.
+
+```bash
+python tools/sync_package_scaffold.py --check    # mirror must be in sync
+python -m build                                   # sdist + wheel into dist/
+python -m twine check dist/kb_factory-<X.Y.Z>*    # metadata sanity
+python -m twine upload dist/kb_factory-<X.Y.Z>*   # requires a PyPI token
+```
+
+`build` and `twine` are **release-time dev tools** (`pip install build twine`),
+not runtime dependencies. Confirm the wheel bundles the scaffold (it must contain
+`kb_factory/_scaffold/kb.py` and `_scaffold/runtime/`). Publish **after** CI is
+green on the release commit and the git tag is pushed.
+
 ## End-to-end (copy/paste)
 
 ```bash
@@ -151,6 +171,10 @@ python tools/validate_vnext_product.py \
 # 4. Build the full agent-package set and organize the mirror
 python tools/build_agent_packages.py
 python tools/organize_agent_packages.py --check
+
+# 5. Build & publish the pip package (after CI green on the release commit + tag)
+python tools/sync_package_scaffold.py --check
+python -m build && python -m twine upload dist/kb_factory-<X.Y.Z>*
 ```
 
 ## Notes
@@ -160,6 +184,9 @@ python tools/organize_agent_packages.py --check
 - **Checksums.** The standalone bundle ships a `.sha256` sidecar; the organized
   mirror records a SHA-256 per artifact in its `manifest.json`. Publish these so
   consumers can verify downloads.
-- **No third-party tooling.** All four scripts are standard-library Python, in
-  keeping with the project's zero-runtime-dependency constraint (see
+- **No third-party tooling in the runtime.** The build scripts are
+  standard-library Python. The only third-party tools anywhere are
+  release-time-only: `pytest` (tests) and `build` / `twine` (publishing the pip
+  package). The shipped runtime and the `kb-factory` package import only the
+  standard library — the zero-runtime-dependency constraint holds (see
   [CONTRIBUTING.md](../CONTRIBUTING.md)).

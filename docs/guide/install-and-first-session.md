@@ -31,23 +31,31 @@ You have two easy paths:
 - **Already have a `.kb/`?** Great — skip to [Step 2](#step-2--install-a-plugin).
 - **Starting fresh?** The simplest order is to do
   [Step 2](#step-2--install-a-plugin) **first** (install a plugin), then come back
-  here and just say **"set up a knowledge base for this project."** If you
-  installed `kb-wiki-vnext`, you can instead run **`/new-project-wizard`**, which
-  walks you through it. (Prefer to set it up by hand? The "Under the hood" block
-  below has the one-time steps — and if the agent can't create files in your
-  workspace, that's the fallback.)
+  here and just say **"set up a knowledge base for this project."** The
+  `kb-lifecycle` plugin now **bundles the scaffold**, so the agent can create the
+  `.kb/` for you without a repo checkout. If you installed `kb-wiki-vnext`, you
+  can instead run **`/new-project-wizard`**. (Prefer to do it by hand? The "Under
+  the hood" block below has the one-time steps, including `pip install
+  kb-factory`.)
 
 <details><summary>Under the hood / for the CLI</summary>
 
 The `.kb/` is a single stdlib-only Python CLI plus a SQLite store — local-first,
-offline, no API key. To scaffold and initialize it by hand:
+offline, no API key. The quickest way to create it by hand is the published CLI:
 
 ```bash
-# from a checkout of the KB Factory repo
+pip install kb-factory
+cd /path/to/your-project
+kb-factory init
+python .kb/kb.py stats   # confirm it worked
+```
+
+No pip? Copy the scaffold from a checkout of the repo instead:
+
+```bash
 cp -r core/templates/kb /path/to/your-project/.kb
 cd /path/to/your-project
 python .kb/kb.py init
-python .kb/kb.py stats   # confirm it worked
 ```
 
 On Windows PowerShell, `Copy-Item -Recurse core/templates/kb C:\path\to\your-project\.kb`.

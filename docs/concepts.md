@@ -223,6 +223,7 @@ Putting it together, a normal session looks like:
 | **Operations log** | An append-only record of mutations ("who changed what, when, and why"). |
 | **Consolidate** | A *mechanical* hygiene pass: exact-title dedupe + date-based tier demotion + integrity — **not** semantic merging. |
 | **Doctor** | A mechanical integrity check over schema, indexes, and invariants. |
+| **Hardening** | Opt-in database-level enforcement of append-only: `harden` installs SQLite triggers that block content `UPDATE` and `DELETE` of records/logs. Off by default, where append-only is enforced by interface discipline. |
 | **Semantic path** | The LLM-curated flow: semantic lookup → governed merge/supersede proposal → validated apply. |
 | **Thin context** | The small always-loaded layer (`NOW.md`, `HOT.md`) read at session start, generated from the store. |
 | **Wiki** | An optional, *derived* Markdown view synthesized from records — never canonical. |

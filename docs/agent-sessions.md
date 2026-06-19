@@ -34,7 +34,9 @@ Once a plugin is installed (see [installation.md](installation.md)):
 
 1. **Open the project** (one that has a `.kb/`). The `kb-lifecycle` hook fires
    and the agent reads `.kb/memory/NOW.md` — a short, always-loaded summary.
-   (No `.kb/` yet? Ask the agent to set one up, or run `/new-project-wizard`.)
+   (No `.kb/` yet? Ask the agent to set one up — the `kb-lifecycle` plugin bundles
+   the scaffold, so no repo checkout is needed — or run `/new-project-wizard`, or
+   `kb-factory init` from a terminal.)
 2. **Work normally.** When something durable comes up, just say so:
    > "Record a decision: we'll use SQLite for storage — it's local-first and
    > needs no service."

@@ -61,6 +61,18 @@ If `sources_hash_drift` is non-zero, a file you ingested has changed underneath
 its record. Use `source-status --hash-drift` to list which ones, then re-ingest
 or update the source so provenance stays trustworthy.
 
+### After `harden`, did I break my workflow?
+
+No. `harden` installs append-only triggers that block only *destructive* direct
+SQL — editing a record's title/content in place, or deleting records / the logs.
+The normal flow is unaffected: `create`, `update` (tier/tags), `supersede`,
+`resolve`, `search`, and the lifecycle commands all keep working, because they
+add or re-route rather than rewrite content in place. `doctor --json` shows
+`append_only_hardening: "enabled"`; run `python .kb/kb.py harden --off` to remove
+the triggers. If a *direct* `UPDATE`/`DELETE` (e.g. via `raw-query --allow-write`
+or an external SQLite tool) now raises `append-only: …`, that's the guard working
+as intended — use `supersede` instead.
+
 ### `wiki-lint` — derived-page hygiene
 
 ```bash

@@ -153,6 +153,7 @@ via the CLI — both read and write the same `.kb/`.
 | [docs/development.md](docs/development.md) | Dev setup, tests, the cleanliness gate, plugin development |
 | [docs/releasing.md](docs/releasing.md) | Maintainer build / validate / package flow |
 | [docs/comparison.md](docs/comparison.md) | Honest comparison vs. Anthropic's memory stack and the OSS field |
+| [docs/merit-evaluation.md](docs/merit-evaluation.md) | The adversarial/hostile/moderated merit debate behind the positioning |
 | [docs/provenance-and-continuity.md](docs/provenance-and-continuity.md) | How continuity & provenance work across sessions and agents |
 
 **Project**
@@ -165,8 +166,10 @@ via the CLI — both read and write the same `.kb/`.
 
 ## Project status
 
-Pre-`1.0.0`. The core runtime is stable and tested; documentation and packaging
-are being finalized for the first public release.
+Pre-`1.0.0`, and actively developed. The core runtime is stable and tested
+(green CI across Linux/macOS/Windows × Python 3.8/3.11/3.13), it's pip-installable
+(`pip install kb-factory`), and the docs are complete. Latest release: **v0.1.2**.
+Expect additive `0.1.x` releases as the API settles toward `1.0.0`.
 
 ## License
 

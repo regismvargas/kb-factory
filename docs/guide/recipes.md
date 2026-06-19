@@ -321,11 +321,13 @@ to overwrite an existing `.kb/`. Related commands:
 `/existing-project-configure-vnext`, `/existing-project-verify-install`,
 `/existing-project-upgrade-vnext`, `/existing-project-rollback-vnext`.
 
-To scaffold a knowledge base manually from the terminal:
+To scaffold a knowledge base manually from the terminal — quickest is the
+published CLI:
 
 ```bash
-cp -r core/templates/kb /path/to/your-project/.kb   # macOS/Linux
-python .kb/kb.py init
+pip install kb-factory && kb-factory init            # run in the project root
+# no pip? copy the scaffold instead:
+# cp -r core/templates/kb /path/to/your-project/.kb && python .kb/kb.py init
 ```
 
 See [the plugins](../plugins.md) for which plugin gives you which commands.

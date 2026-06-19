@@ -44,6 +44,9 @@ python -m venv .venv
 
 # pytest is the only dev dependency (test runner, not a runtime dep)
 pip install pytest
+
+# optional: install the kb-factory CLI from this checkout to exercise init/update
+pip install -e .
 ```
 
 ## Running the tests
@@ -59,12 +62,14 @@ pytest -k supersede           # by keyword
 
 `pytest` must be green before you open a PR. A few tests worth knowing about:
 
-- **`tests/test_runtime_modularization.py`** is the *runtime-parity* test. KB
-  Factory ships the runtime in three places — the canonical `core/runtime/`, the
-  scaffold template `core/templates/kb/runtime/`, and the live workbench copy
-  `.kb/runtime/` — and this test asserts they stay byte-identical. If you edit
-  the runtime, edit the canonical copy and re-sync the mirrors, or this test
-  (and the gate, below) will fail.
+- **Runtime mirrors + `tests/test_packaging.py`.** KB Factory ships the runtime
+  in three byte-identical copies: the canonical `core/runtime/`, the scaffold
+  template `core/templates/kb/runtime/` (what a project vendors as `.kb/runtime/`),
+  and `kb_factory/_scaffold/runtime/` (bundled into the pip wheel). If you edit
+  the runtime, edit `core/runtime/`, mirror it into the template, then run
+  `python tools/sync_package_scaffold.py` to regenerate the package mirror.
+  `tests/test_packaging.py` fails if that mirror drifts; the cleanliness gate
+  (below) checks runtime parity in the authoring repo.
 - **`tests/test_provenance.py`** and **`tests/test_sources.py`** cover the
   source → record linkage and hash-drift detection.
 - **`tests/test_wiki*.py`** cover the derived wiki layer (generation, lint,
@@ -162,7 +167,27 @@ python tools/build_agent_packages.py
 
 This produces a plugin ZIP (files at archive root, for Claude/Cowork upload) and
 a standalone skill ZIP (for a direct Codex/Claude skill install). See the plugin
-`README.md` for the per-runtime install surfaces.
+`README.md` for the per-runtime install surfaces. The kb-lifecycle plugin ZIP
+also **bundles the `.kb/` scaffold** under `scaffold/` (injected from
+`core/templates/kb/` via the builder's `extra_trees`), so an agent can scaffold a
+project KB from the plugin alone — covered by `tests/test_build_agent_packages.py`.
+
+## The pip package (`kb-factory`)
+
+`pip install kb-factory` installs a thin CLI (the `kb_factory/` package) whose
+`init` / `update` commands copy the bundled scaffold — `kb_factory/_scaffold/`, a
+**generated mirror** of `core/templates/kb/` — into a project's `.kb/`. Never edit
+`_scaffold/` by hand; edit the template and regenerate:
+
+```bash
+python tools/sync_package_scaffold.py          # regenerate the mirror
+python tools/sync_package_scaffold.py --check   # CI-style staleness check
+python -m build                                 # or: pip wheel . --no-deps -w dist
+```
+
+`pyproject.toml` declares the package + the `kb-factory` console script;
+`MANIFEST.in` governs what ships in the sdist. `tests/test_packaging.py` enforces
+that the mirror stays in sync and that `init`/`update` produce a working `.kb/`.
 
 ## Code style
 

@@ -26,6 +26,7 @@ git clone <your-fork-url>
 cd kb-factory
 python -m venv .venv && . .venv/bin/activate   # optional
 pip install pytest                              # test runner only; not a runtime dep
+pip install -e .                                # optional: the kb-factory CLI (init/update)
 pytest
 ```
 
@@ -38,8 +39,12 @@ matrix). No other tooling is required to run the core.
 - **Run the integrity checks** if you touched the runtime, scaffold, or wiki
   generation:
   - `python core/runtime/cli.py doctor` (schema / invariant integrity)
-  - the runtime-parity test (ensures the scaffold template stays in sync with
-    the canonical runtime)
+  - **Keep the runtime mirrors in sync.** The runtime ships in three
+    byte-identical copies — `core/runtime/` (canonical), `core/templates/kb/runtime/`
+    (scaffold template), and `kb_factory/_scaffold/runtime/` (pip-package mirror).
+    Edit the canonical copy, mirror it into the template, then run
+    `python tools/sync_package_scaffold.py`. `pytest tests/test_packaging.py`
+    fails if the package mirror is stale.
 - Keep changes focused; one logical change per PR.
 - Match the surrounding code style (the runtime is plain, explicit Python — no
   clever metaprogramming).

@@ -26,6 +26,13 @@ The plugin is intentionally thin. It does not own durable memory. It points the 
 - Claude session-start hook at `hooks/hooks.json`
 - Shared helper script at `scripts/session_start_context.py`
 
+The built plugin ZIP additionally bundles the **`.kb/` scaffold** under
+`scaffold/` (the engine + config, injected from `core/templates/kb/` at build
+time). This lets an agent set up a project's knowledge base from the plugin
+alone — no repo checkout — by copying `scaffold/` to `.kb/` and running
+`python .kb/kb.py init`. The pip package (`kb-factory init`) and this bundle are
+two delivery paths for the same engine.
+
 ## Project KB Boundary
 
 1. `.kb/` remains the durable memory layer.

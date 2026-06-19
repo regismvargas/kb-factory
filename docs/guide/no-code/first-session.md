@@ -68,7 +68,9 @@ don't create it by hand — you **ask your assistant to**:
 
 > *"Set up a knowledge base for this project."*
 
-One of two things will happen, and both are fine:
+Because the `kb-lifecycle` plugin now ships with the memory scaffold built in,
+the assistant can usually set this up from the plugin alone — no downloads, no
+repo. One of two things will happen, and both are fine:
 
 - **It sets it up for you.** The assistant creates the memory and confirms it's
   ready. Great — move to Step 3.

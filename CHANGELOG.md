@@ -7,6 +7,18 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Changed
+- Documentation brought fully in line with v0.1.2: pip-first install/upgrade
+  (`pip install kb-factory` → `kb-factory init` / `update`) across
+  getting-started, installation, the User Guide and recipes (copy-scaffold kept
+  as the no-pip fallback; the no-code track stays zero-CLI, now backed by the
+  plugin's bundled scaffold); `harden` / read-only `raw-query` covered in
+  concepts, commands, troubleshooting and the glossaries; `merit-evaluation.md`
+  added to the docs maps; README "Project status" updated to v0.1.2; and the
+  developer / releasing / architecture / CONTRIBUTING docs now document the pip
+  package, the scaffold-mirror sync tool + parity test, and the PyPI
+  build/publish flow.
+
 ## [0.1.2] - 2026-06-16
 
 Acted on an external technical review (validated point-by-point against the code).

@@ -41,6 +41,11 @@ tiers** are `HOT` (always surfaced at session start), `WARM` (the default), and
 `COLD` (archived). Use [`update`](#update) only for *routing metadata* (tier,
 tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
+> **Getting the CLI:** `pip install kb-factory`, then `kb-factory init` scaffolds
+> a project's `.kb/` (and `kb-factory update` refreshes it later). After that, the
+> commands on this page run as `python .kb/kb.py <command>` from the project root.
+> See [installation.md](installation.md).
+
 ---
 
 ## Slash commands (in a chat session)

@@ -50,6 +50,7 @@ These are the precise, deeper docs.
 | [development.md](development.md) | Dev setup, tests, the cleanliness gate, plugin development |
 | [releasing.md](releasing.md) | Maintainer build / validate / package flow |
 | [comparison.md](comparison.md) | Honest comparison vs. Anthropic's memory stack and the OSS field |
+| [merit-evaluation.md](merit-evaluation.md) | The adversarial/hostile/moderated merit debate behind the positioning |
 | [provenance-and-continuity.md](provenance-and-continuity.md) | How continuity & provenance work across sessions and agents |
 
 For licensing, contributing, security policy, and design credits, see the

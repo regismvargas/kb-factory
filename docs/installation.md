@@ -183,6 +183,20 @@ adds 12 slash commands (`/vnext-session-start`, `/new-project-wizard`,
 `/existing-project-*`, …) and keeps `.kb/` canonical while using `.kb-next/` for
 proposals. See [plugins.md](plugins.md).
 
+## Upgrading
+
+If you installed via pip, update an existing project's runtime with:
+
+```bash
+pip install -U kb-factory
+kb-factory update      # in the project root; refreshes .kb/ runtime, keeps your data
+```
+
+`update` rewrites only the engine (`kb.py` + `runtime/`) inside `.kb/`; your
+`kb.db`, `memory/`, exports, and `kb.config.json` are left untouched. If you
+vendored the scaffold by hand instead, re-copy `core/templates/kb/` over your
+`.kb/` (keeping `kb.db` and `kb.config.json`).
+
 ## Troubleshooting
 
 - **`FTS5 OK` check fails.** Your Python was built without FTS5. Install a
@@ -201,10 +215,12 @@ proposals. See [plugins.md](plugins.md).
 
 The repo also ships maintenance and governance commands beyond the core five —
 `doctor` (integrity), `consolidate` (mechanical dedupe + date-based tier
-demotion), `audit-tiers`, `hygiene-audit`, `ingest`, `source-verify`, and the
-`wiki-*` family that compiles a derived Markdown wiki. These are for upkeep and
-auditing, not day-to-day filing; run `python .kb/kb.py --help` to list them, and
-see [commands.md](commands.md) for details.
+demotion), `audit-tiers`, `hygiene-audit`, `ingest`, `source-verify`, the
+optional `harden` (opt-in append-only DB triggers — see the
+[integrity model](concepts.md#integrity-model-how-append-only-is-enforced)), and
+the `wiki-*` family that compiles a derived Markdown wiki. These are for upkeep
+and auditing, not day-to-day filing; run `python .kb/kb.py --help` to list them,
+and see [commands.md](commands.md) for details.
 
 ## Next steps
 

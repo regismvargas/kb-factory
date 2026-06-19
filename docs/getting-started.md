@@ -38,10 +38,25 @@ If both print successfully, you're ready.
 > **Not a developer, and would rather not open a terminal at all?** Start with the
 > [No-code guide](guide/no-code/index.md) — it walks the whole thing by chat.
 
-## 1. Install the scaffold into your project
+## 1. Install KB Factory into your project
 
-KB Factory lives in a single `.kb/` folder. Copy the template from this repo
-into the project that should own the knowledge base, then initialize the store.
+KB Factory lives in a single `.kb/` folder. The fastest way to create it is the
+published CLI:
+
+```bash
+pip install kb-factory
+cd /path/to/your-project
+kb-factory init
+```
+
+`init` creates the SQLite store and the thin memory surfaces (`NOW.md`,
+`HOT.md`, `INDEX.md`) under `.kb/`. Run it once per project. Later,
+`kb-factory update` refreshes the vendored runtime in `.kb/` to the installed
+version (your data is preserved) — that's how core fixes reach an existing
+project.
+
+**No pip?** Copy the `.kb/` scaffold from a checkout of this repo and initialize
+it directly.
 
 On macOS / Linux:
 
@@ -59,9 +74,7 @@ Set-Location C:\path\to\your-project
 python .kb\kb.py init
 ```
 
-`init` creates the SQLite store and the thin memory surfaces (`NOW.md`,
-`HOT.md`, `INDEX.md`) under `.kb/`. Run it once per project. After that, every
-command is `python .kb/kb.py <command>` from the project root.
+After init, every command is `python .kb/kb.py <command>` from the project root.
 
 > One project = one KB. The `.kb/` folder is the single canonical store that
 > every conversation and every agent in that project reads and writes.
