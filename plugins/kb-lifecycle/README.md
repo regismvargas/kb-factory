@@ -59,7 +59,7 @@ Codex as a **skill** plus the standard engine — not as an installable plugin:
 3. Optionally add KB guidance to the repo's `AGENTS.md` so Codex picks it up at
    session start.
 
-Test with a prompt such as: `Use KB Factory — run session-start and summarize the
+Test with a prompt such as: `Use KB Factory: start a KB session and summarize the
 current state from .kb/memory/NOW.md.`
 
 ### Claude Code
