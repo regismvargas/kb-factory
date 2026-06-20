@@ -394,6 +394,23 @@ def test_kb_lifecycle_plugin_bundles_scaffold(tmp_path: Path) -> None:
         assert ".claude-plugin/plugin.json" in names
 
 
+# -- Manifest hygiene ---------------------------------------------------------
+
+
+def test_claude_manifests_do_not_redeclare_standard_hooks() -> None:
+    """A Claude plugin manifest must not set `hooks` to the auto-loaded
+    `hooks/hooks.json` — Claude Code loads that file automatically, and an
+    explicit declaration triggers a 'duplicate hooks file' load failure
+    (manifest.hooks should only reference ADDITIONAL hook files)."""
+    for manifest in sorted((REPO_ROOT / "plugins").glob("*/.claude-plugin/plugin.json")):
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+        assert data.get("hooks") != "./hooks/hooks.json", (
+            f"{manifest}: declares 'hooks: ./hooks/hooks.json', but Claude Code "
+            "auto-loads that file — remove the key, or point it at an additional "
+            "hook file."
+        )
+
+
 # -- KB/Wiki vNext packages ---------------------------------------------------
 
 
@@ -402,9 +419,9 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
     names = {artifact.archive_path.name for artifact in artifacts}
 
     assert names == {
-        "kb-wiki-vnext-plugin-0.1.4.zip",
-        "kb-wiki-vnext-claude-plugin-0.1.4.zip",
-        "kb-wiki-vnext-cowork-plugin-0.1.4.zip",
+        "kb-wiki-vnext-plugin-0.1.5.zip",
+        "kb-wiki-vnext-claude-plugin-0.1.5.zip",
+        "kb-wiki-vnext-cowork-plugin-0.1.5.zip",
     }
     assert not any(name.startswith(("kb-lifecycle", "session-gate", "case-companion")) for name in names)
 
@@ -435,7 +452,7 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
                 command_text = archive.read(command_name).decode("utf-8")
                 assert command_text.startswith("---\n")
                 assert "description:" in command_text.split("---", 2)[1]
-            if artifact.archive_path.name == "kb-wiki-vnext-plugin-0.1.4.zip":
+            if artifact.archive_path.name == "kb-wiki-vnext-plugin-0.1.5.zip":
                 assert ".codex-plugin/plugin.json" in entries
                 codex_manifest = json.loads(
                     archive.read(".codex-plugin/plugin.json").decode("utf-8")

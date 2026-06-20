@@ -1,6 +1,6 @@
 {
   "name": "kb-wiki-vnext",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
   "author": {
     "name": "KB Factory"
@@ -15,6 +15,5 @@
     "memory",
     "semantic-hygiene"
   ],
-  "skills": "./skills/",
-  "hooks": "./hooks/hooks.json"
+  "skills": "./skills/"
 }

@@ -44,34 +44,23 @@ two delivery paths for the same engine.
 
 ### Codex
 
-- Preferred install surface: repo-local marketplace at `.agents/plugins/marketplace.json`
-- Plugin location for this repository: `plugins/kb-lifecycle/`
-- Marketplace entry should point to `./plugins/kb-lifecycle`
-- Skill-only fallback: extract the standalone `kb-wiki-maintainer` artifact into `~/.codex/skills/` so the resulting folder is `~/.codex/skills/kb-wiki-maintainer/`
-- Important: Codex should treat this plugin ZIP as a distributable source bundle, not the primary install surface. The normal Codex install path for this package is the marketplace entry plus the checked-out plugin folder.
+The Codex CLI has **no plugin/marketplace command**, so KB Factory integrates with
+Codex as a **skill** plus the standard engine — not as an installable plugin:
 
-Recommended repo-local setup:
+1. **Install the skill.** Copy this plugin's `skills/kb-wiki-maintainer/` directory
+   (including `SKILL.md`, `reference.md`, and `agents/openai.yaml`) into
+   `~/.codex/skills/kb-wiki-maintainer/`. To update, copy again over the old folder.
+   (The standalone skill ZIP from
+   `python tools/build_agent_packages.py --include-standalone-skill` unpacks to the
+   same layout.)
+2. **Install the engine.** `pip install kb-factory` then `kb-factory init` / `update`
+   in a project — or vendor the `.kb/` scaffold directly. Codex then runs
+   `python .kb/kb.py …` like any other shell command.
+3. Optionally add KB guidance to the repo's `AGENTS.md` so Codex picks it up at
+   session start.
 
-1. Copy or extract the plugin files into `plugins/kb-lifecycle/`.
-2. Add or keep this entry in `.agents/plugins/marketplace.json`:
-
-```json
-{
-  "name": "kb-lifecycle",
-  "source": {
-    "source": "local",
-    "path": "./plugins/kb-lifecycle"
-  },
-  "policy": {
-    "installation": "AVAILABLE",
-    "authentication": "ON_INSTALL"
-  },
-  "category": "Productivity"
-}
-```
-
-3. Reopen the workspace in Codex so the marketplace entry is picked up.
-4. Test with a prompt such as `Use KB Lifecycle to run a maintenance pass on NOW, HOT, and the wiki.`
+Test with a prompt such as: `Use KB Factory — run session-start and summarize the
+current state from .kb/memory/NOW.md.`
 
 ### Claude Code
 

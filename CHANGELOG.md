@@ -26,6 +26,16 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   update commands in `installation.md` (there is no `plugin update` verb — use
   `uninstall` + `install`, or marketplace auto-update).
 
+### Fixed
+- **kb-wiki-vnext failed to load in Claude Code** ("duplicate hooks file"): its
+  Claude manifest declared `hooks: ./hooks/hooks.json`, which Claude Code already
+  auto-loads. Removed the redundant declaration; bumped kb-wiki-vnext 0.1.4→0.1.5
+  (catalog 0.3.2→0.3.3) so the fix propagates. Added a regression test
+  (`test_claude_manifests_do_not_redeclare_standard_hooks`).
+- Corrected the kb-lifecycle README's **Codex** section: the Codex CLI has no
+  plugin/marketplace command, so the integration is the `~/.codex/skills/` skill +
+  the pip/`.kb.py` engine (+ optional `AGENTS.md`), not a repo-local marketplace.
+
 ## [0.1.2] - 2026-06-16
 
 Acted on an external technical review (validated point-by-point against the code).
