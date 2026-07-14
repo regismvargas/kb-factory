@@ -1,6 +1,6 @@
 {
   "name": "kb-wiki-vnext",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "KB/Wiki vNext thin-memory harness for Codex.",
   "author": {
     "name": "KB Factory"
