@@ -5,6 +5,11 @@
            leaving your data (`kb.db`, `memory/`, `exports/`, `kb.config.json`)
            untouched. This is how core fixes propagate to projects that were
            scaffolded from an older version.
+
+`vnext-init`   — install the KB/Wiki vNext engine into <project>/.kb-next/runtime/
+                 and activate it (populates the resolution ladder's rung 1).
+`vnext-update` — refresh only the `.kb-next/runtime/` engine, leaving vNext data
+                 (config, operations, proposals, manifests, memory, wiki) intact.
 """
 from __future__ import annotations
 
@@ -20,6 +25,13 @@ SCAFFOLD = Path(__file__).resolve().parent / "_scaffold"
 # Engine files refreshed by `update`; everything else in .kb/ is project data.
 ENGINE = ("kb.py", "runtime")
 VERSION_MARKER = ".kb-version"
+
+# KB/Wiki vNext channel: a single self-contained engine vendored under
+# _scaffold_vnext/, installed into <project>/.kb-next/runtime/kb_next.py.
+SCAFFOLD_VNEXT = Path(__file__).resolve().parent / "_scaffold_vnext"
+VNEXT_ENGINE_REL = Path("runtime") / "kb_next.py"
+VNEXT_VERSION_MARKER = ".kb-next-version"
+VNEXT_MODES = ("kb-alone", "kb-wiki")
 
 
 def _copy_tree(src: Path, dst: Path) -> None:
@@ -74,6 +86,54 @@ def cmd_update(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_vnext_init(args: argparse.Namespace) -> int:
+    engine_src = SCAFFOLD_VNEXT / VNEXT_ENGINE_REL
+    if not engine_src.is_file():
+        print("packaged vNext scaffold is missing; reinstall kb-factory", file=sys.stderr)
+        return 1
+    root = Path(args.path).resolve()
+    kbnext = root / ".kb-next"
+    if (kbnext / "kb-next.config.json").exists() and not args.force:
+        print(f"refusing to re-activate existing {kbnext} (pass --force)", file=sys.stderr)
+        return 1
+    # 1) install the engine first so the resolution ladder's rung 1 exists
+    target = kbnext / VNEXT_ENGINE_REL
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(engine_src, target)
+    (kbnext / VNEXT_VERSION_MARKER).write_text(__version__ + "\n", encoding="utf-8")
+    # 2) activate via the engine we just installed; --project-root is a global
+    #    argument and must precede the activation-wizard subcommand
+    subprocess.run(
+        [sys.executable, str(target), "--project-root", str(root),
+         "activation-wizard", "--mode", "short", "--choice", args.mode],
+        check=True,
+    )
+    print(f"Activated KB/Wiki vNext {__version__} at {kbnext} (mode={args.mode})")
+    return 0
+
+
+def cmd_vnext_update(args: argparse.Namespace) -> int:
+    engine_src = SCAFFOLD_VNEXT / VNEXT_ENGINE_REL
+    if not engine_src.is_file():
+        print("packaged vNext scaffold is missing; reinstall kb-factory", file=sys.stderr)
+        return 1
+    root = Path(args.path).resolve()
+    kbnext = root / ".kb-next"
+    if not (kbnext / "kb-next.config.json").exists():
+        print(f"no .kb-next/ found at {kbnext} — run `kb-factory vnext-init` first", file=sys.stderr)
+        return 1
+    target = kbnext / VNEXT_ENGINE_REL
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(engine_src, target)
+    (kbnext / VNEXT_VERSION_MARKER).write_text(__version__ + "\n", encoding="utf-8")
+    print(
+        f"Updated the .kb-next/ runtime at {kbnext} to {__version__}. "
+        "Your data (kb-next.config.json, operations.jsonl, decisions/, proposals/, "
+        "manifests/, memory/, wiki/) was left untouched."
+    )
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="kb-factory", description="KB Factory installer / CLI")
     parser.add_argument("--version", action="version", version=f"kb-factory {__version__}")
@@ -87,6 +147,16 @@ def main(argv=None) -> int:
     update_p = sub.add_parser("update", help="Refresh the .kb/ engine to this version (keeps data)")
     update_p.add_argument("path", nargs="?", default=".", help="project directory (default: cwd)")
     update_p.set_defaults(func=cmd_update)
+
+    vinit_p = sub.add_parser("vnext-init", help="Install + activate KB/Wiki vNext (.kb-next/) in a project")
+    vinit_p.add_argument("path", nargs="?", default=".", help="project directory (default: cwd)")
+    vinit_p.add_argument("--force", action="store_true", help="re-activate an existing .kb-next/")
+    vinit_p.add_argument("--mode", choices=VNEXT_MODES, default="kb-wiki", help="activation mode (default: kb-wiki)")
+    vinit_p.set_defaults(func=cmd_vnext_init)
+
+    vupdate_p = sub.add_parser("vnext-update", help="Refresh the .kb-next/ engine to this version (keeps data)")
+    vupdate_p.add_argument("path", nargs="?", default=".", help="project directory (default: cwd)")
+    vupdate_p.set_defaults(func=cmd_vnext_update)
 
     args = parser.parse_args(argv)
     return args.func(args)

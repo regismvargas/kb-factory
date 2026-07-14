@@ -46,9 +46,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.1.6.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
-| `kb-wiki-vnext-claude-plugin-0.1.6.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
-| `kb-wiki-vnext-cowork-plugin-0.1.6.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-plugin-0.1.7.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-claude-plugin-0.1.7.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-cowork-plugin-0.1.7.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.

@@ -27,6 +27,20 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   `uninstall` + `install`, or marketplace auto-update).
 
 ### Fixed
+- **Durable vNext runtime distribution (all channels)**: the vNext engine
+  (`kb_next.py`) now reaches consumer projects through every channel instead of
+  none. The single master `core/versions/kb-wiki-vnext/runtime/kb_next.py` is
+  (a) injected into every plugin ZIP at `runtime/kb_next.py` (build-time, no
+  committed copy; locked by a required-entry guard + content-identity test),
+  (b) vendored into the pip package under `_scaffold_vnext/` with new
+  `kb-factory vnext-init` / `vnext-update` console commands, and (c) installed
+  into `.kb-next/runtime/kb_next.py` by a new runtime `bootstrap` subcommand the
+  activate/init commands run before `activation-wizard` — killing the
+  chicken-and-egg where activation required the very runtime a consumer lacked.
+  Added `tools/sync_vnext_runtime.py` + byte-identity parity wired into the
+  pre-commit gate and CI so the copies can never drift. Bumped
+  **kb-wiki-vnext 0.1.6→0.1.7** (marketplace catalog 0.3.5→0.3.6) and **pip
+  kb-factory 0.1.2→0.1.3**.
 - **Runtime portability across all vNext surfaces**: the `vnext-session-start`
   command already resolved the runtime via a ladder; extended the same ladder to
   the 7 remaining kb-wiki-vnext commands and to the non-command surfaces (hooks

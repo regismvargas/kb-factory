@@ -10,25 +10,32 @@ project state. The default activation mode is `kb-alone` unless the user
 explicitly asks for KB + Wiki.
 
 1. Confirm `.kb/` exists and do not overwrite it.
-2. If `.kb-next/` already exists, stop and route to
-   `existing-project-configure-vnext` or `existing-project-upgrade-vnext`.
-3. Resolve the vNext runtime. Check these paths in order (Glob or a file
+2. If `.kb-next/kb-next.config.json` already exists, this project is already
+   activated — route to `existing-project-configure-vnext` or
+   `existing-project-upgrade-vnext` and stop. If `.kb-next/` exists but has no
+   config or no `runtime/kb_next.py` (a partial or broken install), continue:
+   the steps below repair it safely (`bootstrap` only writes `runtime/`, never
+   config or memory).
+3. Resolve a runtime you can RUN. Check these paths in order (Glob or a file
    existence check) and use the first that exists:
-   - `.kb-next/runtime/kb_next.py` (runtime installed in the workspace)
+   - `.kb-next/runtime/kb_next.py` (already installed in the workspace)
+   - `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py` (the engine bundled in this
+     plugin; Claude Code sets `CLAUDE_PLUGIN_ROOT` for plugin commands)
+   - `~/.claude/plugins/**/kb-wiki-vnext/runtime/kb_next.py` and the Cowork/Codex
+     plugin directories (glob fallback where `CLAUDE_PLUGIN_ROOT` is unset)
    - `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
      monorepo only)
-4. If no runtime was resolved, stop and report that vNext activation requires
-   the vNext runtime, which this plugin does not currently bundle (known
-   packaging gap). Do not attempt a classic fallback for activation. Ask the
-   user to install or place the runtime at `.kb-next/runtime/kb_next.py`, run
-   this command from the KB Factory authoring monorepo, or keep using the
-   classic `.kb` KB.
-5. Run one of:
-   - `python <resolved-runtime-path> activation-wizard --mode short --choice kb-alone --json`
-   - `python <resolved-runtime-path> activation-wizard --mode short --choice kb-wiki --json`
+4. Install the runtime into the workspace so it is always available:
+   `python <resolved-runtime-path> bootstrap --project-root . --json`
+   This writes `.kb-next/runtime/kb_next.py` (resolution-ladder rung 1). If no
+   runtime could be resolved at all, the plugin install is broken — report that
+   and stop; do not ask the user to hand-place the runtime.
+5. Run activation from the workspace runtime (`--choice kb-wiki` only if the
+   user asked for KB + Wiki):
+   `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-alone --json`
 6. Invoke the `vnext-session-start` plugin command when the client exposes it;
    in a shell run
-   `python <resolved-runtime-path> session-start --json`
+   `python .kb-next/runtime/kb_next.py session-start --json`
    (if `python` is not on PATH, retry with `py` or `python3`).
    Read only `.kb-next/memory/NOW.md`.
 7. Report activation mode, generated paths, and any deferred user decision.

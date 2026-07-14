@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kb-factory"
-version = "0.1.2"
+version = "0.1.3"
 description = "Append-only, source-attributed memory for AI coding agents — local-first, stdlib-only (Python + SQLite)."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -38,4 +38,4 @@ kb-factory = "kb_factory.cli:main"
 packages = ["kb_factory"]
 
 [tool.setuptools.package-data]
-kb_factory = ["_scaffold/*", "_scaffold/**/*"]
+kb_factory = ["_scaffold/*", "_scaffold/**/*", "_scaffold_vnext/*", "_scaffold_vnext/**/*"]

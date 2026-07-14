@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kb-factory-tools",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "KB Factory plugins for local-first, append-only knowledge-base workflows. Distributes kb-lifecycle (KB runtime + wiki maintenance), session-gate (session boundary wrapper), and kb-wiki-vnext (thin-memory harness) for Claude Code and Claude Cowork. New here? Docs and guides: https://github.com/regismvargas/kb-factory/tree/main/docs",
   "owner": {
     "name": "KB Factory"
@@ -43,7 +43,7 @@
       "name": "kb-wiki-vnext",
       "source": "./plugins/kb-wiki-vnext",
       "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Starts with /vnext-session-start, loads only .kb-next/memory/NOW.md by default, and keeps .kb canonical. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "author": {
         "name": "KB Factory"
       },

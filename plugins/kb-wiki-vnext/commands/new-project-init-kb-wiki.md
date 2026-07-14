@@ -11,22 +11,25 @@ published through an approved flow.
 
 1. Ensure `.kb/` exists, using the stand-alone bundle `classic-template/.kb/`
    if this is a fresh workspace.
-2. Resolve the vNext runtime. Check these paths in order (Glob or a file
+2. Resolve a runtime you can RUN. Check these paths in order (Glob or a file
    existence check) and use the first that exists:
-   - `.kb-next/runtime/kb_next.py` (runtime installed in the workspace)
+   - `.kb-next/runtime/kb_next.py` (already installed in the workspace)
+   - `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py` (the engine bundled in this
+     plugin; Claude Code sets `CLAUDE_PLUGIN_ROOT` for plugin commands)
+   - `~/.claude/plugins/**/kb-wiki-vnext/runtime/kb_next.py` and the Cowork/Codex
+     plugin directories (glob fallback where `CLAUDE_PLUGIN_ROOT` is unset)
    - `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
      monorepo only)
-3. If no runtime was resolved, stop and report that vNext activation requires
-   the vNext runtime, which this plugin does not currently bundle (known
-   packaging gap). Do not attempt a classic fallback for activation. Suggest
-   installing or placing the runtime at `.kb-next/runtime/kb_next.py` (or
-   running from the KB Factory authoring monorepo), or keeping the classic
-   `.kb` KB.
-4. If a runtime was resolved, run:
-   `python <resolved-runtime-path> activation-wizard --mode short --choice kb-wiki --json`
+3. Install the runtime into the workspace:
+   `python <resolved-runtime-path> bootstrap --project-root . --json`
+   This writes `.kb-next/runtime/kb_next.py`. If no runtime could be resolved,
+   the plugin install is broken — report that and stop; do not ask the user to
+   hand-place the runtime.
+4. Activate from the workspace runtime:
+   `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-wiki --json`
 5. Invoke the `vnext-session-start` plugin command when the client exposes it;
    in a shell run
-   `python <resolved-runtime-path> session-start --json`
+   `python .kb-next/runtime/kb_next.py session-start --json`
    (if `python` is not on PATH, retry with `py` or `python3`).
    Read only `.kb-next/memory/NOW.md`.
 6. Do not publish `.kb-next` wiki drafts into `.kb/wiki/live`.

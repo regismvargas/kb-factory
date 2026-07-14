@@ -7,8 +7,8 @@ Session start is thin:
 
 - Invoke the explicit vNext `vnext-session-start` plugin/slash command when
   the client exposes it. When working in a shell, resolve the runtime —
-  `.kb-next/runtime/kb_next.py`, else
-  `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
+  `.kb-next/runtime/kb_next.py`, else the plugin-bundled `runtime/kb_next.py`,
+  else `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
   if no runtime resolves, fall back to classic
   `python .kb/kb.py lifecycle session-start --json`.

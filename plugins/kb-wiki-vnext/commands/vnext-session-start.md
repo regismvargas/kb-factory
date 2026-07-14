@@ -11,6 +11,8 @@ vNext, Session Gate, and classic KB lifecycle commands cannot collide.
 1. Resolve the vNext runtime. Check these paths in order (Glob or a file
    existence check) and use the first that exists:
    - `.kb-next/runtime/kb_next.py` (runtime installed in the workspace)
+   - `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py` (engine bundled in this plugin;
+     Claude Code sets `CLAUDE_PLUGIN_ROOT`)
    - `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
      monorepo only)
 2. If a runtime was resolved and shell access is available, run:

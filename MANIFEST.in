@@ -1,4 +1,5 @@
 recursive-include kb_factory/_scaffold *
+recursive-include kb_factory/_scaffold_vnext *
 include LICENSE
 include NOTICE
 include README.md
