@@ -440,18 +440,16 @@ def build_artifacts(
         ),
     ]
 
-    # The vNext plugin ships its runtime engine so the resolution ladder can find
-    # kb_next.py at ${CLAUDE_PLUGIN_ROOT}/runtime/. Injected from the single master
-    # at build time (no committed copy) and locked by required_entries.
-    vnext_runtime_tree = (
-        (root / "core" / "versions" / "kb-wiki-vnext" / "runtime", "runtime"),
-    )
+    # The vNext plugin COMMITS its runtime engine at
+    # plugins/kb-wiki-vnext/runtime/kb_next.py (kept byte-identical to the master
+    # by tools/sync_vnext_runtime.py + the parity gate) so every install path —
+    # ZIP (via iter_files), marketplace (repo source), and pip — carries it.
+    # required_entries locks its presence in the built ZIP.
     vnext_runtime_required = ("runtime/kb_next.py",)
     vnext_artifacts: list[Artifact] = [
         Artifact(
             source_root=vnext_root,
             archive_path=output_dir / f"kb-wiki-vnext-plugin-{vnext_version}.zip",
-            extra_trees=vnext_runtime_tree,
             required_entries=vnext_runtime_required,
         ),
         Artifact(
@@ -459,7 +457,6 @@ def build_artifacts(
             archive_path=output_dir / f"kb-wiki-vnext-claude-plugin-{vnext_version}.zip",
             exclude_top_level=(".codex-plugin",),
             exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
-            extra_trees=vnext_runtime_tree,
             required_entries=vnext_runtime_required,
         ),
         Artifact(
@@ -467,7 +464,6 @@ def build_artifacts(
             archive_path=output_dir / f"kb-wiki-vnext-cowork-plugin-{vnext_version}.zip",
             exclude_top_level=(".codex-plugin",),
             exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
-            extra_trees=vnext_runtime_tree,
             required_entries=vnext_runtime_required,
         ),
     ]

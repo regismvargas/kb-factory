@@ -27,6 +27,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   `uninstall` + `install`, or marketplace auto-update).
 
 ### Fixed
+- **vNext runtime now ships via the marketplace too**: the engine is committed at
+  `plugins/kb-wiki-vnext/runtime/kb_next.py` (kept byte-identical to the master by
+  the parity gate + `sync_vnext_runtime.py`), so a marketplace install (repo
+  source, no build step) carries it — not only the built ZIP. The packager picks
+  up the committed copy via `iter_files`; build-time injection was removed to
+  avoid a duplicate entry. Bumped **kb-wiki-vnext 0.1.7→0.1.8** (marketplace
+  catalog 0.3.6→0.3.7).
 - **Durable vNext runtime distribution (all channels)**: the vNext engine
   (`kb_next.py`) now reaches consumer projects through every channel instead of
   none. The single master `core/versions/kb-wiki-vnext/runtime/kb_next.py` is
