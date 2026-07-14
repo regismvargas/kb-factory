@@ -87,7 +87,9 @@ vNext or classic KB lifecycle session commands.
 
 This wrapper should remain a thin adapter around:
 
-- `python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json`
+- the vNext runtime `kb_next.py session-start --json`, resolved from
+  `.kb-next/runtime/kb_next.py`, else
+  `core/versions/kb-wiki-vnext/runtime/kb_next.py`
 - `python .kb/kb.py lifecycle session-start --json`
 - `python .kb/kb.py lifecycle session-end --json`
 - the companion workflow plugin's `role-boundaries.md`

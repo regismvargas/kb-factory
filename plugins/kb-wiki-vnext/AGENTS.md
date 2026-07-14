@@ -6,8 +6,12 @@ explicitly piloting KB/Wiki vNext.
 Session start is thin:
 
 - Invoke the explicit vNext `vnext-session-start` plugin/slash command when
-  the client exposes it. When working in a shell, run
-  `python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json`.
+  the client exposes it. When working in a shell, resolve the runtime —
+  `.kb-next/runtime/kb_next.py`, else
+  `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
+  monorepo) — and run `python <resolved-runtime-path> session-start --json`;
+  if no runtime resolves, fall back to classic
+  `python .kb/kb.py lifecycle session-start --json`.
 - Read only `.kb-next/memory/NOW.md` by default.
 - Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
   artifacts only on demand.

@@ -27,6 +27,17 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   `uninstall` + `install`, or marketplace auto-update).
 
 ### Fixed
+- **Runtime portability across all vNext surfaces**: the `vnext-session-start`
+  command already resolved the runtime via a ladder; extended the same ladder to
+  the 7 remaining kb-wiki-vnext commands and to the non-command surfaces (hooks
+  echo, SKILL, `AGENTS.md`, README, Codex `defaultPrompt`), plus Session Gate's
+  vNext routing docs. Surfaces now resolve `.kb-next/runtime/kb_next.py`, else the
+  authoring-monorepo path, else fall back to classic
+  `python .kb/kb.py lifecycle session-start --json`, instead of hardcoding
+  `core/versions/...` (which failed with "Exit 2" in consumer projects).
+  Generalized the packaging disambiguation test accordingly. Bumped
+  **kb-wiki-vnext 0.1.5→0.1.6, session-gate 0.2.5→0.2.6** (marketplace catalog
+  0.3.3→0.3.5).
 - **kb-wiki-vnext failed to load in Claude Code** ("duplicate hooks file"): its
   Claude manifest declared `hooks: ./hooks/hooks.json`, which Claude Code already
   auto-loads. Removed the redundant declaration; bumped kb-wiki-vnext 0.1.4→0.1.5

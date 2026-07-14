@@ -46,9 +46,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.1.5.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
-| `kb-wiki-vnext-claude-plugin-0.1.5.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
-| `kb-wiki-vnext-cowork-plugin-0.1.5.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-plugin-0.1.6.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-claude-plugin-0.1.6.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-cowork-plugin-0.1.6.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.
@@ -70,10 +70,13 @@ python -m pytest -p no:cacheprovider tests\test_build_agent_packages.py -q
 ```
 
 After installation, invoke the `vnext-session-start` plugin command when the
-client exposes it, or run
-`python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json` in
-a shell, and confirm it tells the agent to read only `.kb-next/memory/NOW.md`
-by default. Existing and new project setup commands are also shipped under
+client exposes it. In a shell, resolve the runtime
+(`.kb-next/runtime/kb_next.py`, else
+`core/versions/kb-wiki-vnext/runtime/kb_next.py` in the KB Factory authoring
+monorepo) and run `python <resolved-runtime-path> session-start --json`; if no
+runtime resolves, fall back to classic
+`python .kb/kb.py lifecycle session-start --json`. Confirm the output tells
+the agent to read only `.kb-next/memory/NOW.md` by default. Existing and new project setup commands are also shipped under
 explicit `existing-project-*` and `new-project-*` names.
 
 ## Troubleshooting

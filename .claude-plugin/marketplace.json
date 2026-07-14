@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kb-factory-tools",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "KB Factory plugins for local-first, append-only knowledge-base workflows. Distributes kb-lifecycle (KB runtime + wiki maintenance), session-gate (session boundary wrapper), and kb-wiki-vnext (thin-memory harness) for Claude Code and Claude Cowork. New here? Docs and guides: https://github.com/regismvargas/kb-factory/tree/main/docs",
   "owner": {
     "name": "KB Factory"
@@ -27,7 +27,7 @@
       "name": "session-gate",
       "source": "./plugins/session-gate",
       "description": "Thin session-boundary wrapper for Claude Cowork workspaces. Operational workaround for Cowork's missing automatic plugin hooks; provides explicit /gate-session-start and /gate-session-end commands that route to KB-lifecycle canonical surfaces. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.2.5",
+      "version": "0.2.6",
       "author": {
         "name": "KB Factory"
       },

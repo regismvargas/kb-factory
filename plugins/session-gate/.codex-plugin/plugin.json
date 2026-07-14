@@ -1,6 +1,6 @@
 {
   "name": "session-gate",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Thin Cowork session-boundary wrapper for KB-lifecycle and a companion workflow plugin. Detects which canonical surfaces apply and routes startup and closeout to them without duplicating durable memory or workflow canon.",
   "author": {
     "name": "KB Factory"

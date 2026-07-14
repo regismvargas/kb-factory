@@ -27,7 +27,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use the KB/Wiki vNext vnext-session-start plugin command when it is exposed; in PowerShell/PATH shells run python core\\versions\\kb-wiki-vnext\\runtime\\kb_next.py session-start --json instead.",
+      "Use the KB/Wiki vNext vnext-session-start plugin command when it is exposed; in PowerShell/PATH shells resolve the runtime (.kb-next\\runtime\\kb_next.py, else core\\versions\\kb-wiki-vnext\\runtime\\kb_next.py) and run python <resolved-runtime-path> session-start --json, else fall back to python .kb/kb.py lifecycle session-start --json.",
       "Use KB/Wiki vNext existing/new project setup commands for deployment.",
       "Use KB/Wiki vNext targeted lookup before opening broad memory.",
       "Run read-only python .kb/kb.py hygiene-audit --json before HOT overflow proposal flows.",

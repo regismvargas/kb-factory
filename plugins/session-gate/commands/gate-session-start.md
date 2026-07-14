@@ -44,17 +44,20 @@ Use the vNext thin bootstrap contract. It supersedes classic KB startup for
 default session orientation because `.kb-next/memory/NOW.md` is the only
 default read.
 
-1. If the detector reports `runtime_ref`, run:
-   `python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json`
-   or the equivalent `runtime/kb_next.py session-start --json` in a
-   stand-alone bundle.
+1. If the detector reports `runtime_ref`, run
+   `python <runtime_ref> session-start --json`. If `runtime_ref` is absent,
+   resolve the runtime yourself — `.kb-next/runtime/kb_next.py`, else
+   `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
+   monorepo) — and run `python <resolved-runtime-path> session-start --json`.
 2. Read only `.kb-next/memory/NOW.md`.
 3. Stop. HOT, INDEX, wiki pages, and historical artifacts remain on demand.
 
 If the vNext runtime cannot be resolved, invoke the installed
 `/kb-wiki-vnext:vnext-session-start` plugin/slash command when available; do
 not treat `vnext-session-start` as a PowerShell/PATH executable. If neither
-surface is available, report the deferred runtime command explicitly.
+surface is available, use the data-only classic fallback
+`python .kb/kb.py lifecycle session-start --json`, read
+`.kb-next/memory/NOW.md`, and report that the vNext runtime was deferred.
 
 ## Step 3: KB-lifecycle startup (only if `kb.found == true` and `vnext.found == false`)
 

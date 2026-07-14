@@ -419,9 +419,9 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
     names = {artifact.archive_path.name for artifact in artifacts}
 
     assert names == {
-        "kb-wiki-vnext-plugin-0.1.5.zip",
-        "kb-wiki-vnext-claude-plugin-0.1.5.zip",
-        "kb-wiki-vnext-cowork-plugin-0.1.5.zip",
+        "kb-wiki-vnext-plugin-0.1.6.zip",
+        "kb-wiki-vnext-claude-plugin-0.1.6.zip",
+        "kb-wiki-vnext-cowork-plugin-0.1.6.zip",
     }
     assert not any(name.startswith(("kb-lifecycle", "session-gate", "case-companion")) for name in names)
 
@@ -452,7 +452,7 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
                 command_text = archive.read(command_name).decode("utf-8")
                 assert command_text.startswith("---\n")
                 assert "description:" in command_text.split("---", 2)[1]
-            if artifact.archive_path.name == "kb-wiki-vnext-plugin-0.1.5.zip":
+            if artifact.archive_path.name == "kb-wiki-vnext-plugin-0.1.6.zip":
                 assert ".codex-plugin/plugin.json" in entries
                 codex_manifest = json.loads(
                     archive.read(".codex-plugin/plugin.json").decode("utf-8")
@@ -503,7 +503,19 @@ def test_vnext_packages_disambiguate_plugin_command_from_shell_runtime(tmp_path:
 
         assert "vnext-session-start" in combined
         assert "plugin/slash command" in combined or "plugin command" in combined
-        assert "core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json" in combined
+        # Portability: surfaces resolve the runtime via a ladder
+        # (.kb-next/runtime/kb_next.py, else the authoring-monorepo path)
+        # instead of pinning the invocation to core/versions/...; still
+        # require an explicit shell-runtime bootstrap instruction.
+        assert ".kb-next/runtime/kb_next.py" in combined
+        assert "core/versions/kb-wiki-vnext/runtime/kb_next.py" in combined
+        assert "session-start --json" in combined
+        # ...and at least one explicit, CONTIGUOUS portable runtime invocation
+        # must exist in the package (not merely the pieces scattered apart).
+        assert (
+            "<resolved-runtime-path> session-start --json" in combined
+            or "resolved-runtime-path session-start --json" in combined
+        )
         assert "run vnext-session-start" not in combined.lower()
         assert "Run `vnext-session-start`" not in combined
 
@@ -518,9 +530,9 @@ def test_session_gate_packages_use_explicit_command_names(tmp_path: Path) -> Non
     ]
     names = {artifact.archive_path.name for artifact in artifacts}
     assert names == {
-        "session-gate-plugin-0.2.5.zip",
-        "session-gate-claude-plugin-0.2.5.zip",
-        "session-gate-cowork-plugin-0.2.5.zip",
+        "session-gate-plugin-0.2.6.zip",
+        "session-gate-claude-plugin-0.2.6.zip",
+        "session-gate-cowork-plugin-0.2.6.zip",
     }
 
     for artifact in artifacts:

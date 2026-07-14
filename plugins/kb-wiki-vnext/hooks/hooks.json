@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo KB/Wiki vNext: use the vnext-session-start plugin command when exposed; in shell run python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json, then read only .kb-next/memory/NOW.md by default."
+            "command": "echo KB/Wiki vNext: use the vnext-session-start plugin command when exposed. In a shell, resolve the runtime at .kb-next/runtime/kb_next.py or core/versions/kb-wiki-vnext/runtime/kb_next.py and run python resolved-runtime-path session-start --json, else run classic python .kb/kb.py lifecycle session-start --json. Then read only .kb-next/memory/NOW.md by default."
           }
         ]
       }

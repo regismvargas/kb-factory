@@ -13,8 +13,12 @@ release gates.
 ## Session Contract
 
 1. Start with the vNext `vnext-session-start` plugin/slash command when the
-   client exposes it; in a shell, run
-   `python core/versions/kb-wiki-vnext/runtime/kb_next.py session-start --json`.
+   client exposes it. In a shell, resolve the runtime —
+   `.kb-next/runtime/kb_next.py`, else
+   `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
+   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
+   if no runtime resolves, fall back to classic
+   `python .kb/kb.py lifecycle session-start --json`.
 2. Read only `.kb-next/memory/NOW.md` by default.
 3. Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
    artifacts only when the task needs them.
