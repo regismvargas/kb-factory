@@ -27,7 +27,7 @@ def main() -> int:
         )
 
     lines.append(
-        "For projects with a `.kb/` directory, keep session and handoff notes thin. Durable project memory still belongs in `.kb/`."
+        "For CASE projects, keep dispatch and handoff artifacts thin. Durable project memory still belongs in `.kb/`."
     )
 
     print("\n".join(lines))

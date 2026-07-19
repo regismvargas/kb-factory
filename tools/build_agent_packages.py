@@ -4,7 +4,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from zipfile import ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 
 @dataclass(frozen=True)
@@ -31,25 +31,73 @@ def load_version(plugin_root: Path) -> str:
         plugin_root / ".codex-plugin" / "plugin.json",
         plugin_root / ".claude-plugin" / "plugin.json",
     )
+    versions: list[str] = []
     for manifest in manifest_paths:
-        if manifest.exists():
+        if not manifest.is_file():
+            raise FileNotFoundError(f"required plugin manifest is missing: {manifest}")
+        try:
             data = json.loads(manifest.read_text(encoding="utf-8"))
-            return data.get("version", "0.0.0")
-    return "0.0.0"
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"invalid plugin manifest JSON: {manifest}: {exc}") from exc
+        version = data.get("version")
+        if not isinstance(version, str) or not version.strip() or version == "0.0.0":
+            raise ValueError(f"required plugin has no released version: {manifest}")
+        versions.append(version)
+    if len(set(versions)) != 1:
+        raise ValueError(
+            f"plugin manifest versions disagree for {plugin_root}: {', '.join(versions)}"
+        )
+    return versions[0]
+
+
+def _is_reparse_point(path: Path) -> bool:
+    """Return true for symlinks and Windows reparse points without following them."""
+    try:
+        stat = path.lstat()
+    except FileNotFoundError:
+        return False
+    reparse_attribute = getattr(stat, "st_file_attributes", 0) & 0x400
+    return path.is_symlink() or bool(reparse_attribute)
 
 
 def iter_files(root: Path):
+    if not root.is_dir():
+        raise FileNotFoundError(f"required package source directory is missing: {root}")
+    if _is_reparse_point(root):
+        raise ValueError(f"package source directory must not be a link or reparse point: {root}")
     for path in sorted(root.rglob("*")):
-        if "__pycache__" in path.parts:
+        if _is_reparse_point(path):
+            # Never dereference an arbitrary local link into a public artifact.
             continue
-        if path.suffix == ".pyc":
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
             continue
         if path.is_file():
             yield path
 
 
+def _write_deterministic_file(archive: ZipFile, source: Path, archive_name: str) -> None:
+    """Write stable ZIP metadata so identical inputs yield identical artifacts."""
+    info = ZipInfo(archive_name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = ZIP_DEFLATED
+    info.external_attr = 0o100644 << 16
+    archive.writestr(info, source.read_bytes())
+
+
 def write_zip(artifact: Artifact) -> None:
     artifact.archive_path.parent.mkdir(parents=True, exist_ok=True)
+    extra_files: list[tuple[Path, str]] = []
+    for extra_root, prefix in artifact.extra_trees:
+        for file_path in iter_files(extra_root):
+            if file_path.name in ("kb.db", "kb.db-shm", "kb.db-wal"):
+                continue
+            archive_name = f"{prefix}/{file_path.relative_to(extra_root).as_posix()}"
+            if artifact.archive_root:
+                archive_name = f"{artifact.archive_root}/{archive_name}"
+            extra_files.append((file_path, archive_name))
+
+    # Generated scaffold copies in a plugin source must not produce duplicate
+    # ZIP entries. The canonical template injected through extra_trees wins.
+    extra_names = {archive_name for _, archive_name in extra_files}
     with ZipFile(artifact.archive_path, "w", compression=ZIP_DEFLATED) as archive:
         for file_path in iter_files(artifact.source_root):
             rel_path = file_path.relative_to(artifact.source_root)
@@ -63,16 +111,11 @@ def write_zip(artifact: Artifact) -> None:
             archive_name = rel_posix
             if artifact.archive_root:
                 archive_name = f"{artifact.archive_root}/{archive_name}"
-            archive.write(file_path, archive_name)
-        for extra_root, prefix in artifact.extra_trees:
-            for file_path in iter_files(extra_root):
-                if file_path.name in ("kb.db", "kb.db-shm", "kb.db-wal"):
-                    continue
-                rel_posix = file_path.relative_to(extra_root).as_posix()
-                archive_name = f"{prefix}/{rel_posix}"
-                if artifact.archive_root:
-                    archive_name = f"{artifact.archive_root}/{archive_name}"
-                archive.write(file_path, archive_name)
+            if archive_name in extra_names:
+                continue
+            _write_deterministic_file(archive, file_path, archive_name)
+        for file_path, archive_name in extra_files:
+            _write_deterministic_file(archive, file_path, archive_name)
 
 
 ANTHROPIC_SKILL_AGENT_SUFFIXES: tuple[str, ...] = ("agents/openai.yaml",)
@@ -341,9 +384,9 @@ def _write_session_gate_skill_zip(plugin_root: Path, archive_path: Path) -> None
                 mappings.append((file_path, f"{prefix}/{rel.as_posix()}"))
 
     with ZipFile(archive_path, "w", compression=ZIP_DEFLATED) as archive:
-        for src, arc in mappings:
+        for src, arc in sorted(mappings, key=lambda item: item[1]):
             if src.is_file():
-                archive.write(src, arc)
+                _write_deterministic_file(archive, src, arc)
 
 
 def build_artifacts(
@@ -351,36 +394,18 @@ def build_artifacts(
     output_dir: Path,
     include_standalone_skill: bool = False,
     scope: str = "all",
-    case_output_dir: Path | None = None,
 ) -> list[Artifact]:
     """Build the full list of Artifact entries.
 
-    Artifacts are grouped by owner:
-      - companion-owned (sibling repo): companion plugin ZIPs and standalone
-        skills under `templates/claude-code-skills/`.
-      - this-repo-owned: kb-lifecycle, kb-wiki-maintainer, session-gate, and the
-        local deployment copy of the companion plugin.
-
-    If ``case_output_dir`` is provided, companion-owned artifacts (plugins +
-    standalone skills) are routed there; otherwise they share ``output_dir``.
-    The ``scope`` filter accepts ``"all" | "case" | "kb" | "vnext"``.
+    Public artifacts are limited to kb-lifecycle, KB/Wiki vNext, and
+    session-gate. The ``scope`` filter accepts ``"all" | "kb" | "vnext"``.
     """
     kb_root = root / "plugins" / "kb-lifecycle"
     vnext_root = root / "plugins" / "kb-wiki-vnext"
     session_gate_root = root / "plugins" / "session-gate"
-    claude_md_root = root / "plugins" / "claude-md-maintainer"
-    case_framework_root = root.parent / "case-framework"
-    # The companion plugin lives in the sibling repo under plugins/.
-    case_plugin_root = case_framework_root / "plugins" / "case-companion"
-    case_skill_root = case_framework_root / "templates" / "claude-code-skills"
-
     kb_version = load_version(kb_root)
     session_gate_version = load_version(session_gate_root)
     vnext_version = load_version(vnext_root)
-    claude_md_version = load_version(claude_md_root)
-    case_plugin_version = load_version(case_plugin_root)
-
-    case_out = case_output_dir if case_output_dir is not None else output_dir
 
     # The kb-lifecycle plugin bundles the .kb/ scaffold (engine + config) so an
     # agent can scaffold a project's KB without a repo checkout. Injected at
@@ -408,8 +433,6 @@ def build_artifacts(
             exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
             extra_trees=scaffold_tree,
         ),
-        # Companion artifacts live in the sibling repo; build them with
-        # --scope case or from that repo's own build tooling.
         Artifact(
             source_root=session_gate_root,
             archive_path=output_dir / f"session-gate-plugin-{session_gate_version}.zip",
@@ -423,18 +446,6 @@ def build_artifacts(
         Artifact(
             source_root=session_gate_root,
             archive_path=output_dir / f"session-gate-cowork-plugin-{session_gate_version}.zip",
-            exclude_top_level=(".codex-plugin",),
-            exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
-        ),
-        Artifact(
-            source_root=claude_md_root,
-            archive_path=output_dir / f"claude-md-maintainer-claude-plugin-{claude_md_version}.zip",
-            exclude_top_level=(".codex-plugin",),
-            exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
-        ),
-        Artifact(
-            source_root=claude_md_root,
-            archive_path=output_dir / f"claude-md-maintainer-cowork-plugin-{claude_md_version}.zip",
             exclude_top_level=(".codex-plugin",),
             exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
         ),
@@ -468,44 +479,7 @@ def build_artifacts(
         ),
     ]
 
-    # Companion-owned artifacts, sourced from the sibling repo's
-    # plugins/case-companion/ directory.
-    case_artifacts: list[Artifact] = [
-        Artifact(
-            source_root=case_plugin_root,
-            archive_path=case_out / f"case-companion-plugin-{case_plugin_version}.zip",
-        ),
-        Artifact(
-            source_root=case_plugin_root,
-            archive_path=case_out / f"case-companion-claude-plugin-{case_plugin_version}.zip",
-            exclude_top_level=(".codex-plugin",),
-            exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
-        ),
-        Artifact(
-            source_root=case_plugin_root,
-            archive_path=case_out / f"case-companion-cowork-plugin-{case_plugin_version}.zip",
-            exclude_top_level=(".codex-plugin",),
-            exclude_relative_suffixes=ANTHROPIC_SKILL_AGENT_SUFFIXES,
-        ),
-    ]
-
     if include_standalone_skill:
-        case_artifacts.extend(
-            build_skill_artifacts(
-                case_skill_root,
-                case_out,
-                case_claude_version,
-                (
-                    "case-adoption-audit",
-                    "case-resync",
-                    "case-rollout",
-                    "case-runtime-sync",
-                    "kb-audit",
-                    "kb-init",
-                    "kb-sync",
-                ),
-            )
-        )
         kb_artifacts.append(
             Artifact(
                 source_root=kb_root / "skills" / "kb-wiki-maintainer",
@@ -515,13 +489,11 @@ def build_artifacts(
             )
         )
 
-    if scope == "case":
-        return case_artifacts
     if scope == "vnext":
         return vnext_artifacts
     if scope == "kb":
-        return kb_artifacts + vnext_artifacts
-    return kb_artifacts + vnext_artifacts + case_artifacts
+        return kb_artifacts
+    return kb_artifacts + vnext_artifacts
 
 
 def main() -> int:
@@ -534,39 +506,13 @@ def main() -> int:
         help="Output directory (this repo's own artifacts) relative to the repository root.",
     )
     parser.add_argument(
-        "--case-output-dir",
-        default=None,
-        help=(
-            "Explicit override for the companion-owned output directory. "
-            "Absolute paths are used as-is; relative paths resolve against the "
-            "repository root. When unset, defaults to the sibling repo's "
-            "dist/agent-packages/ directory. Using this flag overrides "
-            "--legacy-shared-output."
-        ),
-    )
-    parser.add_argument(
-        "--legacy-shared-output",
-        action="store_true",
-        help=(
-            "Legacy opt-out: force all artifacts (including companion ones) to "
-            "share --output-dir, matching the older shared-output behavior. Not "
-            "recommended. Kept for reproducing historical builds only."
-        ),
-    )
-    parser.add_argument(
-        "--per-owner-output",
-        action="store_true",
-        help=argparse.SUPPRESS,  # deprecated no-op: per-owner routing is now the default.
-    )
-    parser.add_argument(
         "--scope",
-        choices=("all", "case", "kb", "vnext"),
+        choices=("all", "kb", "vnext"),
         default="all",
         help=(
-            "Restrict built artifacts by owner: 'case' builds only the "
-            "companion-owned artifacts; 'kb' builds only this repo's artifacts "
-            "including vNext; 'vnext' builds only KB/Wiki vNext; 'all' "
-            "(default) builds all."
+            "Restrict public artifacts: 'kb' builds kb-lifecycle and session-gate; "
+            "'vnext' builds only KB/Wiki vNext; 'all' (default) builds all nine "
+            "public plugin ZIPs."
         ),
     )
     parser.add_argument(
@@ -584,25 +530,11 @@ def main() -> int:
     root = repo_root()
     output_dir = root / args.output_dir
 
-    # Resolution order (highest precedence first):
-    #   1. --case-output-dir (explicit override, always wins)
-    #   2. --legacy-shared-output (opt-in to older shared routing)
-    #   3. Default: route companion-owned artifacts to the sibling repo's
-    #      dist/agent-packages/ directory.
-    if args.case_output_dir is not None:
-        case_raw = Path(args.case_output_dir)
-        case_output_dir: Path | None = case_raw if case_raw.is_absolute() else root / case_raw
-    elif args.legacy_shared_output:
-        case_output_dir = None
-    else:
-        case_output_dir = (root.parent / "case-framework" / "dist" / "agent-packages").resolve()
-
     artifacts = build_artifacts(
         root,
         output_dir,
         include_standalone_skill=args.include_standalone_skill,
         scope=args.scope,
-        case_output_dir=case_output_dir,
     )
 
     # session-gate standalone skill is KB-owned (kb-factory) — only emit it

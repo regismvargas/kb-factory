@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -30,7 +32,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.1.6"
+RUNTIME_VERSION = "0.1.7"
 OBSIDIAN_DESIGN_NOTES_REL = (
     Path("state")
     / "runs"
@@ -917,36 +919,38 @@ def infer_compliance_work_type(topic: str | None) -> str:
 
 def compliance_surfaces(work_type: str) -> list[str]:
     base = [
-        "core/versions/kb-wiki-vnext/spec-pack/product-intent-prd.pt-br.md",
-        "core/versions/kb-wiki-vnext/spec-pack/README.md",
-        "core/versions/kb-wiki-vnext/spec-pack/release-gates.md",
-        "core/versions/kb-wiki-vnext/spec-pack/test-matrix.md",
-        "core/versions/kb-wiki-vnext/spec-pack/golden-rules-map.md",
-        ".kb/memory/NOW.md",
+        "products/kb-wiki-vnext/product.json",
+        "products/kb-wiki-vnext/README.md",
+        "products/kb-wiki-vnext/docs/en/architecture.md",
+        "products/kb-wiki-vnext/docs/en/maintainer-release.md",
+        "docs/development.md",
+        "docs/releasing.md",
+        "tests/test_kb_wiki_vnext_runtime.py",
+        "tests/test_vnext_runtime_parity.py",
     ]
     extras = {
         "implementation": [
-            "core/versions/kb-wiki-vnext/spec-pack/engineer-maintainer-guide.md",
-            "core/versions/kb-wiki-vnext/spec-pack/provenance-chain-spec.md",
-            "core/versions/kb-wiki-vnext/spec-pack/feature-rationale-register.md",
+            "core/versions/kb-wiki-vnext/runtime/kb_next.py",
+            "tests/test_kb_wiki_vnext_semantic_runtime.py",
+            "tests/test_vnext_pip_channel.py",
         ],
         "review": [
-            "core/versions/kb-wiki-vnext/spec-pack/operator-runbook.md",
-            "state/runs/",
+            "products/kb-wiki-vnext/docs/en/usage-guide.md",
+            "tests/test_kb_wiki_vnext_semantic_runtime.py",
         ],
         "release": [
-            "core/versions/kb-wiki-vnext/spec-pack/packaging-distribution-guide.md",
-            "core/versions/kb-wiki-vnext/spec-pack/migration-rollout-fallback-guide.md",
-            "state/runs/",
+            "products/kb-wiki-vnext/docs/en/admin-installation.md",
+            "products/kb-wiki-vnext/docs/en/upgrade-rollback.md",
+            "tests/test_vnext_runtime_shipping.py",
         ],
         "track-b": [
-            "core/versions/kb-wiki-vnext/spec-pack/provenance-chain-spec.md",
-            "core/versions/kb-wiki-vnext/spec-pack/operator-runbook.md",
+            "docs/provenance-and-continuity.md",
+            "products/kb-wiki-vnext/docs/en/architecture.md",
         ],
         "packaging": [
-            "core/versions/kb-wiki-vnext/spec-pack/packaging-distribution-guide.md",
             "plugins/kb-wiki-vnext/AGENTS.md",
             "plugins/kb-wiki-vnext/skills/kb-wiki-vnext/SKILL.md",
+            "tests/test_vnext_runtime_shipping.py",
         ],
         "operational": [
             ".kb-next/memory/NOW.md",
@@ -959,8 +963,8 @@ def compliance_required_tests(work_type: str) -> list[str]:
     if work_type == "operational":
         return ["No development test run required for simple operational use."]
     tests = [
-        "python tools\\validate_kb_wiki_vnext_spec_pack.py",
-        "python -m pytest -p no:cacheprovider --basetemp=.pytest_tmp_vnext_compliance tests\\test_kb_wiki_vnext_runtime.py tests\\test_kb_wiki_vnext_semantic_runtime.py tests\\test_kb_wiki_vnext_spec_pack.py tests\\test_build_agent_packages.py -q",
+        "python tools\\sync_vnext_runtime.py --check",
+        "python -m pytest -p no:cacheprovider --basetemp=.pytest_tmp_vnext_compliance tests\\test_kb_wiki_vnext_runtime.py tests\\test_kb_wiki_vnext_semantic_runtime.py tests\\test_vnext_runtime_parity.py tests\\test_vnext_pip_channel.py tests\\test_vnext_runtime_shipping.py -q",
     ]
     if work_type == "packaging":
         tests.append("python -m pytest -p no:cacheprovider tests\\test_build_agent_packages.py -q")
@@ -974,7 +978,7 @@ def compliance_required_evidence(work_type: str) -> list[str]:
             "Do not mutate .kb/ or publish .kb/wiki/live.",
         ]
     evidence = [
-        "Map the requested work to PRD/master plan, release checkpoint, and test-matrix row.",
+        "Map the requested work to the public product manifest, maintainer release guide, and focused test surface.",
         "Record commands and results in a compatible run dossier when implementation, hardening, release, or rollout work occurs.",
         "Record any waiver explicitly with owner approval before bypassing a checkpoint.",
     ]
@@ -987,12 +991,12 @@ def compliance_required_evidence(work_type: str) -> list[str]:
 
 def completion_rule() -> list[str]:
     return [
-        "Final release dossier signed by Runtime, Provenance, Docs/Spec, QA, Packaging, and Red Team.",
-        "Spec-pack validator green.",
-        "vNext pytest suite green.",
+        "Public product manifest, architecture, and maintainer release surfaces agree on the release contract.",
+        "vNext runtime mirrors pass python tools\\sync_vnext_runtime.py --check.",
+        "Public vNext pytest suite green.",
         "Required pilots completed or owner-waived.",
         f"{SOURCE_LINKAGE_TRACK_B_BLOCKER_ID} resolved or explicitly waived for Track B.",
-        "Canonical KB decision records that vNext is 100% developed against PRD/master plan.",
+        "Release decision and evidence are recorded through the approved public release process.",
     ]
 
 
@@ -1041,7 +1045,7 @@ def build_compliance_preflight(root: Path, work_type_arg: str | None, topic: str
         next_allowed_action = (
             "Operational vNext use may proceed with thin memory."
             if work_type == "operational"
-            else "Proceed only with the listed PRD/master-plan mapping, traceability, tests, and evidence."
+            else "Proceed only with the listed public release mapping, traceability, tests, and evidence."
         )
 
     development_contract_required = work_type not in {"operational", "unknown"}
@@ -1054,7 +1058,7 @@ def build_compliance_preflight(root: Path, work_type_arg: str | None, topic: str
         "contract_scope": COMPLIANCE_CONTRACT_SCOPE,
         "development_contract_required": development_contract_required,
         "applicable_gates": (
-            ["Development Compliance Contract", "Gate 0 PRD", "Gate 1 Docs/Provenance", "Semantic Memory Gate"]
+            ["Development Compliance Contract", "Public Product Manifest", "Public Documentation/Authority", "Runtime/Test Parity"]
             if work_type not in {"operational", "unknown"}
             else ["Thin Session Contract"]
         ),
@@ -1118,7 +1122,15 @@ def path_is_link_or_junction(path: Path) -> bool:
     if path.is_symlink():
         return True
     is_junction = getattr(path, "is_junction", None)
-    return bool(is_junction and is_junction())
+    if is_junction and is_junction():
+        return True
+    try:
+        attributes = path.lstat().st_file_attributes
+    except (AttributeError, OSError):
+        return False
+    return bool(
+        attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    )
 
 
 def assert_no_reparse_points(path: Path) -> None:
@@ -3880,31 +3892,98 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     vNext without a pre-existing runtime (kills the activation chicken-and-egg).
     Writes ONLY runtime/kb_next.py; never touches config, memory, proposals, or
     operations evidence, so it is safe to run as a repair on an activated
-    workspace. Overwrites when the target is missing, --force is given, or the
-    installed RUNTIME_VERSION differs from this one (legacy engines lacking the
-    constant read as None and are refreshed).
+    workspace. An existing target is accepted only when its bytes match this
+    artifact. Replacement is atomic and refuses links, reparse points,
+    directories, and paths that resolve outside the project root.
     """
     root = project_root(args)
     src = Path(__file__).resolve()
-    target = (kb_next_root(root) / "runtime" / "kb_next.py").resolve()
-    if target == src:
+    source_bytes = src.read_bytes()
+    source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+    root_resolved = root.resolve()
+    kb_next_dir = root / ".kb-next"
+    runtime_dir = kb_next_dir / "runtime"
+    target = runtime_dir / "kb_next.py"
+
+    for candidate in (kb_next_dir, runtime_dir, target):
+        if path_is_link_or_junction(candidate):
+            raise RuntimeError(
+                f"bootstrap target must not contain links or reparse points: {candidate}"
+            )
+    if kb_next_dir.exists() and not kb_next_dir.is_dir():
+        raise RuntimeError(f"bootstrap .kb-next path is not a directory: {kb_next_dir}")
+    if runtime_dir.exists() and not runtime_dir.is_dir():
+        raise RuntimeError(f"bootstrap runtime path is not a directory: {runtime_dir}")
+    if target.exists() and not target.is_file():
+        raise RuntimeError(f"bootstrap target is not a regular file: {target}")
+
+    resolved_target = target.resolve(strict=False)
+    if not path_within(resolved_target, root_resolved):
+        raise RuntimeError(
+            f"refusing to bootstrap runtime outside project root: {target}"
+        )
+
+    same_file = False
+    if target.exists():
+        try:
+            same_file = os.path.samefile(src, target)
+        except OSError:
+            same_file = False
+    if same_file:
         emit(
-            {"event": "bootstrap", "runtime_path": str(target), "action": "self",
-             "runtime_version": RUNTIME_VERSION},
+            {
+                "event": "bootstrap",
+                "runtime_path": str(target),
+                "action": "self",
+                "runtime_version": RUNTIME_VERSION,
+                "source_sha256": source_sha256,
+                "installed_sha256": source_sha256,
+            },
             args.json,
         )
         return 0
-    target.parent.mkdir(parents=True, exist_ok=True)
+
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    if path_is_link_or_junction(runtime_dir):
+        raise RuntimeError(
+            f"bootstrap runtime path must not be a link or reparse point: {runtime_dir}"
+        )
     target_existed = target.exists()
     existing_version = _read_runtime_version(target) if target_existed else None
-    if target_existed and not args.force and existing_version == RUNTIME_VERSION:
+    existing_bytes = target.read_bytes() if target_existed else None
+    previous_sha256 = (
+        hashlib.sha256(existing_bytes).hexdigest()
+        if existing_bytes is not None
+        else None
+    )
+    if target_existed and not args.force and existing_bytes == source_bytes:
         action = "exists"
     else:
-        shutil.copy2(src, target)
+        temporary = runtime_dir / f".kb_next.py.{uuid4().hex}.tmp"
+        try:
+            with temporary.open("xb") as handle:
+                handle.write(source_bytes)
+                handle.flush()
+                os.fsync(handle.fileno())
+            shutil.copystat(src, temporary, follow_symlinks=False)
+            os.replace(temporary, target)
+        finally:
+            temporary.unlink(missing_ok=True)
         action = "updated" if target_existed else "created"
+    installed_sha256 = hashlib.sha256(target.read_bytes()).hexdigest()
+    if installed_sha256 != source_sha256:
+        raise RuntimeError("bootstrap installed runtime hash does not match source")
     emit(
-        {"event": "bootstrap", "runtime_path": str(target), "action": action,
-         "runtime_version": RUNTIME_VERSION, "previous_version": existing_version},
+        {
+            "event": "bootstrap",
+            "runtime_path": str(target),
+            "action": action,
+            "runtime_version": RUNTIME_VERSION,
+            "previous_version": existing_version,
+            "previous_sha256": previous_sha256,
+            "source_sha256": source_sha256,
+            "installed_sha256": installed_sha256,
+        },
         args.json,
     )
     return 0

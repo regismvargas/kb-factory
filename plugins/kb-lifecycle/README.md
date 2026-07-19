@@ -2,15 +2,11 @@
 
 Cross-tool distribution package for KB Factory memory lifecycle and derived wiki workflows.
 
-> **Using it (start here).** This README is about *packaging and distributing* the
-> plugin. If you just want to *use* KB Factory in a chat, start with the
-> [No-code guide](../../docs/guide/no-code/index.md) (for non-developers) or the
-> [User Guide](../../docs/guide/index.md), and see
-> [Using KB Factory in a session](../../docs/agent-sessions.md).
+Release-candidate version: `0.2.3`.
 
 ## Purpose
 
-This plugin packages a knowledge-base workflow for:
+This plugin packages a CASE-compatible workflow for:
 
 - Codex
 - Claude Code
@@ -26,41 +22,27 @@ The plugin is intentionally thin. It does not own durable memory. It points the 
 - Claude session-start hook at `hooks/hooks.json`
 - Shared helper script at `scripts/session_start_context.py`
 
-The built plugin ZIP additionally bundles the **`.kb/` scaffold** under
-`scaffold/` (the engine + config, injected from `core/templates/kb/` at build
-time). This lets an agent set up a project's knowledge base from the plugin
-alone — no repo checkout — by copying `scaffold/` to `.kb/` and running
-`python .kb/kb.py init`. The pip package (`kb-factory init`) and this bundle are
-two delivery paths for the same engine.
-
-## Project KB Boundary
+## CASE Compatibility Rules
 
 1. `.kb/` remains the durable memory layer.
 2. `NOW`, `HOT`, `INDEX`, and `python .kb/kb.py` remain the operating surface.
 3. Plugin output must not become a second memory store.
-4. Session, handoff, and export notes stay thin and disposable.
+4. Dispatch and export artifacts stay thin and disposable.
 
 ## Install Surfaces
 
 ### Codex
 
-The Codex CLI has **no plugin/marketplace command**, so KB Factory integrates with
-Codex as a **skill** plus the standard engine — not as an installable plugin:
+The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
+use the Plugins settings and the public `regismvargas/kb-factory` marketplace,
+or upload `kb-lifecycle-plugin-0.2.3.zip` when file-based installation is
+available. CLI-only users can copy `skills/kb-wiki-maintainer/` to
+`~/.codex/skills/kb-wiki-maintainer/`.
 
-1. **Install the skill.** Copy this plugin's `skills/kb-wiki-maintainer/` directory
-   (including `SKILL.md`, `reference.md`, and `agents/openai.yaml`) into
-   `~/.codex/skills/kb-wiki-maintainer/`. To update, copy again over the old folder.
-   (The standalone skill ZIP from
-   `python tools/build_agent_packages.py --include-standalone-skill` unpacks to the
-   same layout.)
-2. **Install the engine.** `pip install kb-factory` then `kb-factory init` / `update`
-   in a project — or vendor the `.kb/` scaffold directly. Codex then runs
-   `python .kb/kb.py …` like any other shell command.
-3. Optionally add KB guidance to the repo's `AGENTS.md` so Codex picks it up at
-   session start.
-
-Test with a prompt such as: `Use KB Factory: start a KB session and summarize the
-current state from .kb/memory/NOW.md.`
+Restarting Codex reloads the installed cache but does not fetch a newer source
+by itself. Refresh or reinstall from the public marketplace, then verify the
+reported source and version. Test with: `Use KB Lifecycle to start a KB session
+and summarize .kb/memory/NOW.md.`
 
 ### Claude Code
 
@@ -81,15 +63,22 @@ current state from .kb/memory/NOW.md.`
 Run:
 
 ```powershell
-python tools/build_agent_packages.py
+python tools/build_agent_packages.py --scope kb --include-standalone-skill
 ```
 
 This builds:
 
-- a plugin ZIP with the plugin files at archive root for Claude-compatible upload or manual sharing
-- a standalone skill ZIP for Codex or Claude skill installation
+- a Codex plugin ZIP with `.codex-plugin/` and Codex skill metadata;
+- root-level Claude Code and Cowork plugin ZIPs without Codex-only metadata;
+- a standalone `kb-wiki-maintainer` skill ZIP for direct skill installation.
 
 By default the artifacts are saved under:
 
-- `dist/agent-packages/kb-lifecycle-plugin-0.2.2.zip`
-- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.2.zip`
+- `dist/agent-packages/kb-lifecycle-plugin-0.2.3.zip`
+- `dist/agent-packages/kb-lifecycle-claude-plugin-0.2.3.zip`
+- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.2.3.zip`
+- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.3.zip`
+
+The version in `.claude-plugin/plugin.json` is the package authority. Rebuilds
+at the same version refresh source-controlled artifacts but do not force an
+already installed client cache to update.

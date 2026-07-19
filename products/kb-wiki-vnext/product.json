@@ -1,0 +1,73 @@
+{
+  "name": "kb-wiki-vnext",
+  "version": "0.2.0-rc.2",
+  "status": "release-candidate",
+  "summary": "Public KB/Wiki vNext product package for controlled team and admin distribution.",
+  "component_versions": {
+    "product": "0.2.0-rc.2",
+    "python": "0.1.4",
+    "marketplace": "0.3.8",
+    "kb_lifecycle": "0.2.3",
+    "kb_wiki_vnext": "0.1.9",
+    "session_gate": "0.2.7",
+    "runtime": "0.1.7"
+  },
+  "source_paths": [
+    "core/versions/kb-wiki-vnext/runtime/kb_next.py",
+    "core/templates/kb",
+    "plugins/kb-wiki-vnext",
+    "products/kb-wiki-vnext",
+    "tools/build_agent_packages.py",
+    "tools/build_vnext_standalone.py",
+    "tools/validate_vnext_product.py",
+    "tools/sync_vnext_runtime.py",
+    "tests/test_build_agent_packages.py",
+    "tests/test_kb_next_bootstrap.py",
+    "tests/test_kb_wiki_vnext_runtime.py",
+    "tests/test_kb_wiki_vnext_semantic_runtime.py",
+    "tests/test_vnext_pip_channel.py",
+    "tests/test_vnext_runtime_shipping.py"
+  ],
+  "distribution_channels": {
+    "codex_plugin_zip": "dist/agent-packages/kb-wiki-vnext-plugin-0.1.9.zip",
+    "claude_code_plugin_zip": "dist/agent-packages/kb-wiki-vnext-claude-plugin-0.1.9.zip",
+    "claude_cowork_plugin_zip": "dist/agent-packages/kb-wiki-vnext-cowork-plugin-0.1.9.zip",
+    "standalone_bundle": "dist/vnext/kb-wiki-vnext-0.2.0-rc.2-standalone.zip"
+  },
+  "required_checks": [
+    "python tools\\gate.py",
+    "python tools\\sync_vnext_runtime.py --check",
+    "python tools\\build_agent_packages.py --scope all",
+    "python tools\\build_vnext_standalone.py --version 0.2.0-rc.2",
+    "python tools\\validate_vnext_product.py --json --bundle dist\\vnext\\kb-wiki-vnext-0.2.0-rc.2-standalone.zip",
+    "python -m pytest -p no:cacheprovider tests -q"
+  ],
+  "authority_limits": {
+    "canonical_memory": ".kb/",
+    "vnext_memory": ".kb-next/",
+    "classic_runtime_template": "core/templates/kb/",
+    "canonical_mutation_bridge": "proposal-apply via .kb/kb.py",
+    "direct_kb_db_mutation": false,
+    "publishes_kb_wiki_live": false,
+    "cowork_requires_manual_session_boundary": true
+  },
+  "included_in_standalone_bundle": [
+    "runtime/kb_next.py",
+    "classic-template/.kb/",
+    "plugin/",
+    "product/",
+    "tools/build_vnext_standalone.py",
+    "tools/validate_vnext_product.py"
+  ],
+  "excluded_from_standalone_bundle": [
+    ".kb/kb.db",
+    ".kb/wiki/live",
+    ".kb-next/operations.jsonl",
+    "state/runs",
+    "archive",
+    "dist",
+    ".pytest*",
+    "__pycache__",
+    "worktrees"
+  ]
+}

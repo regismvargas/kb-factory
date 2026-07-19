@@ -58,12 +58,12 @@ and write the same `.kb/`.
 
 ## Quickstart (≈60 seconds)
 
-The core is a single stdlib-only CLI. Install it from PyPI and scaffold a
-project — or copy the scaffold folder directly if you'd rather not use pip:
+The core is a single stdlib-only CLI. Install v0.1.4 from the GitHub release
+and scaffold a project, or copy the template directly:
 
 ```bash
-# 1. Install the CLI and create a .kb/ in your project (initializes SQLite)
-pip install kb-factory
+# 1. Install v0.1.4 and create a .kb/ in your project (initializes SQLite)
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 #   No pip? Copy the scaffold instead:
@@ -139,7 +139,7 @@ via the CLI — both read and write the same `.kb/`.
 | [docs/getting-started.md](docs/getting-started.md) | Install and create your first KB record in under 5 minutes |
 | [docs/agent-sessions.md](docs/agent-sessions.md) | Using KB Factory inside a Claude Code / Cowork conversation |
 | [docs/plugins.md](docs/plugins.md) | The three plugins: what each does, differences, and combining them |
-| [docs/installation.md](docs/installation.md) | Scaffold + plugin installation (Claude Code / Cowork) |
+| [docs/installation.md](docs/installation.md) | CLI + plugin installation (Claude Code / Cowork / Codex) |
 | [docs/concepts.md](docs/concepts.md) | The model: typed records, tiers, supersession, provenance, glossary |
 | [docs/commands.md](docs/commands.md) | Slash commands + the authoritative CLI reference |
 | [docs/use-cases.md](docs/use-cases.md) | When KB Factory earns its keep — and when not to use it |
@@ -166,9 +166,10 @@ via the CLI — both read and write the same `.kb/`.
 
 ## Project status
 
-Pre-`1.0.0`, and actively developed. The core runtime is stable and tested
-(green CI across Linux/macOS/Windows × Python 3.8/3.11/3.13), it's pip-installable
-(`pip install kb-factory`), and the docs are complete. Latest release: **v0.1.2**.
+Pre-`1.0.0`, and actively developed. The core runtime is tested across the
+public CI matrix and ships as a wheel plus source distribution on the GitHub
+release. Latest release: **v0.1.4**. PyPI is not the active distribution channel
+for this release.
 Expect additive `0.1.x` releases as the API settles toward `1.0.0`.
 
 ## License

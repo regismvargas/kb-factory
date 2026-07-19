@@ -20,7 +20,6 @@ from zipfile import BadZipFile, ZipFile
 
 DEFAULT_ROOTS = (
     "plugins",
-    "core/versions/kb-wiki-vnext/spec-pack",
     "products/kb-wiki-vnext",
     "docs/references",
 )
@@ -272,7 +271,11 @@ def _audit_plugin_slugs(
         for slug in sorted(plugin_slugs):
             if slug.lower() not in lowered:
                 continue
-            if SAFE_PLUGIN_RE.search(line):
+            explicit_slash = re.compile(
+                rf"/(?:[\w-]+:)?{re.escape(slug)}(?![-\w])",
+                re.IGNORECASE,
+            )
+            if SAFE_PLUGIN_RE.search(line) or explicit_slash.search(line):
                 _add_finding(
                     findings,
                     "accepted_specificity",

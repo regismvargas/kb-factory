@@ -1,59 +1,63 @@
 {
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "kb-factory-tools",
-  "version": "0.3.7",
-  "description": "KB Factory plugins for local-first, append-only knowledge-base workflows. Distributes kb-lifecycle (KB runtime + wiki maintenance), session-gate (session boundary wrapper), and kb-wiki-vnext (thin-memory harness) for Claude Code and Claude Cowork. New here? Docs and guides: https://github.com/regismvargas/kb-factory/tree/main/docs",
+  "metadata": {
+    "description": "KB Factory plugins for governed knowledge workflows across Claude Code and Claude Cowork.",
+    "version": "0.3.8"
+  },
   "owner": {
     "name": "KB Factory"
   },
   "plugins": [
     {
-      "name": "kb-lifecycle",
-      "source": "./plugins/kb-lifecycle",
-      "description": "KB lifecycle and wiki maintenance plugin. Use when a project has a `.kb/` directory and needs session bootstrap, source ingestion, or wiki refresh. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.2.2",
       "author": {
         "name": "KB Factory"
       },
       "category": "Productivity",
+      "description": "CASE-compatible KB lifecycle and wiki maintenance plugin. Use when a project has a `.kb/` directory and needs session bootstrap, source ingestion, or wiki refresh.",
+      "name": "kb-lifecycle",
+      "source": "./plugins/kb-lifecycle",
       "tags": [
         "knowledge-base",
         "wiki",
         "memory",
-        "claude-code"
-      ]
+        "case",
+        "cch-v0.7"
+      ],
+      "version": "0.2.3"
     },
     {
-      "name": "session-gate",
-      "source": "./plugins/session-gate",
-      "description": "Thin session-boundary wrapper for Claude Cowork workspaces. Operational workaround for Cowork's missing automatic plugin hooks; provides explicit /gate-session-start and /gate-session-end commands that route to KB-lifecycle canonical surfaces. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.2.6",
       "author": {
         "name": "KB Factory"
       },
       "category": "Productivity",
+      "description": "Thin session-boundary wrapper for Claude environments. Provides explicit gate-session-start and gate-session-end commands that route to detected KB/Wiki surfaces without generic command collisions.",
+      "name": "session-gate",
+      "source": "./plugins/session-gate",
       "tags": [
         "cowork",
         "session",
         "kb",
+        "case",
         "wrapper"
-      ]
+      ],
+      "version": "0.2.7"
     },
     {
-      "name": "kb-wiki-vnext",
-      "source": "./plugins/kb-wiki-vnext",
-      "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Starts with /vnext-session-start, loads only .kb-next/memory/NOW.md by default, and keeps .kb canonical. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
-      "version": "0.1.8",
       "author": {
         "name": "KB Factory"
       },
       "category": "Productivity",
+      "description": "KB/Wiki vNext thin-memory harness for Claude Code and Cowork. Uses vnext-session-start, loads only .kb-next/memory/NOW.md by default, and keeps .kb canonical.",
+      "name": "kb-wiki-vnext",
+      "source": "./plugins/kb-wiki-vnext",
       "tags": [
         "knowledge-base",
         "wiki",
+        "vnext",
         "memory",
         "semantic-hygiene"
-      ]
+      ],
+      "version": "0.1.9"
     }
   ]
 }

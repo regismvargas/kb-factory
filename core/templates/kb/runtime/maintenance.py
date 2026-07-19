@@ -136,7 +136,10 @@ def build_hygiene_audit_result(conn: sqlite3.Connection, config: dict) -> dict:
             )
 
     hot_limit = int(tier_audit["hot_limit"])
-    overflow_needed = max(0, int(tier_audit["hot_count"]) - hot_limit)
+    overflow_needed = max(
+        0,
+        int(tier_audit["hot_count"]) - hot_limit - len(demote_ids),
+    )
     for row in hot_rows:
         if overflow_needed <= 0:
             break

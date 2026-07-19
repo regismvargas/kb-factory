@@ -1,5 +1,5 @@
 ---
-description: Start a new project with KB/Wiki vNext.
+description: Route a new project into KB alone or KB plus Wiki without inventing scope.
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
@@ -14,7 +14,5 @@ minimum project name/domain details if they are missing.
 2. Choose the activation command:
    - `new-project-init-kb-alone` for memory without wiki publication.
    - `new-project-init-kb-wiki` when the user explicitly wants KB + Wiki.
-3. Invoke the `new-project-verify-install` plugin command when the client
-   exposes it; if working in shell, run the runtime verification steps from
-   that command directly.
+3. Run `new-project-verify-install`.
 4. Report the created surfaces and the first recommended session command.

@@ -1,7 +1,7 @@
 {
   "name": "session-gate",
-  "version": "0.2.6",
-  "description": "Thin Cowork session-boundary wrapper for KB-lifecycle and a companion workflow plugin. Detects which canonical surfaces apply and routes startup and closeout to them without duplicating durable memory or workflow canon.",
+  "version": "0.2.7",
+  "description": "Thin cross-client session-boundary wrapper for KB-lifecycle and CASE Companion. Detects which canonical surfaces apply and routes startup and closeout without duplicating durable memory or CASE canon.",
   "author": {
     "name": "KB Factory"
   },
@@ -12,13 +12,14 @@
     "cowork",
     "session",
     "kb",
+    "case",
     "wrapper"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Session Gate",
-    "shortDescription": "Thin session wrapper for KB workspaces",
-    "longDescription": "Install a thin session-boundary wrapper for Cowork that detects whether KB-lifecycle, a companion workflow plugin, or both are present, then points startup and closeout back to the canonical plugin surfaces.",
+    "shortDescription": "Thin session wrapper for KB + CASE",
+    "longDescription": "Install a thin session-boundary wrapper that detects whether KB-lifecycle, KB/Wiki vNext, CASE Companion, or a combination is present, then routes startup and closeout to the canonical surfaces.",
     "developerName": "KB Factory",
     "category": "Productivity",
     "capabilities": [
@@ -26,8 +27,8 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use the Session Gate gate-session-start plugin/slash command to start this session safely in a KB-based project.",
-      "Use the Session Gate gate-session-end plugin/slash command to close this Cowork session without drifting from KB-lifecycle, vNext, or the companion workflow plugin."
+      "Use the Session Gate skill to start this session safely in a KB-based project.",
+      "Use the Session Gate skill to close this session without drifting from KB-lifecycle or vNext."
     ],
     "brandColor": "#1D4ED8"
   }

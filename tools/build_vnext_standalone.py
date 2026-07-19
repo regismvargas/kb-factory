@@ -17,8 +17,10 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from validate_vnext_product import validate
 
-DEFAULT_VERSION = "0.2.0-rc.1"
+
+DEFAULT_VERSION = "0.2.0-rc.2"
 PRODUCT_DIR = Path("products/kb-wiki-vnext")
 DEFAULT_OUTPUT_DIR = Path("dist/vnext")
 
@@ -67,19 +69,66 @@ def _is_forbidden_source(path: Path) -> bool:
     return False
 
 
+def _is_reparse_point(path: Path) -> bool:
+    try:
+        stat = path.lstat()
+    except FileNotFoundError:
+        return False
+    reparse_attribute = getattr(stat, "st_file_attributes", 0) & 0x400
+    return path.is_symlink() or bool(reparse_attribute)
+
+
 def _iter_tree_files(source: Path) -> list[Path]:
+    if not source.is_dir():
+        raise FileNotFoundError(f"required bundle source directory is missing: {source}")
+    if _is_reparse_point(source):
+        raise ValueError(f"bundle source directory must not be a link or reparse point: {source}")
     files: list[Path] = []
     for path in sorted(source.rglob("*")):
+        if _is_reparse_point(path):
+            continue
         if path.is_file() and not _is_forbidden_source(path):
             files.append(path)
     return files
 
 
 def _add_file(zf: zipfile.ZipFile, source: Path, archive_path: Path) -> str:
-    if not source.exists():
+    if not source.is_file():
         raise FileNotFoundError(source)
-    zf.write(source, archive_path.as_posix())
-    return archive_path.as_posix()
+    archive_name = archive_path.as_posix()
+    info = zipfile.ZipInfo(archive_name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = 0o100644 << 16
+    zf.writestr(info, source.read_bytes())
+    return archive_name
+
+
+def _write_deterministic_text(zf: zipfile.ZipFile, archive_name: str, text: str) -> None:
+    info = zipfile.ZipInfo(archive_name, date_time=(1980, 1, 1, 0, 0, 0))
+    info.compress_type = zipfile.ZIP_DEFLATED
+    info.external_attr = 0o100644 << 16
+    zf.writestr(info, text.encode("utf-8"))
+
+
+def _bundle_readme_text(root: Path, *, at_bundle_root: bool) -> str:
+    text = (root / PRODUCT_DIR / "README.md").read_text(encoding="utf-8")
+    if at_bundle_root:
+        text = text.replace("](docs/", "](product/docs/")
+        text = text.replace("](product.json)", "](product/product.json)")
+        install_target = "product/docs/en/admin-installation.md"
+        tools_prefix = "tools/"
+    else:
+        install_target = "docs/en/admin-installation.md"
+        tools_prefix = "../tools/"
+
+    replacements = {
+        "../../docs/installation.md": install_target,
+        "../../tools/build_vnext_standalone.py": f"{tools_prefix}build_vnext_standalone.py",
+        "../../tools/validate_vnext_product.py": f"{tools_prefix}validate_vnext_product.py",
+    }
+    for source, target in replacements.items():
+        text = text.replace(f"]({source})", f"]({target})")
+    return text
 
 
 def _write_manifest(
@@ -104,7 +153,8 @@ def _write_manifest(
         "included_paths": entries,
         "agent_package_build": agent_package_result,
     }
-    zf.writestr(
+    _write_deterministic_text(
+        zf,
         f"{bundle_root}/bundle-manifest.json",
         json.dumps(manifest, indent=2, sort_keys=True) + "\n",
     )
@@ -122,7 +172,7 @@ def build_agent_packages(root: Path) -> dict[str, object]:
     return {
         "command": "python tools/build_agent_packages.py --scope vnext",
         "returncode": result.returncode,
-        "stdout": result.stdout.strip().splitlines(),
+        "artifacts": [Path(line).name for line in result.stdout.strip().splitlines()],
     }
 
 
@@ -132,46 +182,34 @@ def bundle_entries(root: Path, version: str) -> list[BundleEntry]:
         BundleEntry(root / PRODUCT_DIR, bundle_root / "product", True),
         BundleEntry(root / "plugins" / "kb-wiki-vnext", bundle_root / "plugin", True),
         BundleEntry(
-            root / "core" / "versions" / "kb-wiki-vnext" / "spec-pack",
-            bundle_root / "spec-pack",
-            True,
-        ),
-        BundleEntry(
             root / "core" / "versions" / "kb-wiki-vnext" / "runtime" / "kb_next.py",
             bundle_root / "runtime" / "kb_next.py",
-        ),
-        BundleEntry(
-            root / "core" / "versions" / "kb-wiki-vnext" / "runtime" / "README.md",
-            bundle_root / "runtime" / "README.md",
         ),
         BundleEntry(
             root / "core" / "templates" / "kb",
             bundle_root / "classic-template" / ".kb",
             True,
         ),
-        BundleEntry(root / PRODUCT_DIR / "README.md", bundle_root / "README.md"),
-        BundleEntry(root / "docs" / "INSTALL.md", bundle_root / "docs" / "INSTALL.md"),
+        BundleEntry(
+            root / "tools" / "build_agent_packages.py",
+            bundle_root / "tools" / "build_agent_packages.py",
+        ),
         BundleEntry(
             root / "tools" / "validate_vnext_product.py",
             bundle_root / "tools" / "validate_vnext_product.py",
         ),
         BundleEntry(
-            root / "tools" / "cleanup_vnext_workbench.py",
-            bundle_root / "tools" / "cleanup_vnext_workbench.py",
-        ),
-        BundleEntry(
             root / "tools" / "build_vnext_standalone.py",
             bundle_root / "tools" / "build_vnext_standalone.py",
-        ),
-        BundleEntry(
-            root / "tools" / "validate_kb_wiki_vnext_spec_pack.py",
-            bundle_root / "tools" / "validate_kb_wiki_vnext_spec_pack.py",
         ),
     ]
 
 
 def build_standalone(version: str, output_dir: Path, skip_agent_packages: bool = False) -> Path:
     root = repo_root()
+    preflight_errors = validate()
+    if preflight_errors:
+        raise ValueError("standalone preflight failed:\n- " + "\n- ".join(preflight_errors))
     output_dir = output_dir if output_dir.is_absolute() else root / output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -190,10 +228,23 @@ def build_standalone(version: str, output_dir: Path, skip_agent_packages: bool =
             if entry.is_tree:
                 for source_file in _iter_tree_files(entry.source):
                     relative = source_file.relative_to(entry.source)
+                    if entry.source == root / PRODUCT_DIR and relative == Path("README.md"):
+                        continue
                     archive_path = entry.archive_path / relative
                     included.append(_add_file(zf, source_file, archive_path))
             else:
                 included.append(_add_file(zf, entry.source, entry.archive_path))
+
+        for archive_name, at_bundle_root in (
+            (f"{bundle_root}/product/README.md", False),
+            (f"{bundle_root}/README.md", True),
+        ):
+            _write_deterministic_text(
+                zf,
+                archive_name,
+                _bundle_readme_text(root, at_bundle_root=at_bundle_root),
+            )
+            included.append(archive_name)
 
         _write_manifest(
             zf,

@@ -1,0 +1,134 @@
+{
+  "schema_version": 5,
+  "project": {
+    "name": "{{PROJECT_TITLE}}",
+    "slug": "{{PROJECT_NAME}}",
+    "primary_repo_path": ".",
+    "kb_root": ".kb"
+  },
+  "domains": [
+    "product",
+    "architecture",
+    "operations",
+    "research"
+  ],
+  "hot_session_limit": 10,
+  "memory": {
+    "now_path": "memory/NOW.md",
+    "index_path": "memory/INDEX.md",
+    "hot_path": "memory/HOT.md",
+    "topics_dir": "memory/topics"
+  },
+  "exports": {
+    "cowork_dir": "exports/cowork",
+    "claude_ai_dir": "exports/claude-ai"
+  },
+  "retention": {
+    "premise_review_days": 14,
+    "hot_review_days": 7,
+    "cold_after_days": 90
+  },
+  "lifecycle": {
+    "events": {
+      "session_start": {
+        "run_audit": true,
+        "apply_demotions": false,
+        "refresh_exports": false,
+        "run_wiki_check": true,
+        "run_wiki_lint": false,
+        "run_wiki_sync": false
+      },
+      "source_ingest": {
+        "run_audit": false,
+        "apply_demotions": false,
+        "refresh_exports": true,
+        "run_wiki_check": true,
+        "run_wiki_lint": false,
+        "run_wiki_sync": false
+      },
+      "record_filed": {
+        "run_audit": false,
+        "apply_demotions": false,
+        "refresh_exports": true,
+        "run_wiki_check": true,
+        "run_wiki_lint": false,
+        "run_wiki_sync": false
+      },
+      "session_end": {
+        "run_audit": true,
+        "apply_demotions": false,
+        "apply_cold_demotions": false,
+        "prune_snapshots": false,
+        "refresh_exports": true,
+        "run_wiki_check": false,
+        "run_wiki_lint": true,
+        "run_wiki_sync": false
+      },
+      "scheduled_maintenance": {
+        "run_audit": true,
+        "apply_demotions": true,
+        "apply_cold_demotions": false,
+        "prune_snapshots": false,
+        "refresh_exports": true,
+        "run_wiki_check": true,
+        "run_wiki_lint": true,
+        "run_wiki_sync": false
+      }
+    }
+  },
+  "agent_protocol": {
+    "consult_before_assuming": true,
+    "verify_sensitive_facts": true,
+    "prefer_supersede_over_update": true,
+    "keep_loaded_memory_short": true
+  },
+  "filing_policy": {
+    "enforcement_mode": "advisory",
+    "confidence_bands": {"high": 0.8, "review": 0.55},
+    "filing_types": {
+      "answer":    {"allowed_categories": ["FATO", "APRENDIZADO", "DECISAO", "PREMISSA"], "requires_source_id": false, "min_confidence": 0.55},
+      "analysis":  {"allowed_categories": ["APRENDIZADO", "FATO"],                        "requires_source_id": true,  "min_confidence": 0.55},
+      "synthesis": {"allowed_categories": ["FATO", "APRENDIZADO", "DECISAO"],             "requires_source_id": false, "min_confidence": 0.55}
+    },
+    "when_to_file": [
+      "Captures durable insight, decision rationale, or synthesis reusable across sessions.",
+      "Distills knowledge from multiple records, sources, or conversation threads.",
+      "Losing the content to chat history would be a meaningful loss."
+    ],
+    "when_not_to_file": [
+      "Transient or one-off lookup.",
+      "Already covered by an active KB record - supersede that record instead.",
+      "Confidence below review band without explicit operator approval."
+    ],
+    "provenance_expectations": {
+      "answer":    "Explain reasoning basis; link supporting record ids in content when derived.",
+      "analysis":  "Must carry source_id; reference the summary, not restate it.",
+      "synthesis": "List the supporting record ids or source ids that were combined."
+    }
+  },
+  "wiki": {
+    "enabled": false,
+    "activation_mode": "manual",
+    "project_profile": null,
+    "page_types": ["domain_overview", "research_synthesis", "source_page", "snapshot_report"],
+    "eligibility": {
+      "min_active_records": 30,
+      "min_domains_with_records": 2,
+      "min_soft_signal_score": 1
+    },
+    "semantic": {
+      "min_confidence_autopublish": 0.8,
+      "min_confidence_review": 0.55,
+      "min_sources_research_synthesis": 2
+    },
+    "renderers": {
+      "mkdocs": {
+        "enabled": false,
+        "site_name": "Project Wiki"
+      }
+    },
+    "snapshot_retention": {
+      "keep_last_n": 5
+    }
+  }
+}

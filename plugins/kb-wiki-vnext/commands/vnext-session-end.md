@@ -1,7 +1,6 @@
 ---
-description: Close a KB/Wiki vNext session by recording useful operational evidence.
+description: Close a KB/Wiki vNext session with governed operational evidence.
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
-argument-hint: "[session notes or release evidence]"
 ---
 
 Close a KB/Wiki vNext session by recording only useful operational evidence.

@@ -60,11 +60,26 @@ def test_plugin_slash_or_runtime_wording_is_accepted() -> None:
     assert "accepted_specificity" in categories
 
 
+def test_leading_slash_is_an_explicit_plugin_surface() -> None:
+    categories = _categories(
+        [
+            Document(
+                path="products/kb-wiki-vnext/docs/en/usage-guide.md",
+                text="Run /kb-wiki-vnext:vnext-session-start before doing work.\n",
+                source="file",
+            )
+        ]
+    )
+
+    assert "fix_required" not in categories
+    assert "accepted_specificity" in categories
+
+
 def test_runtime_subcommand_without_python_surface_is_fix_required() -> None:
     categories = _categories(
         [
             Document(
-                path="core/versions/kb-wiki-vnext/spec-pack/use-case-catalog.md",
+                path="products/kb-wiki-vnext/docs/en/usage-guide.md",
                 text="Flow: run session-start, read NOW.md.\n",
                 source="file",
             )

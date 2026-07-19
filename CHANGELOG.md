@@ -7,7 +7,25 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-19
+
+### Added
+- Published the first hash-bound private-to-public release transformation. The
+  public tree records private source commit
+  `6c8873797add4f068b7635403c9b18d478442315`, public baseline
+  `256b217aafac0dbe6663af9edfb70b0d66761bc4`, and policy
+  `2026-07-19.3`; private state, workbench files, personal paths, and credentials
+  are excluded before the public checkout is changed.
+- Added the public KB/Wiki vNext `0.2.0-rc.2` product bundle and platform
+  artifacts for Codex, Claude Code, and Claude Cowork.
+
 ### Changed
+- Coordinated the independently versioned release surfaces: Python package
+  `0.1.4`, catalog release line `0.3.8`, kb-lifecycle `0.2.3`, kb-wiki-vnext `0.1.9`,
+  session-gate `0.2.7`, and bundled vNext runtime `0.1.7`.
+- The supported Python install for this release is the wheel attached to the
+  GitHub `v0.1.4` release. PyPI remains an optional future channel and is not
+  claimed as available.
 - Documentation brought fully in line with v0.1.2: pip-first install/upgrade
   (`pip install kb-factory` → `kb-factory init` / `update`) across
   getting-started, installation, the User Guide and recipes (copy-scaffold kept
@@ -23,8 +41,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
   bundled `.kb/` scaffold) propagate cleanly via `marketplace update` +
   reinstall: **kb-lifecycle 0.2.1→0.2.2, session-gate 0.2.4→0.2.5, kb-wiki-vnext
   0.1.3→0.1.4** (marketplace catalog 0.3.1→0.3.2). Corrected the Claude Code
-  update commands in `installation.md` (there is no `plugin update` verb — use
-  `uninstall` + `install`, or marketplace auto-update).
+  update commands in `installation.md`. Current Claude Code supports
+  `claude plugin update`; restart is required to apply the downloaded version.
 
 ### Fixed
 - **vNext runtime now ships via the marketplace too**: the engine is committed at

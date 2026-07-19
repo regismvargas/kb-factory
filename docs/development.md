@@ -84,16 +84,11 @@ python core/runtime/cli.py doctor   # schema / invariant integrity
 
 ## The cleanliness gate
 
-`tools/gate.py` is a fast, deterministic check that the workbench KB is in a
-shippable, trustworthy state. It runs no tests — it just confirms the KB hasn't
-drifted. It runs three checks and exits non-zero on any failure:
-
-1. **`doctor`** — SQLite integrity is `ok` and there is **zero source hash
-   drift** (no recorded source has been mutated out from under its hash).
-2. **`wiki-lint`** — the live wiki has **zero** lint issues.
-3. **parity** — `core/runtime/*.py` is byte-identical to both the scaffold
-   template runtime and the live `.kb/runtime/`, and `.kb/kb.py` matches the
-   template `kb.py`.
+`tools/gate.py` is a fast, deterministic release check. It always verifies
+parity across the classic runtime/template/package copies and across the three
+vNext runtime copies. When an authoring `.kb/kb.py` is present, it also runs
+`doctor` and `wiki-lint`. A normal public checkout intentionally has no `.kb/`,
+so those authoring-only checks are reported as skipped.
 
 Run it directly any time:
 
@@ -101,8 +96,9 @@ Run it directly any time:
 python tools/gate.py
 ```
 
-It prints exactly what drifted and how to fix it (typically
-`python .kb/kb.py wiki-sync --force` or re-syncing the runtime mirrors).
+It prints exactly what drifted and how to fix it. Use
+`python tools/sync_package_scaffold.py` for the Python scaffold mirror and
+`python tools/sync_vnext_runtime.py` for the vNext runtime mirrors.
 
 ### Enable it as a pre-commit hook
 
@@ -174,7 +170,7 @@ project KB from the plugin alone — covered by `tests/test_build_agent_packages
 
 ## The pip package (`kb-factory`)
 
-`pip install kb-factory` installs a thin CLI (the `kb_factory/` package) whose
+The GitHub release wheel installs a thin CLI (the `kb_factory/` package) whose
 `init` / `update` commands copy the bundled scaffold — `kb_factory/_scaffold/`, a
 **generated mirror** of `core/templates/kb/` — into a project's `.kb/`. Never edit
 `_scaffold/` by hand; edit the template and regenerate:

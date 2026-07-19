@@ -1,6 +1,6 @@
 {
   "name": "kb-wiki-vnext",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "KB/Wiki vNext thin-memory harness for Codex.",
   "author": {
     "name": "KB Factory"
@@ -27,11 +27,9 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use the KB/Wiki vNext vnext-session-start plugin command when it is exposed; in PowerShell/PATH shells resolve the runtime (.kb-next\\runtime\\kb_next.py, else core\\versions\\kb-wiki-vnext\\runtime\\kb_next.py) and run python <resolved-runtime-path> session-start --json, else fall back to python .kb/kb.py lifecycle session-start --json.",
+      "Use the KB/Wiki vNext skill to start the session and read only NOW.md.",
       "Use KB/Wiki vNext existing/new project setup commands for deployment.",
-      "Use KB/Wiki vNext targeted lookup before opening broad memory.",
-      "Run read-only python .kb/kb.py hygiene-audit --json before HOT overflow proposal flows.",
-      "Review a .kb-next proposal without mutating .kb directly."
+      "Use KB/Wiki vNext targeted lookup before opening broad memory."
     ],
     "brandColor": "#155E75"
   }

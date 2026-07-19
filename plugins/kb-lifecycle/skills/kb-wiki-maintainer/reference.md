@@ -46,9 +46,9 @@ When shell access does not exist:
 - produce explicit proposed writes
 - file durable results through a shell-capable agent or follow-up task
 
-## Project KB Boundary
+## CASE Boundary
 
-Projects with a `.kb/` directory already use the clone-kit `.kb/` scaffold. This skill must stay compatible with that contract:
+CASE projects already use the clone-kit `.kb/` scaffold. This skill must stay compatible with that contract:
 
 - no second durable memory store
 - no plugin-owned replacement for `NOW`, `HOT`, or `INDEX`

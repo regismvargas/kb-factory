@@ -1,6 +1,6 @@
 ---
 name: kb-wiki-maintainer
-description: Maintain a project Knowledge Base — ingest raw sources, file typed records, refresh the derived markdown wiki, and run lifecycle maintenance. Use when the project has a `.kb/` directory, when the user mentions "KB", "knowledge base", "ingest source", "session start", "update wiki", "answer from KB", or when bootstrapping memory for a new project.
+description: Maintain a CASE-compatible project Knowledge Base — ingest raw sources, file typed records, refresh the derived markdown wiki, and run lifecycle maintenance. Use when the project has a `.kb/` directory, when the user mentions "KB", "knowledge base", "ingest source", "session start", "update wiki", "answer from KB", or when bootstrapping memory for a new project.
 ---
 
 # KB Wiki Maintainer
@@ -13,20 +13,21 @@ Use this skill when a project has a `.kb/` directory or when the user wants to i
 - Raw sources stay immutable.
 - Typed KB records remain canonical.
 - The wiki is derived and may be refreshed, linted, or recompiled.
-- Plugin, export, and handoff notes stay thin.
+- Plugin, export, and dispatch artifacts stay thin.
 
-## Bootstrapping a new project (no `.kb/` yet)
+## Bootstrapping A New Project
 
-If the project has no `.kb/` directory, create one before the session flows
-below. Two reliable ways:
+If the project has no `.kb/` directory, establish the canonical runtime before
+using the session flows below:
 
-- **If `kb-factory` is installed** (`pip install kb-factory`): run `kb-factory
-  init` in the project root — it scaffolds `.kb/` and initializes the store.
-- **Offline / no pip:** this plugin bundles the scaffold under its own
-  `scaffold/` directory. Copy that `scaffold/` into the project as `.kb/`, then
-  run `python .kb/kb.py init`.
+- If the public Python package is installed, run `kb-factory init` in the
+  project root.
+- Otherwise copy this plugin's bundled `scaffold/` directory to `.kb/`, then
+  run `python .kb/kb.py init`. Every platform-specific Lifecycle artifact must
+  carry this scaffold from the canonical `core/templates/kb/` source.
 
-Confirm with `python .kb/kb.py stats`, then continue with Session Start below.
+Confirm the result with `python .kb/kb.py stats`, and do not create a second
+plugin-owned memory store.
 
 ## Session Start
 
@@ -45,13 +46,13 @@ Use the bootstrap mode that matches the session purpose. When in doubt, start th
 3. Read `.kb/memory/HOT.md`.
 4. Search or check pending as needed based on the conversation topic.
 
-### Deep Review Bootstrap (audit, close-out, or review sessions only)
+### Deep Review Bootstrap (audit, close-out, dispatch, or review sessions only)
 
 1. Run `python .kb/kb.py lifecycle session-start --json`.
 2. Read `.kb/memory/NOW.md`.
 3. Read `.kb/memory/HOT.md`.
 4. Read `.kb/memory/INDEX.md`.
-5. Load wiki, handoff notes, references, and other materials as needed for the review scope.
+5. Load wiki, dispatch packs, references, and other materials as needed for the review scope.
 
 ### On-Demand Loading (all modes)
 
@@ -153,7 +154,7 @@ Use the `file` command when a conversation result has lasting value and should b
 python .kb/kb.py filing-policy --json
 ```
 
-Agents, reviewers, and KB workflows should cite that command's output instead of hardcoding thresholds.
+Agents, reviewers, and CASE workflows should cite that command's output instead of hardcoding thresholds.
 
 #### When to File
 
@@ -187,7 +188,7 @@ Bands come from `filing_policy.confidence_bands`. Read them with `python .kb/kb.
 - `review` ≤ confidence < `high` → present to user for review before filing.
 - confidence < `review` → do not file without explicit approval.
 
-Do not hardcode the numeric values in skill or workflow guidance. The policy is the single source of truth; changing a threshold means editing `kb.config.json#filing_policy` and the new value flows to `filing-status` banding and to every consumer of `filing-policy --json`.
+Do not hardcode the numeric values in skill or CASE guidance. The policy is the single source of truth; changing a threshold means editing `kb.config.json#filing_policy` and the new value flows to `filing-status` banding and to every consumer of `filing-policy --json`.
 
 #### Commands
 
@@ -283,8 +284,10 @@ The operation log tracks lifecycle runs and ingest events as an immutable audit 
 If shell access is available:
 
 1. Run `python .kb/kb.py lifecycle session-end --json`.
-2. For HOT overflow or semantic hygiene, run read-only `python .kb/kb.py hygiene-audit --json` before any maintenance action.
-3. If the project needs a stronger retention pass, run `python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json`.
+2. For HOT overflow or semantic hygiene, run read-only
+   `python .kb/kb.py hygiene-audit --json` before any maintenance action.
+3. If the project needs a stronger retention pass, run
+   `python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json`.
 
 If shell access is not available:
 
@@ -296,9 +299,10 @@ If shell access is not available:
 1. Do not create plugin-local durable memory.
 2. Do not dump transcripts or raw logs into curated memory.
 3. Do not promote too many records to `HOT`.
-4. Do not auto-demote HOT records from semantic judgment alone; use proposals or explicit classic KB commands.
+4. Do not auto-demote HOT records from semantic judgment alone; use governed
+   proposals or explicit classic KB commands.
 5. Do not treat the wiki as the canonical truth when the KB says otherwise.
-6. Do not let session and handoff notes become a shadow KB.
+6. Do not let CASE dispatch artifacts become a shadow KB.
 
 See `reference.md` for lifecycle and automation guidance.
 

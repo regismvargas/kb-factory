@@ -12,15 +12,16 @@ startup without activating wiki workflows.
    if this is a fresh workspace.
 2. Resolve a runtime you can RUN. Check these paths in order (Glob or a file
    existence check) and use the first that exists:
-   - `.kb-next/runtime/kb_next.py` (already installed in the workspace)
    - `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py` (the engine bundled in this
      plugin; Claude Code sets `CLAUDE_PLUGIN_ROOT` for plugin commands)
    - `~/.claude/plugins/**/kb-wiki-vnext/runtime/kb_next.py` and the Cowork/Codex
      plugin directories (glob fallback where `CLAUDE_PLUGIN_ROOT` is unset)
    - `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
      monorepo only)
+   - `.kb-next/runtime/kb_next.py` only as a last-resort source when no installed
+     plugin or authoring runtime resolves. A self-bootstrap cannot upgrade it.
 3. Install the runtime into the workspace:
-   `python <resolved-runtime-path> bootstrap --project-root . --json`
+   `python <resolved-runtime-path> --project-root . bootstrap --json`
    This writes `.kb-next/runtime/kb_next.py`. If no runtime could be resolved,
    the plugin install is broken — report that and stop; do not ask the user to
    hand-place the runtime.

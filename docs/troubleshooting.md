@@ -191,25 +191,22 @@ packaging regression in the plugin, not a runtime problem. The CLI
 
 ## The cleanliness gate (optional)
 
-`tools/gate.py` is a fast, deterministic pre-commit / CI check that the KB is in
-a shippable, trustworthy state. It runs three checks and exits non-zero if any
-fails:
-
-1. **doctor** — SQLite `integrity_check` is `ok` and `sources_hash_drift` is `0`.
-2. **wiki-lint** — zero issues on the live wiki.
-3. **parity** — the canonical runtime, the scaffold template runtime, and the
-   live `.kb/` runtime are byte-identical (catches a copy left out of sync).
+`tools/gate.py` is a fast, deterministic pre-commit / CI check. It always checks
+classic runtime/template/package parity and the three vNext runtime copies. If
+the checkout contains an authoring `.kb/kb.py`, it also runs `doctor` and
+`wiki-lint`; a public checkout without `.kb/` reports those checks as skipped.
 
 ```bash
 python tools/gate.py
 ```
 
-A clean run prints `KB gate OK`. On failure it lists exactly what drifted, e.g.
-`source hash drift = 2` or `live .kb runtime drift: cli.py`. Typical fixes:
+A clean run prints `KB gate OK`. On failure it lists exactly what drifted.
+Typical fixes:
 
 - Wiki out of date → `python .kb/kb.py wiki-sync --force`, then re-run the gate.
 - Source hash drift → re-ingest or update the changed source.
-- Runtime parity drift → re-sync the runtime mirrors so all copies match.
+- Classic scaffold drift → `python tools/sync_package_scaffold.py`.
+- vNext runtime drift → `python tools/sync_vnext_runtime.py`.
 
 The gate is a project-hygiene tool for contributors and maintainers; you do not
 need it to *use* a KB. If you must commit past it once, `git commit --no-verify`

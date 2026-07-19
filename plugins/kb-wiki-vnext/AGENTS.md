@@ -12,6 +12,8 @@ Session start is thin:
   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
   if no runtime resolves, fall back to classic
   `python .kb/kb.py lifecycle session-start --json`.
+- Runtime `session-start` does not write canonical `.kb/`, but appends session
+  evidence to `.kb-next/operations.jsonl`.
 - Read only `.kb-next/memory/NOW.md` by default.
 - Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
   artifacts only on demand.

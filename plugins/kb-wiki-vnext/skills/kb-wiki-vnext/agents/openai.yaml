@@ -1,0 +1,4 @@
+interface:
+  display_name: "KB/Wiki vNext"
+  short_description: "Governed thin-memory KB/Wiki workflows"
+  default_prompt: "Use $kb-wiki-vnext to start a thin-memory session and retrieve only the project context needed."

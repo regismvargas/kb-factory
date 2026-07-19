@@ -1,7 +1,7 @@
-"""Detect vNext, KB-lifecycle, and companion-workflow surfaces for Session Gate.
+"""Detect vNext, KB-lifecycle, and CASE Companion surfaces for Session Gate.
 
 The wrapper must stay thin, so this detector resolves canonical references when
-possible instead of hardcoding workflow or KB rules into the wrapper itself.
+possible instead of hardcoding CASE or KB rules into the wrapper itself.
 """
 
 from __future__ import annotations
@@ -12,8 +12,32 @@ import sys
 from pathlib import Path
 
 
+_WORKSPACE_BOUNDARY_MARKERS = (".git", ".kb", ".kb-next", "pyproject.toml")
+
+
+def _workspace_search_bases(start: Path) -> tuple[Path, ...]:
+    """Return search bases without crossing the nearest workspace boundary."""
+    resolved_start = start.resolve()
+    home = Path.home().resolve()
+    bases: list[Path] = []
+
+    for base in (resolved_start, *resolved_start.parents):
+        # A user-level ``plugins/`` directory is an unrelated authority, not a
+        # workspace fallback. Explicit environment roots remain available for
+        # callers that intentionally need an external canonical reference.
+        if base == home:
+            break
+        bases.append(base)
+        if any((base / marker).exists() for marker in _WORKSPACE_BOUNDARY_MARKERS):
+            return tuple(bases)
+
+    # Without a recognizable workspace boundary, do not search arbitrary
+    # ancestors such as a profile directory or filesystem root.
+    return (resolved_start,) if resolved_start != home else ()
+
+
 def _search_upwards(start: Path, relative_path: str) -> str | None:
-    for base in (start, *start.parents):
+    for base in _workspace_search_bases(start):
         candidate = base / relative_path
         if candidate.exists():
             return str(candidate.resolve())
@@ -68,6 +92,7 @@ def detect(root: Path) -> dict:
         details["operations_jsonl"] = (vnext_root / "operations.jsonl").is_file()
         details["runtime_ref"] = _resolve_reference(
             root,
+            ".kb-next/runtime/kb_next.py",
             "core/versions/kb-wiki-vnext/runtime/kb_next.py",
             "runtime/kb_next.py",
         )
@@ -138,7 +163,7 @@ def detect(root: Path) -> dict:
         has_any_ref = details.get("role_boundaries_ref") or details.get("case_skill_ref")
         details["orphan_state"] = has_companion_state and not has_any_ref
         result["summary"].append(
-            f"Companion workflow detected ({', '.join(found_markers) or 'companion_state.json'})"
+            f"CASE Companion detected ({', '.join(found_markers) or 'companion_state.json'})"
         )
 
     if (
@@ -147,7 +172,7 @@ def detect(root: Path) -> dict:
         and not result["case"]["found"]
     ):
         result["summary"].append(
-            "No KB/Wiki vNext, KB-lifecycle, or companion-workflow artifacts found in this workspace"
+            "No KB/Wiki vNext, KB-lifecycle, or CASE artifacts found in this workspace"
         )
 
     return result

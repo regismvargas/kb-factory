@@ -1,0 +1,4 @@
+interface:
+  display_name: "Session Gate"
+  short_description: "Route governed session start and closeout"
+  default_prompt: "Use $session-gate to detect the workspace and route a governed session start or closeout."

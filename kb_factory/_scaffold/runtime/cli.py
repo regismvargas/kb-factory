@@ -142,7 +142,7 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
         "--allow-write",
         dest="allow_write",
         action="store_true",
-        help="Permit write statements (default: read-only via PRAGMA query_only)",
+        help="Permit write statements (default: opens the database in SQLite read-only mode)",
     )
     raw.set_defaults(func=command_handlers["raw-query"])
 

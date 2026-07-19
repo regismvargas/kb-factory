@@ -13,7 +13,7 @@ from .db import connect
 from .schema import disable_hardening, enable_hardening, hardening_enabled
 from .filing_policy import evaluate_filing, get_filing_policy
 from .helpers import log_action, now_iso, record_exists, row_to_dict, upsert_fts
-from .paths import KB_ROOT, ensure_dirs
+from .paths import DB_PATH, KB_ROOT, ensure_dirs
 from .sources import source_exists, update_source_record_ids
 
 __all__ = [
@@ -500,13 +500,22 @@ def cmd_filing_status(args: argparse.Namespace, *, emit) -> None:
 
 
 def cmd_raw_query(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
-    if not getattr(args, "allow_write", False):
-        # Read-only by default: arbitrary SQL cannot mutate the store unless the
-        # caller explicitly opts in with --allow-write.
-        conn.execute("PRAGMA query_only = ON")
-    rows = conn.execute(args.sql).fetchall()
-    emit([dict(row) for row in rows], True)
+    allow_write = bool(getattr(args, "allow_write", False))
+    if allow_write:
+        conn = connect()
+    else:
+        # Open the existing database in SQLite's real read-only mode.  Do not
+        # call connect(): it runs schema setup and can create or rewrite files.
+        uri = DB_PATH.resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True)
+        conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(args.sql).fetchall()
+        if allow_write:
+            conn.commit()
+        emit([dict(row) for row in rows], True)
+    finally:
+        conn.close()
 
 
 def cmd_harden(args: argparse.Namespace, *, emit) -> None:

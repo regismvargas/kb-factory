@@ -5,12 +5,21 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 
 PRODUCT_DIR = Path("products/kb-wiki-vnext")
+PRODUCT_VERSION = "0.2.0-rc.2"
+REQUIRED_COMPONENT_VERSIONS = {
+    "product": PRODUCT_VERSION,
+    "python": "0.1.4",
+    "marketplace": "0.3.8",
+    "kb_lifecycle": "0.2.3",
+    "kb_wiki_vnext": "0.1.9",
+    "session_gate": "0.2.7",
+    "runtime": "0.1.7",
+}
 REQUIRED_DOCS = [
     "user-manual.md",
     "admin-installation.md",
@@ -20,12 +29,16 @@ REQUIRED_DOCS = [
     "troubleshooting.md",
 ]
 REQUIRED_BUNDLE_PATHS = [
+    "README.md",
     "runtime/kb_next.py",
     "classic-template/.kb/kb.py",
     "plugin/.codex-plugin/plugin.json",
     "product/product.json",
+    "product/README.md",
     "product/docs/en/user-manual.md",
     "product/docs/pt-BR/user-manual.md",
+    "tools/build_agent_packages.py",
+    "tools/build_vnext_standalone.py",
     "tools/validate_vnext_product.py",
 ]
 FORBIDDEN_BUNDLE_PATTERNS = [
@@ -36,6 +49,11 @@ FORBIDDEN_BUNDLE_PATTERNS = [
     re.compile(r"(^|/)state/runs/"),
     re.compile(r"(^|/)\.pytest"),
     re.compile(r"(^|/)worktrees/"),
+    re.compile(r"(^|/)archive/", re.IGNORECASE),
+    re.compile(r"(^|/)(private|spec-pack|workbench)/", re.IGNORECASE),
+    re.compile(r"(^|/)docs/INSTALL\.md$", re.IGNORECASE),
+    re.compile(r"(^|/)runtime/README\.md$", re.IGNORECASE),
+    re.compile(r"(^|/)tools/(cleanup_vnext_workbench|validate_kb_wiki_vnext_spec_pack)\.py$", re.IGNORECASE),
 ]
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\((?!https?://|mailto:|#)([^)]+)\)")
 
@@ -44,25 +62,43 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _load_manifest(root: Path) -> dict[str, object]:
+def _load_manifest(root: Path) -> tuple[dict[str, object] | None, list[str]]:
     path = root / PRODUCT_DIR / "product.json"
     if not path.exists():
-        raise AssertionError(f"Missing product manifest: {path}")
-    return json.loads(path.read_text(encoding="utf-8"))
+        return None, [f"missing product manifest: {path}"]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return None, [f"invalid product manifest: {path}: {exc}"]
+    if not isinstance(data, dict):
+        return None, [f"product manifest must be an object: {path}"]
+    return data, []
 
 
 def _validate_manifest(root: Path, manifest: dict[str, object]) -> list[str]:
     errors: list[str] = []
     if manifest.get("name") != "kb-wiki-vnext":
         errors.append("product.json name must be kb-wiki-vnext")
-    if manifest.get("version") != "0.2.0-rc.1":
-        errors.append("product.json version must be 0.2.0-rc.1")
+    if manifest.get("version") != PRODUCT_VERSION:
+        errors.append(f"product.json version must be {PRODUCT_VERSION}")
+
+    component_versions = manifest.get("component_versions")
+    if not isinstance(component_versions, dict):
+        errors.append("product.json component_versions must be an object")
+    else:
+        for key, expected in REQUIRED_COMPONENT_VERSIONS.items():
+            if component_versions.get(key) != expected:
+                errors.append(f"component_versions.{key} must be {expected}")
 
     for key in ("source_paths", "distribution_channels", "required_checks", "authority_limits"):
         if key not in manifest:
             errors.append(f"product.json missing {key}")
 
-    for rel in manifest.get("source_paths", []):
+    source_paths = manifest.get("source_paths", [])
+    if not isinstance(source_paths, list) or not all(isinstance(path, str) for path in source_paths):
+        errors.append("product.json source_paths must be a list of strings")
+        source_paths = []
+    for rel in source_paths:
         if not (root / rel).exists():
             errors.append(f"source path does not exist: {rel}")
 
@@ -121,23 +157,26 @@ def _validate_relative_links(root: Path) -> list[str]:
     return errors
 
 
-def _validate_archive_inventory(root: Path) -> list[str]:
-    errors: list[str] = []
-    inventory = root / "archive" / "2026-05-vnext-productization" / "inventory.json"
-    if not inventory.exists():
-        errors.append("missing archive inventory")
-        return errors
-    data = json.loads(inventory.read_text(encoding="utf-8"))
-    if data.get("cleanup_policy") != "archive-first":
-        errors.append("archive inventory cleanup_policy must be archive-first")
-    if "reversal" not in data:
-        errors.append("archive inventory missing reversal block")
-    return errors
-
-
 def _strip_bundle_root(name: str) -> str:
     parts = name.split("/", 1)
     return parts[1] if len(parts) == 2 else name
+
+
+def _resolve_bundle_link(source_name: str, target: str) -> str | None:
+    if target.startswith("/"):
+        return None
+    joined = PurePosixPath(source_name).parent / target.replace("\\", "/")
+    normalized: list[str] = []
+    for part in joined.parts:
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not normalized:
+                return None
+            normalized.pop()
+        else:
+            normalized.append(part)
+    return "/".join(normalized)
 
 
 def _validate_bundle(bundle: Path) -> list[str]:
@@ -145,17 +184,60 @@ def _validate_bundle(bundle: Path) -> list[str]:
     if not bundle.exists():
         return [f"bundle not found: {bundle}"]
 
-    with zipfile.ZipFile(bundle) as zf:
-        names = zf.namelist()
-        stripped = {_strip_bundle_root(name) for name in names}
-        for required in REQUIRED_BUNDLE_PATHS:
-            if required not in stripped:
-                errors.append(f"bundle missing {required}")
-        for name in names:
-            for pattern in FORBIDDEN_BUNDLE_PATTERNS:
-                if pattern.search(name):
-                    errors.append(f"bundle contains forbidden path: {name}")
-                    break
+    try:
+        with zipfile.ZipFile(bundle) as zf:
+            names = zf.namelist()
+            expected_root = f"kb-wiki-vnext-{PRODUCT_VERSION}/"
+            if any(not name.startswith(expected_root) for name in names):
+                errors.append(f"bundle entries must be rooted at {expected_root}")
+            name_set = set(names)
+            duplicates = sorted({name for name in names if names.count(name) > 1})
+            if duplicates:
+                errors.append(f"bundle contains duplicate paths: {duplicates[:5]}")
+            stripped = {_strip_bundle_root(name) for name in names}
+            for required in REQUIRED_BUNDLE_PATHS:
+                if required not in stripped:
+                    errors.append(f"bundle missing {required}")
+            for name in names:
+                for pattern in FORBIDDEN_BUNDLE_PATTERNS:
+                    if pattern.search(name):
+                        errors.append(f"bundle contains forbidden path: {name}")
+                        break
+
+            for markdown_name in sorted(name for name in names if name.endswith(".md")):
+                try:
+                    markdown = zf.read(markdown_name).decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    errors.append(f"bundle Markdown is not UTF-8: {markdown_name}: {exc}")
+                    continue
+                for match in LINK_PATTERN.finditer(markdown):
+                    target = match.group(1).split("#", 1)[0]
+                    if target.startswith("<") and target.endswith(">"):
+                        target = target[1:-1]
+                    resolved = _resolve_bundle_link(markdown_name, target)
+                    if resolved is None or not resolved.startswith(expected_root):
+                        errors.append(f"bundle link escapes root: {markdown_name} -> {target}")
+                    elif resolved not in name_set:
+                        errors.append(f"bundle contains broken link: {markdown_name} -> {target}")
+
+            manifest_name = f"{expected_root}bundle-manifest.json"
+            if manifest_name not in names:
+                errors.append("bundle missing bundle-manifest.json")
+            else:
+                try:
+                    bundle_manifest = json.loads(zf.read(manifest_name).decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                    errors.append(f"bundle manifest is invalid JSON: {exc}")
+                else:
+                    if bundle_manifest.get("version") != PRODUCT_VERSION:
+                        errors.append(f"bundle manifest version must be {PRODUCT_VERSION}")
+                    inventory = bundle_manifest.get("included_paths")
+                    if not isinstance(inventory, list) or not all(isinstance(path, str) for path in inventory):
+                        errors.append("bundle manifest included_paths must be a list of strings")
+                    elif set(inventory) != set(names) - {manifest_name}:
+                        errors.append("bundle manifest included_paths does not match bundle inventory")
+    except (OSError, zipfile.BadZipFile) as exc:
+        return [f"bundle is not a readable ZIP: {bundle}: {exc}"]
 
     return errors
 
@@ -163,11 +245,12 @@ def _validate_bundle(bundle: Path) -> list[str]:
 def validate(bundle: Path | None = None) -> list[str]:
     root = repo_root()
     errors: list[str] = []
-    manifest = _load_manifest(root)
-    errors.extend(_validate_manifest(root, manifest))
+    manifest, manifest_errors = _load_manifest(root)
+    errors.extend(manifest_errors)
+    if manifest is not None:
+        errors.extend(_validate_manifest(root, manifest))
     errors.extend(_validate_doc_parity(root))
     errors.extend(_validate_relative_links(root))
-    errors.extend(_validate_archive_inventory(root))
     if bundle is not None:
         errors.extend(_validate_bundle(bundle if bundle.is_absolute() else root / bundle))
     return errors

@@ -12,13 +12,16 @@ release gates.
 
 ## Session Contract
 
-1. Start with the vNext `vnext-session-start` plugin/slash command when the
-   client exposes it. In a shell, resolve the runtime —
-   `.kb-next/runtime/kb_next.py`, else
-   `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
-   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
-   if no runtime resolves, fall back to classic
-   `python .kb/kb.py lifecycle session-start --json`.
+1. Start with the vNext `vnext-session-start` command when available. If the
+   client does not expose commands, resolve the runtime in this order:
+   `.kb-next/runtime/kb_next.py`,
+   `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py`, an installed client-plugin path
+   matching `**/kb-wiki-vnext/runtime/kb_next.py`, then
+   `core/versions/kb-wiki-vnext/runtime/kb_next.py` in the authoring monorepo.
+   Run `python <resolved-runtime-path> session-start --json`. If no runtime
+   resolves but `.kb-next/memory/NOW.md` exists, read it directly and report
+   degraded data-only mode; use classic `.kb/kb.py lifecycle session-start`
+   only as the lifecycle fallback, not as the vNext `NOW.md` source.
 2. Read only `.kb-next/memory/NOW.md` by default.
 3. Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
    artifacts only when the task needs them.
@@ -34,6 +37,8 @@ release gates.
 - Treat `.kb/` records as canonical durable memory.
 - Treat `.kb-next/` as proposal, manifest, draft, materialization, package, and
   operations evidence.
+- `session-start` and `lookup` do not write canonical `.kb/`, but they append
+  operational evidence to `.kb-next/operations.jsonl`.
 - Do not write SQL or edit `.kb/kb.db` directly.
 - Do not publish vNext wiki drafts to `.kb/wiki/live`.
 - Apply durable changes only through `proposal-apply` with explicit approval or
@@ -54,5 +59,5 @@ release gates.
   `needs_sponsor`; only approved `demote_hot` and `resolve` may apply.
 - Confirm packaging names include `vnext` and do not collide with classic
   package names or generic command basenames.
-- Record evidence in run artifacts before claiming release
+- Record evidence in CASE-compatible run artifacts before claiming release
   compliance.

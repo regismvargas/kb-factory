@@ -437,10 +437,11 @@ def test_compliance_preflight_planning_lists_prd_gates_and_traceability(project:
     assert result["status"] == "pass"
     assert result["development_contract_required"] is True
     assert result["contract_scope"].startswith("development until 100% developed")
-    assert "Gate 0 PRD" in result["applicable_gates"]
-    assert any("product-intent-prd.pt-br.md" in item for item in result["required_spec_surfaces"])
-    assert any("release-gates.md" in item for item in result["required_spec_surfaces"])
-    assert any("test-matrix.md" in item for item in result["required_spec_surfaces"])
+    assert "Public Product Manifest" in result["applicable_gates"]
+    assert any("products/kb-wiki-vnext/product.json" == item for item in result["required_spec_surfaces"])
+    assert any("products/kb-wiki-vnext/docs/en/maintainer-release.md" == item for item in result["required_spec_surfaces"])
+    assert any("tests/test_vnext_runtime_parity.py" == item for item in result["required_spec_surfaces"])
+    assert not any("spec-pack" in item for item in result["required_spec_surfaces"])
     assert any("Development compliance preflight" == item for item in result["required_traceability_rows"])
 
 
@@ -455,10 +456,12 @@ def test_compliance_preflight_implementation_requires_tests_and_dossier(project:
     )
 
     assert result["status"] == "pass"
-    assert any("validate_kb_wiki_vnext_spec_pack.py" in item for item in result["required_tests"])
+    assert any("sync_vnext_runtime.py --check" in item for item in result["required_tests"])
     assert any("pytest" in item for item in result["required_tests"])
+    assert not any("spec_pack" in item for item in result["required_tests"])
     assert any("run dossier" in item for item in result["required_evidence"])
-    assert "Proceed only with the listed PRD/master-plan mapping" in result["next_allowed_action"]
+    assert "Proceed only with the listed public release mapping" in result["next_allowed_action"]
+    assert any("runtime mirrors pass" in item.lower() for item in result["completion_rule"])
 
 
 def test_compliance_preflight_track_b_blocks_on_source_linkage_pendencia(project: Path) -> None:

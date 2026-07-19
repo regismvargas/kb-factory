@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "record_type": "controlled-source-to-public-release",
+  "source_sha": "6c8873797add4f068b7635403c9b18d478442315",
+  "baseline_public_sha": "256b217aafac0dbe6663af9edfb70b0d66761bc4",
+  "policy_version": "2026-07-19.3",
+  "export_stage_file_count": 245,
+  "final_public_file_count": 250,
+  "omitted_source_files": [
+    "core/templates/kb/runtime/conformance.json"
+  ],
+  "final_integrity_binding": {
+    "git_ref": "refs/tags/v0.1.4",
+    "scope": "all tracked files in the tagged public commit",
+    "release_assets": "SHA256SUMS.txt"
+  },
+  "post_export_public_hardening": [
+    "public-only packaging and runtime parity",
+    "public documentation and release metadata",
+    "Claude marketplace schema validation",
+    "public CI and release-artifact validation"
+  ],
+  "verification_contract": [
+    "claude plugin validate .",
+    "python tools/gate.py",
+    "python tools/sync_package_scaffold.py --check",
+    "python tools/sync_vnext_runtime.py --check",
+    "python tools/validate_vnext_product.py --json",
+    "python -m pytest"
+  ]
+}

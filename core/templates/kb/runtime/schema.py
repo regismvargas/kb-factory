@@ -200,6 +200,14 @@ HARDENING_TRIGGERS = {
             SELECT RAISE(ABORT, 'append-only: records cannot be deleted; supersede or resolve instead');
         END;
     """,
+    "kbf_records_no_replace": """
+        CREATE TRIGGER kbf_records_no_replace
+        BEFORE INSERT ON records
+        FOR EACH ROW WHEN EXISTS (SELECT 1 FROM records WHERE id = NEW.id)
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: an existing record id cannot be replaced');
+        END;
+    """,
     "kbf_audit_log_no_update": """
         CREATE TRIGGER kbf_audit_log_no_update
         BEFORE UPDATE ON audit_log
@@ -212,6 +220,14 @@ HARDENING_TRIGGERS = {
         BEFORE DELETE ON audit_log
         BEGIN
             SELECT RAISE(ABORT, 'append-only: audit_log is immutable');
+        END;
+    """,
+    "kbf_audit_log_no_replace": """
+        CREATE TRIGGER kbf_audit_log_no_replace
+        BEFORE INSERT ON audit_log
+        FOR EACH ROW WHEN EXISTS (SELECT 1 FROM audit_log WHERE audit_id = NEW.audit_id)
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: an existing audit_log id cannot be replaced');
         END;
     """,
     "kbf_operations_no_update": """
@@ -228,15 +244,26 @@ HARDENING_TRIGGERS = {
             SELECT RAISE(ABORT, 'append-only: operations log is immutable');
         END;
     """,
+    "kbf_operations_no_replace": """
+        CREATE TRIGGER kbf_operations_no_replace
+        BEFORE INSERT ON operations
+        FOR EACH ROW WHEN EXISTS (SELECT 1 FROM operations WHERE op_id = NEW.op_id)
+        BEGIN
+            SELECT RAISE(ABORT, 'append-only: an existing operations id cannot be replaced');
+        END;
+    """,
 }
 
 
 def hardening_enabled(conn: sqlite3.Connection) -> bool:
-    """True if the optional append-only triggers are installed."""
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'trigger' AND name = 'kbf_records_no_delete'"
-    ).fetchone()
-    return row is not None
+    """True only when the complete optional hardening trigger set is installed."""
+    installed = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'trigger'"
+        ).fetchall()
+    }
+    return set(HARDENING_TRIGGERS).issubset(installed)
 
 
 def enable_hardening(conn: sqlite3.Connection) -> None:

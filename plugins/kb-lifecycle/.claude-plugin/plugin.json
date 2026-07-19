@@ -1,7 +1,7 @@
 {
   "name": "kb-lifecycle",
-  "version": "0.2.2",
-  "description": "Distribute KB Factory memory lifecycle and wiki maintenance across Claude environments. Learn to use it: https://github.com/regismvargas/kb-factory/tree/main/docs/guide",
+  "version": "0.2.3",
+  "description": "Distribute KB Factory memory lifecycle and wiki maintenance across Claude environments. (CCH v0.7-aware)",
   "author": {
     "name": "KB Factory"
   },
@@ -11,7 +11,8 @@
   "keywords": [
     "knowledge-base",
     "wiki",
-    "memory"
+    "memory",
+    "case"
   ],
   "skills": "./skills/"
 }

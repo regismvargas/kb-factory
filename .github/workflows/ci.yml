@@ -25,5 +25,43 @@ jobs:
       - name: Install pytest
         run: pip install pytest
 
+      - name: Check release mirrors and product contract
+        run: |
+          python tools/gate.py
+          python tools/sync_package_scaffold.py --check
+          python tools/sync_vnext_runtime.py --check
+          python tools/validate_vnext_product.py --json
+
       - name: Run test suite
         run: python -m pytest tests/ -q
+
+  release-artifacts:
+    name: public release artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install release tools
+        run: pip install build twine
+
+      - name: Build and validate public plugin packages
+        run: |
+          python tools/build_agent_packages.py --scope all
+          python tools/organize_agent_packages.py
+          python tools/organize_agent_packages.py --check
+
+      - name: Build and validate standalone product
+        run: |
+          python tools/build_vnext_standalone.py --version 0.2.0-rc.2
+          python tools/validate_vnext_product.py --json --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+
+      - name: Build and validate Python distributions
+        run: |
+          python -m build
+          python -m twine check dist/kb_factory-0.1.4*

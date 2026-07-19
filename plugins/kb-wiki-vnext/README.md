@@ -1,17 +1,13 @@
 # KB/Wiki vNext Plugin
 
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
-classic `kb-lifecycle` and `session-gate`.
+classic `kb-lifecycle`, `session-gate`, and `case-companion`.
+
+Release-candidate identities: plugin `0.1.9`, bundled runtime `0.1.7`, product
+`0.2.0-rc.2`, Session Gate companion `0.2.7`, and marketplace `0.3.8`.
 
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
-
-> **Using it (start here).** This README covers packaging and validation. To
-> *use* the plugin in a chat, see the [User Guide](../../docs/guide/index.md) (or
-> the [No-code guide](../../docs/guide/no-code/index.md) if you're not a
-> developer) and [Using KB Factory in a session](../../docs/agent-sessions.md).
-> For what all three plugins do and how they combine, see
-> [the plugins](../../docs/plugins.md).
 
 Prerequisites:
 
@@ -21,13 +17,12 @@ Prerequisites:
 
 ## Capabilities
 
-- Starts sessions with the explicit vNext `vnext-session-start` plugin command
-  when exposed, or the runtime Python `session-start` command in shells.
+- Starts sessions with the explicit vNext `vnext-session-start` command.
 - Loads only `.kb-next/memory/NOW.md` by default.
 - Uses `lookup` or `semantic-lookup` before opening broad memory surfaces.
 - Reviews `.kb-next` evidence, manifests, proposals, and wiki drafts.
 - Runs semantic hygiene proposal flows without direct `.kb/` mutation.
-- Records packaging/release evidence in run artifacts.
+- Records packaging/release evidence in CASE-compatible run artifacts.
 
 ## Boundaries
 
@@ -46,38 +41,33 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.1.8.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
-| `kb-wiki-vnext-claude-plugin-0.1.8.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
-| `kb-wiki-vnext-cowork-plugin-0.1.8.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/` |
+| `kb-wiki-vnext-plugin-0.1.9.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-claude-plugin-0.1.9.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-cowork-plugin-0.1.9.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.
 
-After building, run `python tools/organize_agent_packages.py --mode current
---archive-legacy` to copy the current plugin ZIPs into
-`dist/agent-packages/by-platform/<platform>/<version>/` and each platform's
-`latest/` folder. Recognized non-current plugin ZIPs move to
-`dist/agent-packages/legacy/<platform>/<version>/`. The flat current ZIPs remain
-the canonical build output; the organized mirror is for manual install and hash
-review.
-
 ## Verification
 
 ```powershell
-python tools\build_agent_packages.py --scope kb
-python tools\organize_agent_packages.py --mode current --check
+python tools\build_agent_packages.py --scope vnext
 python -m pytest -p no:cacheprovider tests\test_build_agent_packages.py -q
 ```
 
-After installation, invoke the `vnext-session-start` plugin command when the
-client exposes it. In a shell, resolve the runtime
-(`.kb-next/runtime/kb_next.py`, else
-`core/versions/kb-wiki-vnext/runtime/kb_next.py` in the KB Factory authoring
-monorepo) and run `python <resolved-runtime-path> session-start --json`; if no
-runtime resolves, fall back to classic
-`python .kb/kb.py lifecycle session-start --json`. Confirm the output tells
-the agent to read only `.kb-next/memory/NOW.md` by default. Existing and new project setup commands are also shipped under
-explicit `existing-project-*` and `new-project-*` names.
+After installation, invoke the client-specific plugin/slash or skill-based
+`vnext-session-start` surface
+and confirm it tells the agent to read only `.kb-next/memory/NOW.md` by
+default. Claude Code uses `/kb-wiki-vnext:vnext-session-start`; Codex uses the
+embedded skill; Cowork uses the action exposed by its UI or the skill in
+natural language. Existing and new project setup commands ship under explicit
+`existing-project-*` and `new-project-*` names.
+
+The Codex CLI has no plugin-management command. Use the Codex app Plugins
+settings with the public marketplace, or upload
+`kb-wiki-vnext-plugin-0.1.9.zip` when the app exposes file-based installation.
+For a skill-only fallback, copy `skills/kb-wiki-vnext/` into
+`~/.codex/skills/kb-wiki-vnext/`.
 
 ## Troubleshooting
 
@@ -86,10 +76,13 @@ explicit `existing-project-*` and `new-project-*` names.
 - If Codex rejects the manifest, confirm `.codex-plugin/plugin.json` omits
   unsupported `hooks` and references only companion files that exist.
 - If the package appears to collide with another KB Factory plugin, rebuild
-  with `--scope kb` and verify vNext commands use `vnext-session-*`,
+  with `--scope vnext` and verify vNext commands use `vnext-session-*`,
   `existing-project-*`, and `new-project-*` names.
 
 Related:
 
+- `docs/installation.md`
+- `products/kb-wiki-vnext/docs/en/admin-installation.md`
+- `products/kb-wiki-vnext/docs/pt-BR/admin-installation.md`
 - `tools/build_agent_packages.py`
 - `tests/test_build_agent_packages.py`

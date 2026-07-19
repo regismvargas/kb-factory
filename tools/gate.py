@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
 """KB Factory cleanliness gate.
 
-Fast, deterministic checks that the workbench KB is in a shippable, trustworthy
-state. Intended as a pre-commit hook and a CI step so the authoring repo cannot
-drift back into the state the merit review flagged (stale wiki pages, source
-hash drift, runtime copies out of sync).
-
-Checks (all fast — no full test run):
-  1. doctor    — SQLite integrity ok, zero source hash drift.
-  2. wiki-lint — zero issues on the live wiki.
-  3. parity    — the canonical runtime (core/runtime/*.py) is byte-identical to
-                 the scaffold template runtime and the live .kb runtime, and
-                 .kb/kb.py matches the template kb.py.
+Fast, deterministic checks that release runtime surfaces are synchronized.
+The public checkout deliberately has no root ``.kb/``. In that shape, the
+authoring-only doctor and wiki-lint checks are skipped while all source,
+template, pip, and vNext runtime parity checks remain mandatory.
 
 Exit 0 if clean, 1 otherwise. Standard library only.
 """
@@ -22,6 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+
 ROOT = Path(__file__).resolve().parent.parent
 KB_PY = ROOT / ".kb" / "kb.py"
 
@@ -29,7 +23,8 @@ KB_PY = ROOT / ".kb" / "kb.py"
 def _run_json(*args):
     proc = subprocess.run(
         [sys.executable, str(KB_PY), *args, "--json"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     if proc.returncode != 0:
         return None, (proc.stderr or proc.stdout).strip()
@@ -61,46 +56,89 @@ def check_wiki_lint(failures):
         failures.append(f"wiki-lint issues = {count}")
 
 
-def check_parity(failures):
-    core_rt = ROOT / "core" / "runtime"
-    template_kb = ROOT / "core" / "templates" / "kb"
-    mirrors = {
-        "template runtime": template_kb / "runtime",
-        "live .kb runtime": ROOT / ".kb" / "runtime",
-    }
-    if not core_rt.is_dir():
-        failures.append("core/runtime not found")
+def check_runtime_tree_parity(source, mirrors, failures):
+    if not source.is_dir():
+        failures.append(f"{source.relative_to(ROOT)} not found")
         return
+    source_files = {path.name: path for path in source.glob("*.py")}
+    if not source_files:
+        failures.append(f"{source.relative_to(ROOT)} has no Python runtime files")
+        return
+
     for label, mirror in mirrors.items():
         if not mirror.is_dir():
             failures.append(f"{label} not found")
             continue
-        for src in sorted(core_rt.glob("*.py")):
-            other = mirror / src.name
-            if not other.is_file():
-                failures.append(f"{label} missing {src.name}")
-            elif other.read_bytes() != src.read_bytes():
+        mirror_files = {path.name: path for path in mirror.glob("*.py")}
+        for name in sorted(source_files.keys() - mirror_files.keys()):
+            failures.append(f"{label} missing {name}")
+        for name in sorted(mirror_files.keys() - source_files.keys()):
+            failures.append(f"{label} unexpected {name}")
+        for name, src in sorted(source_files.items()):
+            other = mirror_files.get(name)
+            if other is not None and other.read_bytes() != src.read_bytes():
                 failures.append(f"{label} drift: {src.name}")
-    # The live kb.py entry point must match the distributed template.
-    tmpl_kb_py = template_kb / "kb.py"
-    if KB_PY.is_file() and tmpl_kb_py.is_file():
-        if KB_PY.read_bytes() != tmpl_kb_py.read_bytes():
+
+
+def check_vnext_runtime_parity(failures):
+    master = ROOT / "core" / "versions" / "kb-wiki-vnext" / "runtime" / "kb_next.py"
+    mirrors = {
+        "vNext plugin runtime": ROOT / "plugins" / "kb-wiki-vnext" / "runtime" / "kb_next.py",
+        "vNext pip scaffold runtime": ROOT / "kb_factory" / "_scaffold_vnext" / "runtime" / "kb_next.py",
+    }
+    if not master.is_file():
+        failures.append("vNext master runtime not found")
+        return
+    master_bytes = master.read_bytes()
+    for label, mirror in mirrors.items():
+        if not mirror.is_file():
+            failures.append(f"{label} not found")
+        elif mirror.read_bytes() != master_bytes:
+            failures.append(f"{label} drift: kb_next.py")
+
+
+def check_parity(failures, authoring_kb):
+    core_rt = ROOT / "core" / "runtime"
+    template_kb = ROOT / "core" / "templates" / "kb"
+    check_runtime_tree_parity(
+        core_rt,
+        {
+            "template runtime": template_kb / "runtime",
+            "pip scaffold runtime": ROOT / "kb_factory" / "_scaffold" / "runtime",
+        },
+        failures,
+    )
+    if authoring_kb:
+        check_runtime_tree_parity(
+            core_rt,
+            {"live .kb runtime": ROOT / ".kb" / "runtime"},
+            failures,
+        )
+        tmpl_kb_py = template_kb / "kb.py"
+        if tmpl_kb_py.is_file() and KB_PY.read_bytes() != tmpl_kb_py.read_bytes():
             failures.append("kb.py drift: .kb/kb.py != template kb.py")
+    check_vnext_runtime_parity(failures)
 
 
 def main():
     failures: list[str] = []
-    check_doctor(failures)
-    check_wiki_lint(failures)
-    check_parity(failures)
+    authoring_kb = KB_PY.is_file()
+    if authoring_kb:
+        check_doctor(failures)
+        check_wiki_lint(failures)
+    else:
+        print("KB gate: skipping doctor and wiki-lint (no authoring .kb/kb.py).")
+    check_parity(failures, authoring_kb)
     if failures:
-        print("KB gate FAILED — the KB is not in a shippable state:")
+        print("KB gate FAILED - the release surface is not shippable:")
         for item in failures:
             print(f"  - {item}")
-        print("\nFix the above (e.g. `python .kb/kb.py wiki-sync --force`, "
-              "re-sync runtime mirrors) or bypass once with `git commit --no-verify`.")
+        print("\nFix the reported mirror drift and re-run the gate.")
         return 1
-    print("KB gate OK: integrity, zero hash drift, zero wiki-lint issues, runtime parity.")
+    if authoring_kb:
+        print("KB gate OK: integrity, zero hash drift, zero wiki-lint issues, classic and vNext runtime parity.")
+    else:
+        print("KB gate OK: classic and vNext runtime parity; doctor/wiki-lint skipped for public checkout.")
     return 0
 
 

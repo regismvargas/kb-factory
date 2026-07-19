@@ -35,7 +35,7 @@ If that prints `FTS5 OK`, you are ready.
 The fastest way is the published CLI:
 
 ```bash
-pip install kb-factory
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init        # scaffolds .kb/ and initializes the SQLite store
 ```
@@ -125,7 +125,7 @@ Add this repository as a plugin marketplace, then install the `kb-lifecycle`
 plugin:
 
 ```bash
-claude plugin marketplace add /path/to/kb-factory
+claude plugin marketplace add regismvargas/kb-factory
 claude plugin install kb-lifecycle@kb-factory-tools
 claude plugin list
 ```
@@ -145,17 +145,18 @@ to start a KB session. The `kb-wiki-maintainer` skill should run
 **Update / remove:**
 
 ```bash
-claude plugin marketplace update kb-factory-tools         # refresh from the repo
-claude plugin uninstall kb-lifecycle@kb-factory-tools     # then reinstall to update
-claude plugin install   kb-lifecycle@kb-factory-tools
-claude plugin disable   kb-lifecycle                       # disable without removing
+claude plugin marketplace update kb-factory-tools
+claude plugin update kb-lifecycle@kb-factory-tools
+claude plugin update kb-wiki-vnext@kb-factory-tools
+claude plugin update session-gate@kb-factory-tools
 ```
 
-There is no single `plugin update` verb — refresh the marketplace, then reinstall
-(or enable the marketplace's auto-update so plugins refresh at startup). Run
-`/reload-plugins` to apply changes within a running session. An update is only
-picked up when the plugin's `version` in its manifest changes, so content-only
-edits ship with a patch bump.
+`claude plugin update` downloads the latest declared plugin version. Restart
+Claude Code after the update; the CLI requires a restart before the new plugin
+version is applied. Content-only edits therefore ship with a plugin patch bump.
+
+Restarting Claude Code is not an update command. It only applies a version that
+was already downloaded, unless marketplace auto-update is explicitly enabled.
 
 ### Claude Cowork
 
@@ -163,8 +164,8 @@ Cowork installs plugins from a folder or marketplace through the UI:
 
 1. Open Claude Desktop and switch to Cowork.
 2. Open **Customize → Plugins**.
-3. Either add this repository as a GitHub plugin marketplace, or upload the
-   `plugins/kb-lifecycle` folder as a custom plugin.
+3. Add `regismvargas/kb-factory` as a GitHub plugin marketplace, or upload
+   `kb-lifecycle-cowork-plugin-0.2.3.zip` from release `v0.1.4`.
 
 **Verify:** the plugin appears under **Customize → Plugins**, and asking the
 agent to start a KB session reads only `.kb/memory/NOW.md` by default.
@@ -185,17 +186,35 @@ To use the thin-session model and the project setup/migration commands, install
 claude plugin install kb-wiki-vnext@kb-factory-tools   # Claude Code
 ```
 
-(or upload `plugins/kb-wiki-vnext` via **Customize → Plugins** in Cowork). It
+(or upload `kb-wiki-vnext-cowork-plugin-0.1.9.zip` via **Customize → Plugins**
+in Cowork). It
 adds 12 slash commands (`/vnext-session-start`, `/new-project-wizard`,
 `/existing-project-*`, …) and keeps `.kb/` canonical while using `.kb-next/` for
 proposals. See [plugins.md](plugins.md).
+
+### Codex
+
+The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
+open the Plugins settings, select the public `regismvargas/kb-factory`
+marketplace when available, and install the target plugin. For a file-based
+install, use the Codex artifact from release `v0.1.4`, for example
+`kb-wiki-vnext-plugin-0.1.9.zip`; do not upload the Claude or Cowork ZIP.
+
+If the app exposes plugin management to chat, use:
+
+> Update the KB Factory plugins from the public `regismvargas/kb-factory`
+> marketplace. Do not use `kb-factory-local` or a workbench source. Confirm the
+> installed name, source, and version before changing anything.
+
+If that capability is not exposed, use the Plugins settings. Restarting Codex
+alone reloads the current cache; it does not fetch a newer marketplace version.
 
 ## Upgrading
 
 If you installed via pip, update an existing project's runtime with:
 
 ```bash
-pip install -U kb-factory
+pip install --upgrade https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
 kb-factory update      # in the project root; refreshes .kb/ runtime, keeps your data
 ```
 
