@@ -419,9 +419,9 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
     names = {artifact.archive_path.name for artifact in artifacts}
 
     assert names == {
-        "kb-wiki-vnext-plugin-0.1.9.zip",
-        "kb-wiki-vnext-claude-plugin-0.1.9.zip",
-        "kb-wiki-vnext-cowork-plugin-0.1.9.zip",
+        "kb-wiki-vnext-plugin-0.3.0.zip",
+        "kb-wiki-vnext-claude-plugin-0.3.0.zip",
+        "kb-wiki-vnext-cowork-plugin-0.3.0.zip",
     }
     assert not any(name.startswith(("kb-lifecycle", "session-gate", "case-companion")) for name in names)
 
@@ -452,7 +452,7 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
                 command_text = archive.read(command_name).decode("utf-8")
                 assert command_text.startswith("---\n")
                 assert "description:" in command_text.split("---", 2)[1]
-            if artifact.archive_path.name == "kb-wiki-vnext-plugin-0.1.9.zip":
+            if artifact.archive_path.name == "kb-wiki-vnext-plugin-0.3.0.zip":
                 assert ".codex-plugin/plugin.json" in entries
                 codex_manifest = json.loads(
                     archive.read(".codex-plugin/plugin.json").decode("utf-8")

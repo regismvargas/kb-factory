@@ -21,11 +21,11 @@ Platform map:
 
 | Platform | Artifact | Internal structure | Primary capabilities |
 | --- | --- | --- | --- |
-| Codex | `kb-wiki-vnext-plugin-0.1.9.zip` | `.codex-plugin`, skills, commands, and runtime `0.1.7` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
-| Claude Code | `kb-wiki-vnext-claude-plugin-0.1.9.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.1.7` | guided memory workflows and explicit commands |
-| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.1.9.zip` | Cowork plugin package, runtime `0.1.7`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
+| Codex | `kb-wiki-vnext-plugin-0.3.0.zip` | `.codex-plugin`, skills, commands, and runtime `0.3.0` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
+| Claude Code | `kb-wiki-vnext-claude-plugin-0.3.0.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.3.0` | guided memory workflows and explicit commands |
+| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.3.0.zip` | Cowork plugin package, runtime `0.3.0`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
 | Session Gate | `session-gate-*-0.2.7.zip` | plugin detector plus `gate-session-*` commands | route `.kb-next/` first, then classic `.kb/` and CASE when present |
-| Stand-alone | `kb-wiki-vnext-0.2.0-rc.2-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
+| Stand-alone | `kb-wiki-vnext-0.3.0-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
 
 Plugin packaging installs client capabilities. Skills describe agent behavior. Commands expose callable workflows. Hooks are platform-specific convenience surfaces and are not assumed for Cowork.
 
@@ -37,12 +37,12 @@ The version lines are independent component identities, not alternatives:
 
 | Component | Version |
 |---|---|
-| Product release candidate | `0.2.0-rc.2` |
-| KB Lifecycle | `0.2.3` |
-| vNext plugin container | `0.1.9` |
-| Bundled `kb_next.py` engine | `0.1.7` |
+| Product release candidate | `0.3.0` |
+| KB Lifecycle | `0.3.0` |
+| vNext plugin container | `0.3.0` |
+| Bundled `kb_next.py` engine | `0.3.0` |
 | Session Gate | `0.2.7` |
-| Marketplace | `0.3.8` |
+| Marketplace/catalog | no independent version; plugin manifests are authoritative |
 
 The bundled engine bootstraps a stable workspace copy at
 `.kb-next/runtime/kb_next.py`. Normal sessions use the workspace copy. Upgrade
@@ -61,8 +61,8 @@ manifests, proposals, drafts, or materializations. Only approved
 ## Verification
 
 Use `python tools\validate_vnext_product.py` to confirm product docs, manifest,
-plugin runtime inclusion, relative links, and optional bundle contents. Use
-`python tools\sync_vnext_runtime.py --check` to confirm runtime-copy parity.
+archive inventory, plugin runtime inclusion, and optional bundle contents. Use
+the existing spec-pack validator to confirm runtime/spec consistency.
 
 ## Troubleshooting
 

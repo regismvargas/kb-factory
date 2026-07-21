@@ -1,9 +1,7 @@
 {
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "description": "KB Factory plugins for governed knowledge workflows across Claude Code and Claude Cowork.",
   "name": "kb-factory-tools",
-  "metadata": {
-    "description": "KB Factory plugins for governed knowledge workflows across Claude Code and Claude Cowork.",
-    "version": "0.3.8"
-  },
   "owner": {
     "name": "KB Factory"
   },
@@ -22,8 +20,7 @@
         "memory",
         "case",
         "cch-v0.7"
-      ],
-      "version": "0.2.3"
+      ]
     },
     {
       "author": {
@@ -39,8 +36,7 @@
         "kb",
         "case",
         "wrapper"
-      ],
-      "version": "0.2.7"
+      ]
     },
     {
       "author": {
@@ -56,8 +52,7 @@
         "vnext",
         "memory",
         "semantic-hygiene"
-      ],
-      "version": "0.1.9"
+      ]
     }
   ]
 }

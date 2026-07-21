@@ -58,12 +58,12 @@ and write the same `.kb/`.
 
 ## Quickstart (≈60 seconds)
 
-The core is a single stdlib-only CLI. Install v0.1.4 from the GitHub release
+The core is a single stdlib-only CLI. Install v0.3.0 from the GitHub release
 and scaffold a project, or copy the template directly:
 
 ```bash
-# 1. Install v0.1.4 and create a .kb/ in your project (initializes SQLite)
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+# 1. Install v0.3.0 and create a .kb/ in your project (initializes SQLite)
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.3.0/kb_factory-0.3.0-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 #   No pip? Copy the scaffold instead:
@@ -168,7 +168,7 @@ via the CLI — both read and write the same `.kb/`.
 
 Pre-`1.0.0`, and actively developed. The core runtime is tested across the
 public CI matrix and ships as a wheel plus source distribution on the GitHub
-release. Latest release: **v0.1.4**. PyPI is not the active distribution channel
+release. Latest release: **v0.3.0**. PyPI is not the active distribution channel
 for this release.
 Expect additive `0.1.x` releases as the API settles toward `1.0.0`.
 

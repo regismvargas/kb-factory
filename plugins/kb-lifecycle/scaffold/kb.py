@@ -27,6 +27,11 @@ from runtime.exports import (
 from runtime.filing_policy import (
     cmd_filing_policy as runtime_cmd_filing_policy,
 )
+from runtime.graph import (
+    cmd_edge_add as runtime_cmd_edge_add,
+    cmd_edge_remove as runtime_cmd_edge_remove,
+    cmd_source_link as runtime_cmd_source_link,
+)
 from runtime.helpers import now_iso, row_to_dict
 from runtime.oplog import (
     log_operation as runtime_log_operation,
@@ -486,6 +491,9 @@ def build_parser():
             "export": cmd_export,
             "raw-query": cmd_raw_query,
             "harden": cmd_harden,
+            "graph-edge-add": runtime_cmd_edge_add,
+            "graph-edge-remove": runtime_cmd_edge_remove,
+            "graph-source-link": runtime_cmd_source_link,
             "bulk-import": cmd_bulk_import,
             "ingest": cmd_ingest,
             "sources": cmd_sources,

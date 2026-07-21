@@ -35,7 +35,7 @@ If that prints `FTS5 OK`, you are ready.
 The fastest way is the published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.3.0/kb_factory-0.3.0-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init        # scaffolds .kb/ and initializes the SQLite store
 ```
@@ -165,7 +165,7 @@ Cowork installs plugins from a folder or marketplace through the UI:
 1. Open Claude Desktop and switch to Cowork.
 2. Open **Customize → Plugins**.
 3. Add `regismvargas/kb-factory` as a GitHub plugin marketplace, or upload
-   `kb-lifecycle-cowork-plugin-0.2.3.zip` from release `v0.1.4`.
+   `kb-lifecycle-cowork-plugin-0.3.0.zip` from release `v0.3.0`.
 
 **Verify:** the plugin appears under **Customize → Plugins**, and asking the
 agent to start a KB session reads only `.kb/memory/NOW.md` by default.
@@ -186,7 +186,7 @@ To use the thin-session model and the project setup/migration commands, install
 claude plugin install kb-wiki-vnext@kb-factory-tools   # Claude Code
 ```
 
-(or upload `kb-wiki-vnext-cowork-plugin-0.1.9.zip` via **Customize → Plugins**
+(or upload `kb-wiki-vnext-cowork-plugin-0.3.0.zip` via **Customize → Plugins**
 in Cowork). It
 adds 12 slash commands (`/vnext-session-start`, `/new-project-wizard`,
 `/existing-project-*`, …) and keeps `.kb/` canonical while using `.kb-next/` for
@@ -197,8 +197,8 @@ proposals. See [plugins.md](plugins.md).
 The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
 open the Plugins settings, select the public `regismvargas/kb-factory`
 marketplace when available, and install the target plugin. For a file-based
-install, use the Codex artifact from release `v0.1.4`, for example
-`kb-wiki-vnext-plugin-0.1.9.zip`; do not upload the Claude or Cowork ZIP.
+install, use the Codex artifact from release `v0.3.0`, for example
+`kb-wiki-vnext-plugin-0.3.0.zip`; do not upload the Claude or Cowork ZIP.
 
 If the app exposes plugin management to chat, use:
 
@@ -214,7 +214,7 @@ alone reloads the current cache; it does not fetch a newer marketplace version.
 If you installed via pip, update an existing project's runtime with:
 
 ```bash
-pip install --upgrade https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install --upgrade https://github.com/regismvargas/kb-factory/releases/download/v0.3.0/kb_factory-0.3.0-py3-none-any.whl
 kb-factory update      # in the project root; refreshes .kb/ runtime, keeps your data
 ```
 

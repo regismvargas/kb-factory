@@ -46,3 +46,32 @@ Runtime-only command:
 
 Classic `.kb/` remains canonical durable memory. `.kb-next/` remains governed
 proposal, evidence, draft, materialization, and operations state.
+
+## Graph surfaces
+
+The vNext runtime exposes pure reads. Every command opens `.kb/kb.db` with
+SQLite URI `mode=ro` and `PRAGMA query_only=ON`:
+
+| Command | Result | Exit codes |
+|---|---|---|
+| `graph backlinks RECORD_ID [--json]` | pages stored in `wiki_page_provenance` | `0`, or `2` for usage/environment error |
+| `graph lineage RECORD_ID [--json]` | roots, current tips, branches, cycles, and encoding divergence | `0`, or `2` |
+| `graph neighbors RECORD_ID [--json]` | de-duplicated neighbors with separate `origins[]` | `0`, or `2` |
+| `graph source-records SOURCE_ID [--json]` | both source-link encodings and any divergence | `0`, or `2` |
+| `graph verify [--json]` | deterministic findings with stable issue codes | `0` clean, `1` findings, `2` error |
+| `graph source-backfill [--limit 1..3] [--json]` | bounded exact-evidence proposals; never applies them | `0`, or `2` |
+
+All JSON responses use `graph_contract_version`, `command`, `subject`,
+`results`, `warnings`, and `blind_spots`. Schema v5 remains readable; missing
+typed edges produce `TYPED_EDGE_CAPABILITY_UNAVAILABLE`.
+
+Canonical graph mutations exist only in the classic runtime:
+
+```text
+graph edge-add SOURCE_RECORD TYPE TARGET_RECORD --actor ID --actor-runtime human|codex|claude-code|cowork [--note TEXT]
+graph edge-remove EDGE_ID --actor ID --actor-runtime human|codex|claude-code|cowork [--note TEXT]
+graph source-link RECORD_ID SOURCE_ID --actor ID --actor-runtime human|codex|claude-code|cowork [--note TEXT]
+```
+
+Allowed edge types are `depends-on`, `contradicts`, and `duplicates`.
+Mutations, audit rows, and operations rows commit in one transaction.

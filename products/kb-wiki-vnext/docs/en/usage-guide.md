@@ -10,10 +10,10 @@ Project users, admins, and maintainers who need more than install instructions: 
 
 ## Prerequisites
 
-- KB/Wiki vNext `0.2.0-rc.2` installed through a plugin ZIP or the stand-alone bundle.
-- Component identity recorded by the maintainer: product `0.2.0-rc.2`, KB
-  Lifecycle `0.2.3`, plugin container `0.1.9`, bundled runtime `0.1.7`, Session
-  Gate `0.2.7`, and marketplace `0.3.8`.
+- KB/Wiki vNext `0.3.0` installed through a plugin ZIP or the stand-alone bundle.
+- Component identity recorded by the maintainer: release, KB Lifecycle, vNext,
+  and runtime `0.3.0`; Session Gate `0.2.7`. The marketplace has no version
+  authority; plugin manifests define update identity.
 - A workspace with `.kb/` available as canonical memory.
 - Python available as `python`.
 - Agreement that `.kb-next/` is operational memory, proposal evidence, and draft materialization, not the canonical source of truth.
@@ -102,12 +102,12 @@ New project:
 
 1. Ensure `.kb/` exists from the bundled classic template or an existing KB Factory setup.
 2. Run `activation-wizard`.
-3. Run `python <resolved-runtime-path> session-start --json`.
+3. Run `python runtime/kb_next.py --project-root <workspace> session-start`.
 4. Use `lookup` first; use semantic commands only when you can supply or review LLM judgment.
 
 Existing project:
 
-1. Run `python <resolved-runtime-path> session-start --json`.
+1. Run `python runtime/kb_next.py --project-root <workspace> session-start`.
 2. Read `.kb-next/memory/NOW.md`.
 3. Use `compliance-preflight` before planning, packaging, release, or development work.
 4. Use `proposal-apply` only after human approval.
@@ -137,8 +137,7 @@ Upgrade and rollback:
 
 1. Record current package/runtime.
 2. Install the new plugin or unpack the new stand-alone bundle beside the previous one.
-3. Bootstrap from the newly installed artifact, then run
-   `python <resolved-runtime-path> session-start --json`,
+3. Bootstrap from the newly installed artifact, then run `python runtime/kb_next.py --project-root <workspace> session-start`,
    `compliance-preflight`, and default report-only `semantic-hygiene`.
 4. Roll back by reinstalling the previous artifact and bootstrapping from its
    runtime. Do not use the current workspace runtime as its own upgrade or
@@ -657,6 +656,23 @@ the plugin or stand-alone artifact runtime and run `bootstrap`; do not ask the
 user to hand-place the file. If a command asks for judgment, prefer
 `--judgment @path` after reviewing first-pass candidates. If a workflow would
 change `.kb/kb.db`, stop unless the operation is an approved `proposal-apply`.
+
+## Graph reads
+
+Use the `graph` namespace for deterministic structural inspection without
+writing `.kb/` or `.kb-next`:
+
+```powershell
+python .\.kb-next\runtime\kb_next.py --project-root . graph backlinks KB-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph lineage KB-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph neighbors KB-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph source-records SRC-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph verify --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph source-backfill --limit 3 --json
+```
+
+Treat backfill rows as proposals. Apply an accepted pair only through the
+classic `graph source-link` command with actor evidence.
 
 ## Related
 

@@ -20,12 +20,15 @@ def log_operation(
     event: str,
     details: dict,
     summary: str | None = None,
+    *,
+    commit: bool = True,
 ) -> int:
     cur = conn.execute(
         "INSERT INTO operations(category, event, happened_at, details_json, summary) VALUES(?, ?, ?, ?, ?)",
         (category, event, now_iso(), json.dumps(details, ensure_ascii=False), summary),
     )
-    conn.commit()
+    if commit:
+        conn.commit()
     return cur.lastrowid
 
 

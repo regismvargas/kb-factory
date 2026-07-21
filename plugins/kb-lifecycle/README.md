@@ -2,7 +2,7 @@
 
 Cross-tool distribution package for KB Factory memory lifecycle and derived wiki workflows.
 
-Release-candidate version: `0.2.3`.
+Release-candidate version: `0.3.0`.
 
 ## Purpose
 
@@ -33,16 +33,46 @@ The plugin is intentionally thin. It does not own durable memory. It points the 
 
 ### Codex
 
-The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
-use the Plugins settings and the public `regismvargas/kb-factory` marketplace,
-or upload `kb-lifecycle-plugin-0.2.3.zip` when file-based installation is
-available. CLI-only users can copy `skills/kb-wiki-maintainer/` to
-`~/.codex/skills/kb-wiki-maintainer/`.
+- Preferred install surface: repo-local marketplace at `.agents/plugins/marketplace.json`
+- Plugin location for this repository: `plugins/kb-lifecycle/`
+- Marketplace entry should point to `./plugins/kb-lifecycle`
+- Skill-only fallback: extract the standalone `kb-wiki-maintainer` artifact into `~/.codex/skills/` so the resulting folder is `~/.codex/skills/kb-wiki-maintainer/`
+- Important: Codex should treat this plugin ZIP as a distributable source bundle, not the primary install surface. The normal Codex install path for this package is the marketplace entry plus the checked-out plugin folder.
 
-Restarting Codex reloads the installed cache but does not fetch a newer source
-by itself. Refresh or reinstall from the public marketplace, then verify the
-reported source and version. Test with: `Use KB Lifecycle to start a KB session
-and summarize .kb/memory/NOW.md.`
+With a Codex executable that exposes the plugin CLI, install or refresh the
+stable marketplace package with:
+
+```powershell
+codex plugin marketplace upgrade kb-factory-tools --json
+codex plugin add kb-lifecycle@kb-factory-tools --json
+codex plugin list --marketplace kb-factory-tools --json
+```
+
+If the bare executable on `PATH` lacks these subcommands, qualify the Codex
+Desktop bundled CLI or use the app/plugin UI.
+
+Recommended repo-local setup:
+
+1. Copy or extract the plugin files into `plugins/kb-lifecycle/`.
+2. Add or keep this entry in `.agents/plugins/marketplace.json`:
+
+```json
+{
+  "name": "kb-lifecycle",
+  "source": {
+    "source": "local",
+    "path": "./plugins/kb-lifecycle"
+  },
+  "policy": {
+    "installation": "AVAILABLE",
+    "authentication": "ON_INSTALL"
+  },
+  "category": "Productivity"
+}
+```
+
+3. Reopen the workspace in Codex so the marketplace entry is picked up.
+4. Test with a prompt such as `Use KB Lifecycle to run a maintenance pass on NOW, HOT, and the wiki.`
 
 ### Claude Code
 
@@ -74,10 +104,10 @@ This builds:
 
 By default the artifacts are saved under:
 
-- `dist/agent-packages/kb-lifecycle-plugin-0.2.3.zip`
-- `dist/agent-packages/kb-lifecycle-claude-plugin-0.2.3.zip`
-- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.2.3.zip`
-- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.3.zip`
+- `dist/agent-packages/kb-lifecycle-plugin-0.3.0.zip`
+- `dist/agent-packages/kb-lifecycle-claude-plugin-0.3.0.zip`
+- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.3.0.zip`
+- `dist/agent-packages/kb-wiki-maintainer-skill-0.3.0.zip`
 
 The version in `.claude-plugin/plugin.json` is the package authority. Rebuilds
 at the same version refresh source-controlled artifacts but do not force an

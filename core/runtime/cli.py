@@ -272,6 +272,48 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     prune_snap.add_argument("--json", action="store_true")
     prune_snap.set_defaults(func=command_handlers["prune-snapshots"])
 
+    graph = sub.add_parser("graph")
+    graph_sub = graph.add_subparsers(dest="graph_command", required=True)
+
+    edge_add = graph_sub.add_parser("edge-add")
+    edge_add.add_argument("source_record_id")
+    edge_add.add_argument("relation_type")
+    edge_add.add_argument("target_record_id")
+    edge_add.add_argument("--actor", required=True)
+    edge_add.add_argument(
+        "--actor-runtime",
+        required=True,
+        choices=["human", "codex", "claude-code", "cowork"],
+    )
+    edge_add.add_argument("--note")
+    edge_add.add_argument("--json", action="store_true")
+    edge_add.set_defaults(func=command_handlers["graph-edge-add"])
+
+    edge_remove = graph_sub.add_parser("edge-remove")
+    edge_remove.add_argument("edge_id")
+    edge_remove.add_argument("--actor", required=True)
+    edge_remove.add_argument(
+        "--actor-runtime",
+        required=True,
+        choices=["human", "codex", "claude-code", "cowork"],
+    )
+    edge_remove.add_argument("--note")
+    edge_remove.add_argument("--json", action="store_true")
+    edge_remove.set_defaults(func=command_handlers["graph-edge-remove"])
+
+    source_link = graph_sub.add_parser("source-link")
+    source_link.add_argument("record_id")
+    source_link.add_argument("source_id")
+    source_link.add_argument("--actor", required=True)
+    source_link.add_argument(
+        "--actor-runtime",
+        required=True,
+        choices=["human", "codex", "claude-code", "cowork"],
+    )
+    source_link.add_argument("--note")
+    source_link.add_argument("--json", action="store_true")
+    source_link.set_defaults(func=command_handlers["graph-source-link"])
+
     lifecycle = sub.add_parser("lifecycle")
     lifecycle.add_argument("event", choices=LIFECYCLE_EVENTS)
     lifecycle.add_argument("--domain")

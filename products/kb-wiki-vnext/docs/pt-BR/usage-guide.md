@@ -10,10 +10,10 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.2` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.2`,
-  KB Lifecycle `0.2.3`, container de plugin `0.1.9`, runtime incluído `0.1.7`,
-  Session Gate `0.2.7` e marketplace `0.3.8`.
+- KB/Wiki vNext `0.3.0` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade registrada pelo maintainer: release, KB Lifecycle, vNext e
+  runtime `0.3.0`; Session Gate `0.2.7`. O marketplace não tem autoridade de
+  versão; os manifestos dos plugins definem a identidade de update.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
@@ -102,12 +102,12 @@ Projeto novo:
 
 1. Garanta que `.kb/` existe a partir do template clássico do bundle ou de um workspace KB Factory existente.
 2. Rode `activation-wizard`.
-3. Rode `python <caminho-do-runtime> session-start --json`.
+3. Rode `python runtime/kb_next.py --project-root <workspace> session-start`.
 4. Use `lookup` primeiro; use comandos semânticos apenas quando houver julgamento LLM fornecido ou revisável.
 
 Projeto existente:
 
-1. Rode `python <caminho-do-runtime> session-start --json`.
+1. Rode `python runtime/kb_next.py --project-root <workspace> session-start`.
 2. Leia `.kb-next/memory/NOW.md`.
 3. Use `compliance-preflight` antes de planejamento, packaging, release ou desenvolvimento.
 4. Use `proposal-apply` apenas depois de aprovação humana.
@@ -137,8 +137,7 @@ Upgrade e rollback:
 
 1. Registre pacote/runtime atual.
 2. Instale o novo plugin ou descompacte o bundle stand-alone ao lado do anterior.
-3. Faça bootstrap a partir do novo artefato e rode
-   `python <caminho-do-runtime> session-start --json`,
+3. Faça bootstrap a partir do novo artefato e rode `python runtime/kb_next.py --project-root <workspace> session-start`,
    `compliance-preflight` e `semantic-hygiene` no modo report-only padrão.
 4. Para rollback, reinstale o artefato anterior e faça bootstrap a partir do
    runtime dele. Não use o runtime atual do workspace como sua própria fonte de
@@ -658,6 +657,23 @@ ao usuário para posicionar o arquivo manualmente. Se um comando pedir
 julgamento, prefira `--judgment @path` depois de revisar os candidatos da
 primeira passagem. Se um fluxo puder alterar `.kb/kb.db`, pare, exceto quando a
 operação for um `proposal-apply` aprovado.
+
+## Leituras de grafo
+
+Use o namespace `graph` para inspeção estrutural determinística sem escrever
+em `.kb/` ou `.kb-next`:
+
+```powershell
+python .\.kb-next\runtime\kb_next.py --project-root . graph backlinks KB-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph lineage KB-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph neighbors KB-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph source-records SRC-ID --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph verify --json
+python .\.kb-next\runtime\kb_next.py --project-root . graph source-backfill --limit 3 --json
+```
+
+Trate as linhas de backfill como propostas. Aplique um par aceito apenas pelo
+comando clássico `graph source-link`, com evidência de actor.
 
 ## Related / Relacionados
 

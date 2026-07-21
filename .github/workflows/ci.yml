@@ -58,10 +58,26 @@ jobs:
 
       - name: Build and validate standalone product
         run: |
-          python tools/build_vnext_standalone.py --version 0.2.0-rc.2
-          python tools/validate_vnext_product.py --json --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+          python tools/build_vnext_standalone.py --version 0.3.0
+          python tools/validate_vnext_product.py --json --bundle dist/vnext/kb-wiki-vnext-0.3.0-standalone.zip
 
       - name: Build and validate Python distributions
         run: |
           python -m build
-          python -m twine check dist/kb_factory-0.1.4*
+          python tools/normalize_sdist.py dist/kb_factory-0.3.0.tar.gz --epoch "$(git show -s --format=%ct HEAD)"
+          python -m twine check dist/kb_factory-0.3.0*
+
+      - name: Assemble selective release bundle
+        run: |
+          python tools/build_release_bundle.py \
+            --public-candidate-sha "$(git rev-parse HEAD)" \
+            --source-date-epoch "$(git show -s --format=%ct HEAD)"
+          cd dist/release/kb-factory-v0.3.0
+          sha256sum --check SHA256SUMS.txt
+
+      - name: Upload validated release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: kb-factory-v0.3.0-release-candidate
+          path: dist/release/kb-factory-v0.3.0/
+          if-no-files-found: error

@@ -21,11 +21,11 @@ Mapa de plataforma:
 
 | Plataforma | Artefato | Estrutura interna | Capacidades principais |
 | --- | --- | --- | --- |
-| Codex | `kb-wiki-vnext-plugin-0.1.9.zip` | `.codex-plugin`, skills, comandos e runtime `0.1.7` | `vnext-session-start`, comandos de setup, lookup, compliance preflight, propostas |
-| Claude Code | `kb-wiki-vnext-claude-plugin-0.1.9.zip` | manifesto Claude, skills, comandos/hooks e runtime `0.1.7` | fluxos guiados de memória e comandos explícitos |
-| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.1.9.zip` | pacote Cowork, runtime `0.1.7` e orientação de sessão manual | `vnext-session-start` manual, comandos de setup, sem depender de hooks automáticos |
+| Codex | `kb-wiki-vnext-plugin-0.3.0.zip` | `.codex-plugin`, skills, comandos e runtime `0.3.0` | `vnext-session-start`, comandos de setup, lookup, compliance preflight, propostas |
+| Claude Code | `kb-wiki-vnext-claude-plugin-0.3.0.zip` | manifesto Claude, skills, comandos/hooks e runtime `0.3.0` | fluxos guiados de memória e comandos explícitos |
+| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.3.0.zip` | pacote Cowork, runtime `0.3.0` e orientação de sessão manual | `vnext-session-start` manual, comandos de setup, sem depender de hooks automáticos |
 | Session Gate | `session-gate-*-0.2.7.zip` | detector de plugin mais comandos `gate-session-*` | rotear `.kb-next/` primeiro, depois `.kb/` clássico e CASE quando presentes |
-| Stand-alone | `kb-wiki-vnext-0.2.0-rc.2-standalone.zip` | runtime, template clássico, plugin source, docs, tools | bootstrap e distribuição controlada por admin |
+| Stand-alone | `kb-wiki-vnext-0.3.0-standalone.zip` | runtime, template clássico, plugin source, docs, tools | bootstrap e distribuição controlada por admin |
 
 Plugin instala capacidades no cliente. Skills descrevem comportamento do agente. Commands expõem workflows chamáveis. Hooks são conveniências específicas de plataforma e não são assumidos no Cowork.
 
@@ -37,12 +37,12 @@ As linhas de versão são identidades independentes de componentes:
 
 | Componente | Versão |
 |---|---|
-| Release candidate do produto | `0.2.0-rc.2` |
-| KB Lifecycle | `0.2.3` |
-| Container do plugin vNext | `0.1.9` |
-| Engine `kb_next.py` incluído | `0.1.7` |
+| Release candidate do produto | `0.3.0` |
+| KB Lifecycle | `0.3.0` |
+| Container do plugin vNext | `0.3.0` |
+| Engine `kb_next.py` incluído | `0.3.0` |
 | Session Gate | `0.2.7` |
-| Marketplace | `0.3.8` |
+| Marketplace/catálogo | sem versão independente; manifestos dos plugins são autoritativos |
 
 O engine incluído faz bootstrap de uma cópia estável em
 `.kb-next/runtime/kb_next.py`. Sessões normais usam essa cópia. Upgrade e
@@ -61,8 +61,8 @@ de wiki podem escrever manifests, propostas, drafts ou materializações. Apenas
 ## Verification / Verificação
 
 Use `python tools\validate_vnext_product.py` para validar docs, manifesto,
-inclusão do runtime nos plugins, links relativos e, opcionalmente, o ZIP. Use
-`python tools\sync_vnext_runtime.py --check` para conferir a paridade do runtime.
+inventário de arquivo, inclusão do runtime nos plugins e, opcionalmente, o ZIP.
+Use o validador do spec-pack para consistência entre runtime e especificação.
 
 ## Troubleshooting / Solução De Problemas
 

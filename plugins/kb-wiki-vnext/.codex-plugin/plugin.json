@@ -1,6 +1,6 @@
 {
   "name": "kb-wiki-vnext",
-  "version": "0.1.9",
+  "version": "0.3.0",
   "description": "KB/Wiki vNext thin-memory harness for Codex.",
   "author": {
     "name": "KB Factory"
@@ -27,7 +27,7 @@
       "Write"
     ],
     "defaultPrompt": [
-      "Use the KB/Wiki vNext skill to start the session and read only NOW.md.",
+      "Use the KB/Wiki vNext Codex skill to run the `vnext-session-start` plugin action and read only NOW.md.",
       "Use KB/Wiki vNext existing/new project setup commands for deployment.",
       "Use KB/Wiki vNext targeted lookup before opening broad memory."
     ],

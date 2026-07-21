@@ -78,10 +78,10 @@ def _run_raw(kb_dir: Path, sql: str):
 # ---------------------------------------------------------------------------
 
 
-class TestSchemaV3:
-    def test_schema_version_is_3(self, prov_kb):
+class TestSchemaV6:
+    def test_schema_version_is_6(self, prov_kb):
         result = _run_raw(prov_kb, "SELECT value FROM schema_meta WHERE key = 'schema_version'")
-        assert result[0]["value"] == "3"
+        assert result[0]["value"] == "6"
 
     def test_records_table_has_source_id_column(self, prov_kb):
         result = _run_raw(prov_kb, "PRAGMA table_info(records)")

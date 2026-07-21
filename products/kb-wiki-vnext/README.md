@@ -2,13 +2,13 @@
 
 KB/Wiki vNext is packaged here as a controlled, stand-alone release candidate for team/admin distribution.
 
-Version: `0.2.0-rc.2`
-Current audited plugin component line: `0.1.9`
+Version: `0.3.0`
+Current audited plugin component line: `0.3.0`
 
-Bundled runtime engine: `0.1.7`
-KB Lifecycle companion line: `0.2.3`
+Bundled runtime engine: `0.3.0`
+KB Lifecycle companion line: `0.3.0`
 Session Gate companion line: `0.2.7`
-Marketplace line: `0.3.8`
+Marketplace version authority: none; plugin manifests are authoritative
 
 ## Start Here
 
@@ -37,8 +37,8 @@ Português:
 ## Maintainer Commands
 
 ```powershell
-python tools\build_vnext_standalone.py --version 0.2.0-rc.2
-python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\build_vnext_standalone.py --version 0.3.0
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.3.0-standalone.zip
 ```
 
 ## Authority Boundary

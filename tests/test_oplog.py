@@ -82,10 +82,10 @@ def _op_count(kb_dir: Path, category: str | None = None) -> int:
 # ---------------------------------------------------------------------------
 
 
-class TestSchemaV4:
-    def test_schema_version_is_4(self, oplog_kb):
+class TestSchemaV6:
+    def test_schema_version_is_6(self, oplog_kb):
         result = _run_raw(oplog_kb, "SELECT value FROM schema_meta WHERE key = 'schema_version'")
-        assert result[0]["value"] == "4"
+        assert result[0]["value"] == "6"
 
     def test_operations_table_exists(self, oplog_kb):
         result = _run_raw(oplog_kb, "SELECT name FROM sqlite_master WHERE type='table' AND name='operations'")

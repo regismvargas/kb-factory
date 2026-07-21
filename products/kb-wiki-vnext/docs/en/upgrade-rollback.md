@@ -82,6 +82,12 @@ matching source/installed hashes, `vnext-session-start` or runtime
 append operational evidence to `.kb-next/operations.jsonl`; they must not change
 canonical `.kb/`. Compare the `.kb/kb.db` hash before and after the checks.
 
+Schema v6 rollback is forward-compatible. Rolling runtime code back does not
+drop `record_edges` or reduce `schema_meta`; there is no destructive schema
+downgrade. Before migrating a production copy, prove that the v0.1.4 runtime
+still reads a migrated v6 copy, retain the pre-migration backup and hash, and
+do not apply typed edges or source-link candidates during activation.
+
 ## Troubleshooting
 
 If the new runtime fails, return to the previous artifact and preserve the

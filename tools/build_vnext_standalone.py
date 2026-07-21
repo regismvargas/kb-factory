@@ -20,7 +20,7 @@ from pathlib import Path
 from validate_vnext_product import validate
 
 
-DEFAULT_VERSION = "0.2.0-rc.2"
+DEFAULT_VERSION = "0.3.0"
 PRODUCT_DIR = Path("products/kb-wiki-vnext")
 DEFAULT_OUTPUT_DIR = Path("dist/vnext")
 

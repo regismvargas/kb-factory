@@ -46,3 +46,32 @@ Comando apenas de runtime:
 
 `.kb/` continua sendo memória durável canônica. `.kb-next/` continua sendo
 estado governado de proposta, evidência, draft, materialização e operações.
+
+## Superfícies de grafo
+
+O runtime vNext expõe apenas leituras puras. Cada comando abre `.kb/kb.db` com
+SQLite URI `mode=ro` e `PRAGMA query_only=ON`:
+
+| Comando | Resultado | Exit codes |
+|---|---|---|
+| `graph backlinks RECORD_ID [--json]` | páginas registradas em `wiki_page_provenance` | `0`, ou `2` para erro de uso/ambiente |
+| `graph lineage RECORD_ID [--json]` | raízes, pontas atuais, branches, ciclos e divergência de codificação | `0`, ou `2` |
+| `graph neighbors RECORD_ID [--json]` | vizinhos sem duplicação, com `origins[]` separados | `0`, ou `2` |
+| `graph source-records SOURCE_ID [--json]` | as duas codificações de source linkage e divergências | `0`, ou `2` |
+| `graph verify [--json]` | findings determinísticos com issue codes estáveis | `0` limpo, `1` com findings, `2` erro |
+| `graph source-backfill [--limit 1..3] [--json]` | propostas limitadas por evidência exata; nunca aplica | `0`, ou `2` |
+
+Todo JSON usa `graph_contract_version`, `command`, `subject`, `results`,
+`warnings` e `blind_spots`. Schema v5 continua legível; a ausência de typed
+edges gera `TYPED_EDGE_CAPABILITY_UNAVAILABLE`.
+
+Mutações canônicas de grafo existem apenas no runtime clássico:
+
+```text
+graph edge-add SOURCE_RECORD TYPE TARGET_RECORD --actor ID --actor-runtime human|codex|claude-code|cowork [--note TEXT]
+graph edge-remove EDGE_ID --actor ID --actor-runtime human|codex|claude-code|cowork [--note TEXT]
+graph source-link RECORD_ID SOURCE_ID --actor ID --actor-runtime human|codex|claude-code|cowork [--note TEXT]
+```
+
+Os tipos permitidos são `depends-on`, `contradicts` e `duplicates`. Mutação,
+audit rows e operations rows fazem commit na mesma transação.

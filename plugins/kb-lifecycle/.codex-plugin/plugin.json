@@ -1,6 +1,6 @@
 {
   "name": "kb-lifecycle",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Distribute KB Factory memory lifecycle and wiki maintenance across Codex workspaces. (CCH v0.7-aware)",
   "author": {
     "name": "KB Factory"

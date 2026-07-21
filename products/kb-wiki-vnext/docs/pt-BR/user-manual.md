@@ -18,15 +18,14 @@ Usuários de projeto que recebem o ZIP de plugin ou o bundle stand-alone de um m
 
 Escolha o pacote certo para o cliente:
 
-- Codex: `kb-wiki-vnext-plugin-0.1.9.zip`
-- Claude Code: `kb-wiki-vnext-claude-plugin-0.1.9.zip`
-- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.1.9.zip`
-- Stand-alone: `kb-wiki-vnext-0.2.0-rc.2-standalone.zip`
+- Codex: `kb-wiki-vnext-plugin-0.3.0.zip`
+- Claude Code: `kb-wiki-vnext-claude-plugin-0.3.0.zip`
+- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.3.0.zip`
+- Stand-alone: `kb-wiki-vnext-0.3.0-standalone.zip`
 
-Produto, KB Lifecycle, container de plugin, runtime incluído, Session Gate e
-marketplace têm linhas de versão separadas: `0.2.0-rc.2`, `0.2.3`, `0.1.9`,
-`0.1.7`, `0.2.7` e `0.3.8`. Registre todos os valores aplicáveis durante
-instalação ou upgrade.
+Release, KB Lifecycle, vNext e runtime incluído usam `0.3.0`; Session Gate
+permanece `0.2.7`. Marketplace e catálogo não têm linha própria de versão.
+Registre versões dos manifestos e hashes dos artefatos na instalação ou upgrade.
 
 Em instalação por plugin, use `existing-project-activate-vnext` para resolver o
 engine incluído e fazer bootstrap do workspace. O fluxo equivalente no shell é:

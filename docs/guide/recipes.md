@@ -325,7 +325,7 @@ To scaffold a knowledge base manually from the terminal — quickest is the
 published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.3.0/kb_factory-0.3.0-py3-none-any.whl
 kb-factory init                                      # run in the project root
 # no pip? copy the scaffold instead:
 # cp -r core/templates/kb /path/to/your-project/.kb && python .kb/kb.py init

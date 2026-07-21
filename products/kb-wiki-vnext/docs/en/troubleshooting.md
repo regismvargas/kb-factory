@@ -37,7 +37,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirm product package:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.3.0-standalone.zip
 ```
 
 For runtime examples and safe conversation prompts, see the [detailed usage guide](usage-guide.md).
@@ -62,6 +62,13 @@ restored artifact instead of the current workspace runtime. If
 `semantic-hygiene` reports issues, treat them as review findings unless a
 separate approved work package authorizes proposal creation. If a command
 changed canonical memory unexpectedly, stop and compare the workspace backup.
+
+For graph failures, run `graph verify --json` first. Exit `1` means structural
+findings, not a runtime crash. On a schema v5 KB,
+`TYPED_EDGE_CAPABILITY_UNAVAILABLE` is an expected warning. Exit `2` means a
+usage or environment error. If any vNext graph read changes the DB or
+`.kb-next` tree hash, stop: that violates the read-only contract. Do not apply
+`source-backfill` output automatically.
 
 ## Related
 

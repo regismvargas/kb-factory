@@ -124,7 +124,7 @@ into two delivery copies:
 - `core/templates/kb/runtime/` — the scaffold a project vendors as `.kb/runtime/`
   (via `kb-factory init` or by copying the template).
 - `kb_factory/_scaffold/runtime/` — bundled into the pip wheel so
-  The wheel attached to GitHub release `v0.1.4` ships the engine offline. It is generated from the
+  The wheel attached to GitHub release `v0.3.0` ships the engine offline. It is generated from the
   template by `tools/sync_package_scaffold.py` and kept honest by
   `tests/test_packaging.py`.
 

@@ -175,7 +175,7 @@ class TestNegativeChecks:
         hot_md = (analysis_kb / "memory" / "HOT.md").read_text(encoding="utf-8")
         assert "Strategic memo: market entry" not in hot_md
 
-    def test_schema_unchanged(self, analysis_kb):
+    def test_schema_version_is_6(self, analysis_kb):
         from pathlib import Path
         r = subprocess.run(
             [sys.executable, str(analysis_kb / "kb.py"), "raw-query",
@@ -183,4 +183,4 @@ class TestNegativeChecks:
             capture_output=True, text=True, check=True, cwd=str(analysis_kb),
         )
         result = json.loads(r.stdout)
-        assert result[0]["value"] == "4"
+        assert result[0]["value"] == "6"

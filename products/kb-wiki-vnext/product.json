@@ -1,16 +1,15 @@
 {
   "name": "kb-wiki-vnext",
-  "version": "0.2.0-rc.2",
+  "version": "0.3.0",
   "status": "release-candidate",
   "summary": "Public KB/Wiki vNext product package for controlled team and admin distribution.",
   "component_versions": {
-    "product": "0.2.0-rc.2",
-    "python": "0.1.4",
-    "marketplace": "0.3.8",
-    "kb_lifecycle": "0.2.3",
-    "kb_wiki_vnext": "0.1.9",
+    "product": "0.3.0",
+    "python": "0.3.0",
+    "kb_lifecycle": "0.3.0",
+    "kb_wiki_vnext": "0.3.0",
     "session_gate": "0.2.7",
-    "runtime": "0.1.7"
+    "runtime": "0.3.0"
   },
   "source_paths": [
     "core/versions/kb-wiki-vnext/runtime/kb_next.py",
@@ -29,17 +28,17 @@
     "tests/test_vnext_runtime_shipping.py"
   ],
   "distribution_channels": {
-    "codex_plugin_zip": "dist/agent-packages/kb-wiki-vnext-plugin-0.1.9.zip",
-    "claude_code_plugin_zip": "dist/agent-packages/kb-wiki-vnext-claude-plugin-0.1.9.zip",
-    "claude_cowork_plugin_zip": "dist/agent-packages/kb-wiki-vnext-cowork-plugin-0.1.9.zip",
-    "standalone_bundle": "dist/vnext/kb-wiki-vnext-0.2.0-rc.2-standalone.zip"
+    "codex_plugin_zip": "dist/agent-packages/kb-wiki-vnext-plugin-0.3.0.zip",
+    "claude_code_plugin_zip": "dist/agent-packages/kb-wiki-vnext-claude-plugin-0.3.0.zip",
+    "claude_cowork_plugin_zip": "dist/agent-packages/kb-wiki-vnext-cowork-plugin-0.3.0.zip",
+    "standalone_bundle": "dist/vnext/kb-wiki-vnext-0.3.0-standalone.zip"
   },
   "required_checks": [
     "python tools\\gate.py",
     "python tools\\sync_vnext_runtime.py --check",
     "python tools\\build_agent_packages.py --scope all",
-    "python tools\\build_vnext_standalone.py --version 0.2.0-rc.2",
-    "python tools\\validate_vnext_product.py --json --bundle dist\\vnext\\kb-wiki-vnext-0.2.0-rc.2-standalone.zip",
+    "python tools\\build_vnext_standalone.py --version 0.3.0",
+    "python tools\\validate_vnext_product.py --json --bundle dist\\vnext\\kb-wiki-vnext-0.3.0-standalone.zip",
     "python -m pytest -p no:cacheprovider tests -q"
   ],
   "authority_limits": {

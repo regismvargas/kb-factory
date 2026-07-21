@@ -84,6 +84,12 @@ podem anexar evidência operacional a `.kb-next/operations.jsonl`; eles não pod
 alterar a `.kb/` canônica. Compare o hash de `.kb/kb.db` antes e depois dos
 checks.
 
+O rollback do schema v6 é forward-compatible. Voltar o código do runtime não
+remove `record_edges` nem reduz `schema_meta`; não existe downgrade destrutivo.
+Antes de migrar uma cópia de produção, prove que o runtime v0.1.4 ainda lê uma
+cópia v6, retenha backup e hash anteriores e não aplique typed edges nem
+candidatos de source-link durante a ativação.
+
 ## Troubleshooting / Solução De Problemas
 
 Se o runtime novo falhar, volte ao artefato anterior e preserve o bundle com

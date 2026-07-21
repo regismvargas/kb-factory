@@ -3,8 +3,9 @@
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
 classic `kb-lifecycle`, `session-gate`, and `case-companion`.
 
-Release-candidate identities: plugin `0.1.9`, bundled runtime `0.1.7`, product
-`0.2.0-rc.2`, Session Gate companion `0.2.7`, and marketplace `0.3.8`.
+Release-candidate identities: plugin, bundled runtime, product, Python package,
+and standalone `0.3.0`; Session Gate companion remains `0.2.7`. The marketplace
+has no independent version authority.
 
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
@@ -41,9 +42,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.1.9.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/` |
-| `kb-wiki-vnext-claude-plugin-0.1.9.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
-| `kb-wiki-vnext-cowork-plugin-0.1.9.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-plugin-0.3.0.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-claude-plugin-0.3.0.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-cowork-plugin-0.3.0.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.
@@ -55,19 +56,20 @@ python tools\build_agent_packages.py --scope vnext
 python -m pytest -p no:cacheprovider tests\test_build_agent_packages.py -q
 ```
 
-After installation, invoke the client-specific plugin/slash or skill-based
-`vnext-session-start` surface
+After installation, invoke the client-specific plugin/slash `vnext-session-start` action
 and confirm it tells the agent to read only `.kb-next/memory/NOW.md` by
 default. Claude Code uses `/kb-wiki-vnext:vnext-session-start`; Codex uses the
 embedded skill; Cowork uses the action exposed by its UI or the skill in
 natural language. Existing and new project setup commands ship under explicit
 `existing-project-*` and `new-project-*` names.
 
-The Codex CLI has no plugin-management command. Use the Codex app Plugins
-settings with the public marketplace, or upload
-`kb-wiki-vnext-plugin-0.1.9.zip` when the app exposes file-based installation.
-For a skill-only fallback, copy `skills/kb-wiki-vnext/` into
-`~/.codex/skills/kb-wiki-vnext/`.
+For a qualifying Codex CLI, install or refresh the marketplace plugin with:
+
+```powershell
+codex plugin marketplace upgrade kb-factory-tools --json
+codex plugin add kb-wiki-vnext@kb-factory-tools --json
+codex plugin list --marketplace kb-factory-tools --json
+```
 
 ## Troubleshooting
 
@@ -81,8 +83,7 @@ For a skill-only fallback, copy `skills/kb-wiki-vnext/` into
 
 Related:
 
-- `docs/installation.md`
-- `products/kb-wiki-vnext/docs/en/admin-installation.md`
-- `products/kb-wiki-vnext/docs/pt-BR/admin-installation.md`
+- `docs/INSTALL.md`
+- `core/versions/kb-wiki-vnext/spec-pack/packaging-distribution-guide.md`
 - `tools/build_agent_packages.py`
 - `tests/test_build_agent_packages.py`

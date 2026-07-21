@@ -7,6 +7,29 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-21
+
+### Added
+- Added read-only vNext graph surfaces for backlinks, lineage, neighbors,
+  source linkage verification, structural verify, and bounded source backfill.
+- Added classic typed-edge and source-link mutations with schema v6,
+  tombstones, actor metadata, audit log, and operations in one transaction.
+- Added a managed record index, stable anchors, navigable KB references,
+  backlinks, and related-knowledge sections to the generated wiki.
+
+### Changed
+- Moved Python, standalone, Lifecycle, vNext, and runtime to release train
+  `0.3.0`; Session Gate remains `0.2.7`.
+- Removed marketplace version authority and duplicate versions from catalog
+  entries. Plugin manifests remain the update identities.
+- Made wiki regeneration byte-idempotent when substantive content is unchanged.
+
+### Security
+- Graph reads open SQLite read-only with `query_only`; production verification
+  is baseline-delta bound and preserves the approved 15-vs-14 lineage finding.
+- Migration is additive, preserves trigger state, and is rollback-compatible
+  with runtime `v0.1.4`.
+
 ## [0.1.4] - 2026-07-19
 
 ### Added

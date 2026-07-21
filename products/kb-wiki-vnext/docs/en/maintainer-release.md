@@ -20,25 +20,29 @@ Build:
 
 ```powershell
 python tools\build_agent_packages.py --scope vnext
-python tools\build_vnext_standalone.py --version 0.2.0-rc.2
+python tools\build_vnext_standalone.py --version 0.3.0
 ```
 
 Validate:
 
 ```powershell
-python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
-python tools\sync_vnext_runtime.py --check
-python -m pytest -p no:cacheprovider tests -q
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.3.0-standalone.zip
+python tools\validate_kb_wiki_vnext_spec_pack.py
+python -m pytest -p no:cacheprovider --basetemp=.pytest_tmp_vnext_compliance tests\test_kb_wiki_vnext_runtime.py tests\test_kb_wiki_vnext_semantic_runtime.py tests\test_kb_wiki_vnext_spec_pack.py tests\test_build_agent_packages.py tests\test_vnext_product.py -q
 ```
 
 Audit hashes:
 
 ```powershell
-Get-FileHash dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip -Algorithm SHA256
+Get-FileHash dist\vnext\kb-wiki-vnext-0.3.0-standalone.zip -Algorithm SHA256
 Get-ChildItem dist\agent-packages\*vnext*.zip,dist\agent-packages\session-gate-*.zip | Get-FileHash -Algorithm SHA256
 ```
 
-Confirm `git status --short` contains only the intended public release changes.
+Plan cleanup:
+
+```powershell
+python tools\cleanup_vnext_workbench.py --dry-run
+```
 
 ## Verification
 

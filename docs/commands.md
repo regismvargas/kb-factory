@@ -41,7 +41,7 @@ tiers** are `HOT` (always surfaced at session start), `WARM` (the default), and
 `COLD` (archived). Use [`update`](#update) only for *routing metadata* (tier,
 tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
-> **Getting the CLI:** install the `v0.1.4` GitHub release wheel (see
+> **Getting the CLI:** install the `v0.3.0` GitHub release wheel (see
 > [installation.md](installation.md)), then `kb-factory init` scaffolds
 > a project's `.kb/` (and `kb-factory update` refreshes it later). After that, the
 > commands on this page run as `python .kb/kb.py <command>` from the project root.

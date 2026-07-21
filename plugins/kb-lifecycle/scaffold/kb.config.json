@@ -1,5 +1,5 @@
 {
-  "schema_version": 5,
+  "schema_version": 6,
   "project": {
     "name": "{{PROJECT_TITLE}}",
     "slug": "{{PROJECT_NAME}}",

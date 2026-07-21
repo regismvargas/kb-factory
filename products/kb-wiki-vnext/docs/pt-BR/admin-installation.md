@@ -13,9 +13,9 @@ Admins de workspace, leads técnicos e maintainers que instalam o pacote para ou
 - Artefato de release limpo, gerado a partir deste repositório.
 - Acesso ao cliente de destino: Codex, Claude Code, Claude Cowork ou workspace com Python.
 - Alinhamento com o dono do workspace de que `.kb/` segue canônico e `.kb-next/` é a camada vNext.
-- A identidade de release registra separadamente produto `0.2.0-rc.2`, KB
-  Lifecycle `0.2.3`, plugin `0.1.9`, runtime incluído `0.1.7`, Session Gate
-  `0.2.7` e marketplace `0.3.8`.
+- A identidade registra release, KB Lifecycle, vNext e runtime `0.3.0`, além
+  do Session Gate `0.2.7`. As entradas do marketplace não duplicam versão; os
+  manifestos dos plugins definem a identidade de update.
 
 ## Passos
 
@@ -23,30 +23,37 @@ Gere todos os distribuíveis KB afetados e o bundle stand-alone:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.2
+python tools\build_vnext_standalone.py --version 0.3.0
 ```
 
 Valide antes de compartilhar:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.3.0-standalone.zip
 ```
 
 Distribua apenas o artefato correspondente:
 
 - Usuários Codex recebem o ZIP de plugin Codex.
 - Usuários Claude Code recebem o ZIP de plugin Claude Code.
-- Usuários Claude Cowork recebem o ZIP Cowork e instruções explícitas de
-  startup manual com `vnext-session-start`.
+- Usuários Claude Cowork recebem o ZIP Cowork e instruções explícitas para a
+  ação de plugin `vnext-session-start` no startup manual.
 - Usuários Session Gate recebem o artefato `session-gate-*-0.2.7.zip`
-  correspondente e usam `gate-session-start` / `gate-session-end`.
+  correspondente e usam as ações de plugin `gate-session-start` / `gate-session-end`.
 - Admins que criam workspace novo recebem o bundle stand-alone.
 
-O Codex CLI não possui comando de gerenciamento de plugins. No app Codex, use
-as configurações de Plugins com o marketplace público
-`regismvargas/kb-factory` ou carregue
-`kb-wiki-vnext-plugin-0.1.9.zip` quando a instalação por arquivo estiver
-disponível. Reiniciar sozinho não busca uma versão mais nova do marketplace.
+Para instalar pelo marketplace do Codex, selecione primeiro um executável que
+exponha o CLI de plugins e rode:
+
+```powershell
+codex plugin marketplace upgrade kb-factory-tools --json
+codex plugin add kb-wiki-vnext@kb-factory-tools --json
+codex plugin list --marketplace kb-factory-tools --json
+```
+
+Se um `codex` antigo no `PATH` não expuser esses comandos, use o CLI incluído
+no Codex Desktop ou a UI de plugins; o binário antigo não define a capacidade
+do produto atual.
 
 Todo ZIP de plugin vNext deve conter `runtime/kb_next.py` na raiz do arquivo.
 Não distribua artefato que contenha apenas comandos referindo-se ao engine
@@ -68,10 +75,10 @@ workspace com `classic-template/.kb/`.
 
 Confirme que o arquivo contém `runtime/kb_next.py`; o bootstrap informa a versão
 esperada do runtime e `source_sha256` igual a `installed_sha256`; o destinatário
-consegue invocar a superfície vNext específica do cliente, ler
-`.kb-next/memory/NOW.md` e executar o runtime instalado com
-`lookup --facet status`. As operações de início e lookup do runtime podem anexar
-`.kb-next/operations.jsonl`, mas instalação e verificação
+consegue invocar a superfície vNext específica do cliente e ler
+`.kb-next/memory/NOW.md` e executar `python <runtime-do-plugin-instalado> --project-root <workspace> lookup --facet status`.
+Os comandos de runtime `python <runtime-do-plugin-instalado> --project-root <workspace> session-start` e
+`python <runtime-do-plugin-instalado> --project-root <workspace> lookup` podem anexar `.kb-next/operations.jsonl`, mas instalação e verificação
 não podem alterar `.kb/` canônica nem publicar `.kb/wiki/live`. Para Session
 Gate, confirme que a superfície de startup específica do cliente detecta `.kb-next/` antes de cair no
 `.kb/` clássico.

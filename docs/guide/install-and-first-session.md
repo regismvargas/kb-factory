@@ -44,7 +44,7 @@ The `.kb/` is a single stdlib-only Python CLI plus a SQLite store — local-firs
 offline, no API key. The quickest way to create it by hand is the published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.3.0/kb_factory-0.3.0-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 python .kb/kb.py stats   # confirm it worked
@@ -125,7 +125,7 @@ claude plugin install kb-wiki-vnext@kb-factory-tools
 1. Open Claude Desktop and switch to **Cowork**.
 2. Go to **Customize → Plugins**.
 3. Add `regismvargas/kb-factory` as a GitHub plugin marketplace, or upload
-   `kb-lifecycle-cowork-plugin-0.2.3.zip` from release `v0.1.4`.
+   `kb-lifecycle-cowork-plugin-0.3.0.zip` from release `v0.3.0`.
 
 If you're on Cowork, also install **`session-gate`** the same way — you'll want
 its explicit session commands, because Cowork won't start sessions on its own.
@@ -134,7 +134,7 @@ its explicit session commands, because Cowork won't start sessions on its own.
 
 Cowork installs plugins through the UI, not a command line. To add the optional
 plugins, repeat step 3 with `session-gate-cowork-plugin-0.2.7.zip` and
-`kb-wiki-vnext-cowork-plugin-0.1.9.zip`. A plugin never stores your memory —
+`kb-wiki-vnext-cowork-plugin-0.3.0.zip`. A plugin never stores your memory —
 the `.kb/` you created in Step 1 stays the single source of truth.
 
 </details>

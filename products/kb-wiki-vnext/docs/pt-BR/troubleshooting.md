@@ -36,7 +36,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirmar pacote de produto:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.3.0-standalone.zip
 ```
 
 Para exemplos de runtime e prompts seguros de conversa, veja o [guia de uso detalhado](usage-guide.md).
@@ -60,6 +60,13 @@ artefato substituto ou restaurado, não o runtime atual do workspace. Se
 `semantic-hygiene` reportar problemas, trate como findings de revisão até
 existir autorização separada para criar propostas. Se algum comando alterar
 memória canônica inesperadamente, pare e compare o backup.
+
+Para falhas de grafo, rode primeiro `graph verify --json`. Exit `1` significa
+findings estruturais, não crash do runtime. Em KB schema v5,
+`TYPED_EDGE_CAPABILITY_UNAVAILABLE` é warning esperado. Exit `2` significa
+erro de uso ou ambiente. Se qualquer leitura vNext mudar o hash do DB ou da
+árvore `.kb-next`, pare: o contrato read-only foi violado. Não aplique a saída
+de `source-backfill` automaticamente.
 
 ## Related / Relacionados
 

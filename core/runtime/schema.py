@@ -163,10 +163,60 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_wiki_snapshots_taken_at ON wiki_snapshots(taken_at);
         """
     )
+    # --- v6 migration: human-authored typed record graph ---
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS record_edges (
+            edge_id TEXT PRIMARY KEY,
+            source_record_id TEXT NOT NULL,
+            target_record_id TEXT NOT NULL,
+            relation_type TEXT NOT NULL
+                CHECK (relation_type IN ('depends-on', 'contradicts', 'duplicates')),
+            created_by TEXT NOT NULL CHECK (length(trim(created_by)) > 0),
+            created_by_runtime TEXT NOT NULL
+                CHECK (created_by_runtime IN ('human', 'codex', 'claude-code', 'cowork')),
+            created_at TEXT NOT NULL,
+            note TEXT,
+            removed_at TEXT,
+            removed_by TEXT,
+            removed_by_runtime TEXT,
+            removal_note TEXT,
+            FOREIGN KEY (source_record_id) REFERENCES records(id),
+            FOREIGN KEY (target_record_id) REFERENCES records(id),
+            CHECK (source_record_id <> target_record_id),
+            CHECK (
+                (relation_type = 'depends-on')
+                OR (source_record_id < target_record_id)
+            ),
+            CHECK (
+                (removed_at IS NULL AND removed_by IS NULL
+                    AND removed_by_runtime IS NULL AND removal_note IS NULL)
+                OR
+                (removed_at IS NOT NULL AND removed_by IS NOT NULL
+                    AND removed_by_runtime IN ('human', 'codex', 'claude-code', 'cowork'))
+            )
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_record_edges_source
+            ON record_edges(source_record_id);
+        CREATE INDEX IF NOT EXISTS idx_record_edges_target
+            ON record_edges(target_record_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_record_edges_active_unique
+            ON record_edges(source_record_id, relation_type, target_record_id)
+            WHERE removed_at IS NULL;
+        """
+    )
+
     config = load_config()
+    configured_version = int(config.get("schema_version", 6))
+    current_row = conn.execute(
+        "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+    ).fetchone()
+    current_version = int(current_row[0]) if current_row is not None else 0
+    schema_version = max(6, configured_version, current_version)
     conn.execute(
         "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', ?)",
-        (str(config.get("schema_version", 5)),),
+        (str(schema_version),),
     )
     conn.commit()
 

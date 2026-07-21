@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-import shutil
 import sqlite3
 import subprocess
 import sys
@@ -32,75 +30,6 @@ def run_next_json(project_root: Path, *args: str) -> dict:
 
 def file_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _decode_frontmatter_scalar(token: str):
-    token = token.strip()
-    if token.startswith('"'):
-        return json.loads(token)
-    if token == "true":
-        return True
-    if token == "false":
-        return False
-    if token == "null":
-        return None
-    try:
-        return int(token)
-    except ValueError:
-        pass
-    try:
-        return float(token)
-    except ValueError:
-        return token
-
-
-def markdown_frontmatter(path: Path) -> dict:
-    # Parse the YAML-style frontmatter that kb_next emits (`yaml_frontmatter` and
-    # the simple wiki-draft headers) without a third-party dependency, so the
-    # test suite stays stdlib-only. The writer JSON-quotes every string, so an
-    # unquoted token is only ever true/false/null or a number; block lists are
-    # `key:` followed by `  - item` lines, and empty lists render as `key: []`.
-    text = path.read_text(encoding="utf-8")
-    assert text.startswith("---\n")
-    _start, raw, _body = text.split("---", 2)
-    parsed: dict = {}
-    current_key = None
-    for line in raw.splitlines():
-        if not line.strip():
-            continue
-        if line.startswith("  - ") and current_key is not None:
-            parsed.setdefault(current_key, []).append(
-                _decode_frontmatter_scalar(line[4:])
-            )
-            continue
-        if ":" not in line:
-            current_key = None
-            continue
-        key, _, value = line.partition(":")
-        key = key.strip()
-        value = value.strip()
-        if value == "[]":
-            parsed[key] = []
-            current_key = None
-        elif value == "":
-            parsed[key] = []
-            current_key = key
-        else:
-            parsed[key] = _decode_frontmatter_scalar(value)
-            current_key = None
-    assert isinstance(parsed, dict)
-    return parsed
-
-
-def markdown_body_hash(path: Path) -> str:
-    text = path.read_text(encoding="utf-8")
-    _start, _raw, body = text.split("---", 2)
-    return hashlib.sha256(body.lstrip("\n").encode("utf-8")).hexdigest()
-
-
-def is_reparse_point(path: Path) -> bool:
-    is_junction = getattr(path, "is_junction", None)
-    return path.is_symlink() or bool(is_junction and is_junction())
 
 
 def ensure_sources_table(project: Path) -> None:
@@ -201,34 +130,6 @@ def add_track_b_record(
             "2026-05-25T00:00:00Z",
             "2026-05-25T00:00:00Z",
             source_id,
-        ),
-    )
-    conn.commit()
-    conn.close()
-
-
-def add_active_source_linkage_pendencia(project: Path) -> None:
-    conn = sqlite3.connect(project / ".kb" / "kb.db")
-    conn.execute(
-        """
-        INSERT INTO records (
-            id, category, domain, title, content, status, tier, source,
-            tags_json, created_at, updated_at, source_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            "KB-20260525141938-0cd4cc",
-            "PENDENCIA",
-            "wiki",
-            "Canonical source-linkage debt blocks external human wiki Track B",
-            "Track B remains blocked until source-linkage is resolved.",
-            "ATIVO",
-            "HOT",
-            "test",
-            json.dumps(["kb-wiki-vnext", "track-b"]),
-            "2026-05-25T00:00:00Z",
-            "2026-05-25T00:00:00Z",
-            None,
         ),
     )
     conn.commit()
@@ -365,7 +266,6 @@ def test_short_kb_alone_activation_creates_kb_next_without_wiki(project: Path) -
     assert config["activation"]["source"] == "short"
     assert config["wiki"]["enabled"] is False
     assert config["wiki"]["surfaces"] == {"machine": False, "human": False}
-    assert "semantic-hygiene" in config["semantic_curation"]["commands"]
     assert (project / ".kb-next" / "memory" / "NOW.md").is_file()
     assert (project / ".kb-next" / "operations.jsonl").is_file()
 
@@ -437,11 +337,10 @@ def test_compliance_preflight_planning_lists_prd_gates_and_traceability(project:
     assert result["status"] == "pass"
     assert result["development_contract_required"] is True
     assert result["contract_scope"].startswith("development until 100% developed")
-    assert "Public Product Manifest" in result["applicable_gates"]
-    assert any("products/kb-wiki-vnext/product.json" == item for item in result["required_spec_surfaces"])
-    assert any("products/kb-wiki-vnext/docs/en/maintainer-release.md" == item for item in result["required_spec_surfaces"])
-    assert any("tests/test_vnext_runtime_parity.py" == item for item in result["required_spec_surfaces"])
-    assert not any("spec-pack" in item for item in result["required_spec_surfaces"])
+    assert "Gate 0 PRD" in result["applicable_gates"]
+    assert any("product-intent-prd.pt-br.md" in item for item in result["required_spec_surfaces"])
+    assert any("release-gates.md" in item for item in result["required_spec_surfaces"])
+    assert any("test-matrix.md" in item for item in result["required_spec_surfaces"])
     assert any("Development compliance preflight" == item for item in result["required_traceability_rows"])
 
 
@@ -456,12 +355,10 @@ def test_compliance_preflight_implementation_requires_tests_and_dossier(project:
     )
 
     assert result["status"] == "pass"
-    assert any("sync_vnext_runtime.py --check" in item for item in result["required_tests"])
+    assert any("validate_kb_wiki_vnext_spec_pack.py" in item for item in result["required_tests"])
     assert any("pytest" in item for item in result["required_tests"])
-    assert not any("spec_pack" in item for item in result["required_tests"])
     assert any("run dossier" in item for item in result["required_evidence"])
-    assert "Proceed only with the listed public release mapping" in result["next_allowed_action"]
-    assert any("runtime mirrors pass" in item.lower() for item in result["completion_rule"])
+    assert "Proceed only with the listed PRD/master-plan mapping" in result["next_allowed_action"]
 
 
 def test_compliance_preflight_track_b_blocks_on_source_linkage_pendencia(project: Path) -> None:
@@ -596,177 +493,6 @@ def test_compliance_preflight_track_b_blocks_when_audit_fails_after_pendencia_re
     assert result["canonical_blockers"][0]["id"] == "source-linkage-audit"
     assert result["source_linkage_audit"]["blocked_record_ids"] == ["TRACKB-PREFLIGHT-NO-SOURCE"]
     assert "audit blockers" in result["next_allowed_action"]
-
-
-def test_track_b_export_blocks_when_source_linkage_audit_fails(project: Path) -> None:
-    add_track_b_record(project, "TRACKB-EXPORT-NO-SOURCE")
-    db_before = file_hash(project / ".kb" / "kb.db")
-
-    result = run_next_json(
-        project,
-        "track-b-export",
-        "--adapter",
-        "obsidian_static_markdown",
-    )
-
-    db_after = file_hash(project / ".kb" / "kb.db")
-    assert result["status"] == "blocked"
-    assert "source-linkage-audit:blocked" in result["blocked_reasons"]
-    assert result["exported_record_ids"] == []
-    assert not (project / ".kb-next" / "adapters" / "obsidian_static_markdown" / "vault").exists()
-    assert db_before == db_after
-
-
-def test_track_b_export_blocks_when_track_b_preflight_fails(project: Path) -> None:
-    add_active_source_linkage_pendencia(project)
-    add_source(project, "SRC-20260525-000005-c0ffee", "clean")
-    add_track_b_record(
-        project,
-        "TRACKB-EXPORT-PREFLIGHT-BLOCKED",
-        source_id="SRC-20260525-000005-c0ffee",
-    )
-
-    result = run_next_json(
-        project,
-        "track-b-export",
-        "--adapter",
-        "obsidian_static_markdown",
-    )
-
-    assert result["status"] == "blocked"
-    assert "compliance-preflight:blocked" in result["blocked_reasons"]
-    assert result["input_audit_status"] == "pass"
-    assert not (project / ".kb-next" / "adapters" / "obsidian_static_markdown" / "vault").exists()
-
-
-def test_track_b_export_writes_safe_self_contained_obsidian_vault(project: Path) -> None:
-    clean_hash_1 = add_source(project, "SRC-20260525-000006-c0ffee", "clean source 1")
-    clean_hash_2 = add_source(project, "SRC-20260525-000007-c0ffee", "clean source 2")
-    add_source(
-        project,
-        "SRC-20260421-142649-5810a8",
-        "quarantined old source",
-        tags=["hash-mismatch", "quarantined", "needs-provenance-repair"],
-        expected_hash="1" * 64,
-    )
-    add_source(
-        project,
-        "SRC-20260421-142649-63aca2",
-        "quarantined old source",
-        tags=["hash-mismatch", "quarantined", "needs-provenance-repair"],
-        expected_hash="2" * 64,
-    )
-    add_track_b_record(
-        project,
-        "TRACKB-EXPORT-CLEAN-1",
-        source_id="SRC-20260525-000006-c0ffee",
-        content="First clean Track B record.",
-    )
-    add_track_b_record(
-        project,
-        "TRACKB-EXPORT-CLEAN-2",
-        source_id="SRC-20260525-000007-c0ffee",
-        content="Second clean Track B record.",
-    )
-    add_track_b_record(
-        project,
-        "TRACKB-EXPORT-META",
-        source_id="SRC-20260525-000007-c0ffee",
-        tags=["track-b-candidate", "filed-answer"],
-    )
-    db_before = file_hash(project / ".kb" / "kb.db")
-
-    result = run_next_json(
-        project,
-        "track-b-export",
-        "--adapter",
-        "obsidian_static_markdown",
-    )
-
-    db_after = file_hash(project / ".kb" / "kb.db")
-    assert result["status"] == "exported"
-    assert result["exported_record_ids"] == ["TRACKB-EXPORT-CLEAN-1", "TRACKB-EXPORT-CLEAN-2"]
-    assert result["source_ids"] == ["SRC-20260525-000006-c0ffee", "SRC-20260525-000007-c0ffee"]
-    assert result["external_adapter_called"] is False
-    assert result["classic_wiki_live_publish"] is False
-    assert result["classic_kb_mutation"] == "forbidden"
-    assert db_before == db_after
-
-    vault = Path(result["paths"]["vault"])
-    manifest_path = Path(result["paths"]["manifest"])
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    assert manifest["manifest_id"].startswith("obsidian-export-")
-    assert manifest["adapter"] == "obsidian_static_markdown"
-    assert manifest["status"] == "exported"
-    assert manifest["exported_record_ids"] == ["TRACKB-EXPORT-CLEAN-1", "TRACKB-EXPORT-CLEAN-2"]
-    assert manifest["input_audit_status"] == "pass"
-    assert manifest["source_ids"] == ["SRC-20260525-000006-c0ffee", "SRC-20260525-000007-c0ffee"]
-    assert "TRACKB-EXPORT-META" in manifest["excluded_record_ids"]
-    assert "SRC-20260421-142649-5810a8" in manifest["hash_mismatch_source_ids"]
-    assert "SRC-20260421-142649-63aca2" in manifest["quarantined_source_ids"]
-    assert manifest["obsidian_design_decisions"]["version"] == "obsidian_static_markdown_design_v1"
-    assert manifest["obsidian_design_decisions"]["uses_obsidian_publish"] is False
-    assert manifest["obsidian_design_decisions"]["uses_symlinks_or_junctions"] is False
-
-    output_records = manifest["output_paths"]["records"]
-    output_sources = manifest["output_paths"]["sources"]
-    assert sorted(output_records) == ["TRACKB-EXPORT-CLEAN-1", "TRACKB-EXPORT-CLEAN-2"]
-    assert sorted(output_sources) == ["SRC-20260525-000006-c0ffee", "SRC-20260525-000007-c0ffee"]
-    assert all("TRACKB-EXPORT-META" not in path for path in output_records.values())
-    assert all("SRC-20260421-142649" not in path for path in output_sources.values())
-
-    for rel_path, expected_hash in manifest["file_hashes"].items():
-        assert file_hash(project / rel_path) == expected_hash
-
-    generated_md = sorted(vault.rglob("*.md"))
-    assert generated_md
-    forbidden_filename_chars = set('<>:"\\|?*#^[]')
-    for path in generated_md:
-        assert not any(char in forbidden_filename_chars for char in path.name)
-        assert " " not in path.name
-        assert not is_reparse_point(path)
-        text = path.read_text(encoding="utf-8")
-        assert "[[" not in text
-        assert "#^" not in text
-        metadata = markdown_frontmatter(path)
-        assert metadata["manifest_id"] == manifest["manifest_id"]
-        assert isinstance(metadata["record_ids"], list)
-        assert isinstance(metadata["content_hash"], str)
-        assert len(metadata["content_hash"]) == 64
-        assert metadata["content_hash"] == markdown_body_hash(path)
-        assert "confidence" in metadata
-        assert isinstance(metadata["warnings"], list)
-        assert isinstance(metadata["stale_warnings"], list)
-        assert isinstance(metadata["provenance_warnings"], list)
-        assert metadata["authority"] == "derived"
-        assert "tag" not in metadata
-        assert "alias" not in metadata
-        assert "cssclass" not in metadata
-        assert isinstance(metadata["tags"], list)
-        assert isinstance(metadata["aliases"], list)
-        for tag in metadata["tags"]:
-            assert re.match(r"^[a-z0-9_/-]+$", tag)
-            assert re.search(r"[a-z]", tag)
-            assert " " not in tag
-
-    for record_id, rel_path in output_records.items():
-        record_path = project / rel_path
-        metadata = markdown_frontmatter(record_path)
-        assert metadata["record_id"] == record_id
-        assert metadata["record_ids"] == [record_id]
-        assert metadata["adapter"] == "obsidian_static_markdown"
-        assert metadata["derived"] is True
-        assert metadata["canonical"] is False
-        assert metadata["source_linkage_audit_status"] == "pass"
-        assert isinstance(metadata["source_ids"], list)
-        assert isinstance(metadata["source_hashes"], list)
-        assert any(item.endswith(clean_hash_1) or item.endswith(clean_hash_2) for item in metadata["source_hashes"])
-
-    for path in vault.rglob("*"):
-        assert not is_reparse_point(path)
-
-    shutil.rmtree(vault)
-    assert file_hash(project / ".kb" / "kb.db") == db_before
 
 
 def test_compliance_preflight_operational_is_lightweight(project: Path) -> None:

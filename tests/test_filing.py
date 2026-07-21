@@ -272,14 +272,14 @@ class TestFilingBackwardCompat:
         assert "filed-analysis" in record["tags"]
         assert record["source_id"] == sid
 
-    def test_schema_version_unchanged(self, filing_kb):
+    def test_schema_version_is_6(self, filing_kb):
         r = subprocess.run(
             [sys.executable, str(filing_kb / "kb.py"), "raw-query",
              "SELECT value FROM schema_meta WHERE key = 'schema_version'"],
             capture_output=True, text=True, check=True, cwd=str(filing_kb),
         )
         result = json.loads(r.stdout)
-        assert result[0]["value"] == "4"
+        assert result[0]["value"] == "6"
 
     def test_create_command_unchanged(self, filing_kb):
         record = _run(filing_kb, "create",

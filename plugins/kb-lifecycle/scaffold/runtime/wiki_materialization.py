@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
+import re
 from pathlib import Path
 
 from .config import load_config
@@ -304,11 +306,253 @@ def _build_source_page_body(candidate: dict, conn) -> list[str]:
     return lines
 
 
-def build_wiki_page(candidate: dict, conn, *, now_iso) -> str:
+def _record_anchor(record_id: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", record_id.lower()).strip("-")
+    return f"kb-{normalized}"
+
+
+def _markdown_slug(target_slug: str) -> str:
+    return target_slug if target_slug.endswith(".md") else f"{target_slug}.md"
+
+
+def _relative_page_link(current_slug: str, target_slug: str, anchor: str | None = None) -> str:
+    current_path = _markdown_slug(current_slug)
+    target_path = _markdown_slug(target_slug)
+    if current_path == target_path:
+        relative = ""
+    else:
+        relative = posixpath.relpath(target_path, posixpath.dirname(current_path) or ".")
+    suffix = f"#{anchor}" if anchor else ""
+    return f"{relative}{suffix}" or "#"
+
+
+def _table_exists(conn, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _record_index_candidate(conn) -> dict:
+    record_ids = [
+        row["id"]
+        for row in conn.execute("SELECT id FROM records ORDER BY id").fetchall()
+    ]
+    return {
+        "candidate_id": "wiki-live-record-index",
+        "target_slug": "live/index",
+        "page_type": "record_index",
+        "title": "Knowledge Record Index",
+        "status": "heuristic_candidate",
+        "why_now": "Managed directory for every canonical record.",
+        "supporting_record_ids": record_ids,
+        "supporting_sources": [],
+    }
+
+
+def _build_navigation_context(conn, candidates: list[dict]) -> dict:
+    rows = conn.execute(
+        "SELECT id, category, title, content, domain, status, tags_json, source_id "
+        "FROM records ORDER BY id"
+    ).fetchall()
+    records = {row["id"]: dict(row) for row in rows}
+    pages_by_record: dict[str, list[dict]] = {record_id: [] for record_id in records}
+    for candidate in sorted(candidates, key=lambda item: item["target_slug"]):
+        for record_id in candidate.get("supporting_record_ids", []):
+            if record_id in records:
+                pages_by_record.setdefault(record_id, []).append(candidate)
+
+    primary: dict[str, str] = {}
+    for record_id, record in records.items():
+        pages = pages_by_record.get(record_id, [])
+        domain_slug = f"live/{record.get('domain')}/overview" if record.get("domain") else None
+        if domain_slug and any(page["target_slug"] == domain_slug for page in pages):
+            primary[record_id] = domain_slug
+            continue
+        non_index = sorted(
+            (page["target_slug"] for page in pages if page["target_slug"] != "live/index")
+        )
+        primary[record_id] = non_index[0] if non_index else "live/index"
+
+    source_links: dict[str, set[str]] = {record_id: set() for record_id in records}
+    for record_id, record in records.items():
+        if record.get("source_id"):
+            source_links[record_id].add(str(record["source_id"]))
+    if _table_exists(conn, "sources"):
+        source_rows = conn.execute(
+            "SELECT source_id, record_ids_json FROM sources ORDER BY source_id"
+        ).fetchall()
+        for source in source_rows:
+            try:
+                linked = json.loads(source["record_ids_json"] or "[]")
+            except (TypeError, ValueError):
+                linked = []
+            for record_id in linked:
+                if record_id in records:
+                    source_links[record_id].add(str(source["source_id"]))
+
+    typed_edges: list[dict] = []
+    if _table_exists(conn, "record_edges"):
+        typed_edges = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT edge_id, source_record_id, target_record_id, relation_type "
+                "FROM record_edges WHERE removed_at IS NULL ORDER BY edge_id"
+            ).fetchall()
+        ]
+    return {
+        "records": records,
+        "pages_by_record": pages_by_record,
+        "primary": primary,
+        "source_links": source_links,
+        "typed_edges": typed_edges,
+    }
+
+
+def _record_link(record_id: str, current_slug: str, navigation: dict) -> str:
+    target = navigation["primary"].get(record_id, "live/index")
+    return _relative_page_link(current_slug, target, _record_anchor(record_id))
+
+
+def _link_record_references(content: str, current_slug: str, navigation: dict) -> str:
+    records = navigation.get("records", {})
+
+    def replace(match: re.Match) -> str:
+        record_id = match.group(1)
+        if record_id not in records:
+            return match.group(0)
+        return f"[{record_id}]({_record_link(record_id, current_slug, navigation)})"
+
+    return re.sub(r"\[([A-Za-z0-9][A-Za-z0-9._-]*)\](?!\()", replace, content)
+
+
+def _build_index_body(candidate: dict, conn, navigation: dict) -> list[str]:
+    records = navigation["records"]
+    domain_pages = sorted(
+        {
+            page["target_slug"]
+            for pages in navigation["pages_by_record"].values()
+            for page in pages
+            if page.get("page_type") == "domain_overview"
+        }
+    )
+    lines = ["## Domain overviews", ""]
+    if domain_pages:
+        for slug in domain_pages:
+            domain = slug.split("/")[1] if len(slug.split("/")) > 1 else slug
+            lines.append(f"- [{domain}]({_relative_page_link(candidate['target_slug'], slug)})")
+    else:
+        lines.append("- *(none)*")
+    lines.extend(["", "## Record directory", ""])
+    by_domain: dict[str, list[dict]] = {}
+    for record in records.values():
+        by_domain.setdefault(record.get("domain") or "unassigned", []).append(record)
+    if not by_domain:
+        lines.append("- *(none)*")
+        return lines
+    for domain in sorted(by_domain):
+        lines.extend([f"### {domain}", ""])
+        for record in sorted(by_domain[domain], key=lambda item: item["id"]):
+            record_id = record["id"]
+            destination = _record_link(record_id, candidate["target_slug"], navigation)
+            lines.append(f"- [{record_id}]({destination}) — {record['title']} "
+                         f"({record['category']}, {record['status']})")
+        lines.append("")
+    return lines
+
+
+def _build_cited_by(candidate: dict, navigation: dict) -> list[str]:
+    current_slug = candidate["target_slug"]
+    cited: dict[str, set[str]] = {}
+    page_titles: dict[str, str] = {}
+    for record_id in candidate.get("supporting_record_ids", []):
+        for page in navigation["pages_by_record"].get(record_id, []):
+            slug = page["target_slug"]
+            if slug == current_slug:
+                continue
+            cited.setdefault(slug, set()).add(record_id)
+            page_titles[slug] = page["title"]
+    lines = ["## Cited by", ""]
+    if not cited:
+        lines.append("- *(none)*")
+        return lines
+    for slug in sorted(cited):
+        record_ids = sorted(cited[slug])
+        anchor = _record_anchor(record_ids[0]) if record_ids else None
+        link = _relative_page_link(current_slug, slug, anchor)
+        lines.append(
+            f"- [{page_titles[slug]}]({link}) [page:live/managed] — "
+            + ", ".join(record_ids)
+        )
+    return lines
+
+
+def _build_related_knowledge(candidate: dict, navigation: dict) -> list[str]:
+    records = navigation["records"]
+    subject_ids = {
+        record_id
+        for record_id in candidate.get("supporting_record_ids", [])
+        if record_id in records
+    }
+    origins: dict[str, set[str]] = {}
+    for subject_id in sorted(subject_ids):
+        subject = records[subject_id]
+        subject_tags = set(json.loads(subject.get("tags_json") or "[]"))
+        subject_sources = navigation["source_links"].get(subject_id, set())
+        for page in navigation["pages_by_record"].get(subject_id, []):
+            for neighbor_id in page.get("supporting_record_ids", []):
+                if neighbor_id not in subject_ids and neighbor_id in records:
+                    origins.setdefault(neighbor_id, set()).add(f"page:{page['target_slug']}")
+        for neighbor_id, neighbor in records.items():
+            if neighbor_id in subject_ids:
+                continue
+            if subject.get("domain") and neighbor.get("domain") == subject.get("domain"):
+                origins.setdefault(neighbor_id, set()).add(f"domain:{subject['domain']}")
+            neighbor_tags = set(json.loads(neighbor.get("tags_json") or "[]"))
+            for tag in sorted(subject_tags & neighbor_tags):
+                origins.setdefault(neighbor_id, set()).add(f"tag:{tag}")
+            for source_id in sorted(subject_sources & navigation["source_links"].get(neighbor_id, set())):
+                origins.setdefault(neighbor_id, set()).add(f"source:{source_id}")
+        for edge in navigation["typed_edges"]:
+            if edge["source_record_id"] == subject_id:
+                other_id = edge["target_record_id"]
+                direction = "outgoing"
+            elif edge["target_record_id"] == subject_id:
+                other_id = edge["source_record_id"]
+                direction = "incoming"
+            else:
+                continue
+            if other_id not in subject_ids and other_id in records:
+                origins.setdefault(other_id, set()).add(
+                    f"typed-edge:{edge['relation_type']}/{direction}/{edge['edge_id']}"
+                )
+    lines = ["## Related knowledge", ""]
+    if not origins:
+        lines.append("- *(none)*")
+        return lines
+    for record_id in sorted(origins):
+        record = records[record_id]
+        link = _record_link(record_id, candidate["target_slug"], navigation)
+        labels = "; ".join(sorted(origins[record_id]))
+        lines.append(f"- [{record_id}]({link}) — {record['title']} [{labels}]")
+    return lines
+
+
+def build_wiki_page(
+    candidate: dict,
+    conn,
+    *,
+    now_iso,
+    navigation: dict | None = None,
+    generated_at: str | None = None,
+) -> str:
     page_class = "snapshot" if candidate["target_slug"].startswith("snapshots/") else "live"
-    generated_at = now_iso()
+    generated_at = generated_at or now_iso()
     header = _build_metadata_header(candidate)
-    if candidate["page_type"] == "domain_overview":
+    if candidate["page_type"] == "record_index" and navigation is not None:
+        body = _build_index_body(candidate, conn, navigation)
+    elif candidate["page_type"] == "domain_overview":
         body = _build_domain_overview_body(candidate, conn)
     elif candidate["page_type"] == "research_synthesis":
         body = _build_research_synthesis_body(candidate, conn)
@@ -319,9 +563,22 @@ def build_wiki_page(candidate: dict, conn, *, now_iso) -> str:
     provenance = _build_provenance_block(candidate, page_class, generated_at)
     lines = [WIKI_CITATION_MARKER, f"# {candidate['title']}", ""]
     lines.extend(header)
+    if navigation is not None:
+        anchors = [
+            f'<a id="{_record_anchor(record_id)}"></a>'
+            for record_id in candidate.get("supporting_record_ids", [])
+            if record_id in navigation["records"]
+        ]
+        lines.extend(["<!-- kb-record-anchors -->", *anchors, "<!-- /kb-record-anchors -->", ""])
     lines.extend(body)
+    if navigation is not None:
+        lines.extend(["", *_build_cited_by(candidate, navigation)])
+        lines.extend(["", *_build_related_knowledge(candidate, navigation)])
     lines.extend(provenance)
-    return "\n".join(lines) + "\n"
+    content = "\n".join(lines) + "\n"
+    if navigation is not None:
+        content = _link_record_references(content, candidate["target_slug"], navigation)
+    return content
 
 
 def is_managed_wiki_file(path: Path) -> bool:
@@ -774,6 +1031,10 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
     candidates = candidate_provider(conn, config, wiki_cfg)
     if domain:
         candidates = [candidate for candidate in candidates if domain in candidate["target_slug"]]
+    # The record index is a managed live page and part of every candidate set,
+    # including a domain-scoped sync. This prevents the reconciler from pruning
+    # it and keeps fallback record links available.
+    candidates.append(_record_index_candidate(conn))
     syncable = [candidate for candidate in candidates if candidate["status"] == "heuristic_candidate"]
     skipped_review = [candidate for candidate in candidates if candidate["status"] == "review_required"]
     wiki_root = KB_ROOT / "wiki"
@@ -783,30 +1044,66 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
     snapshots_created: list[dict] = []
     held_back: list[dict] = []
     now = now_iso()
+
+    publishable: list[dict] = []
     for candidate in syncable:
+        target = wiki_root / candidate["target_slug"]
+        target_md = target if target.suffix == ".md" else target.with_suffix(".md")
+        if target_md.exists() and not is_managed_wiki_file(target_md):
+            held_back.append(
+                {
+                    "candidate_id": candidate["candidate_id"],
+                    "target_slug": candidate["target_slug"],
+                    "page_type": candidate["page_type"],
+                    "reason": "unmanaged_target_collision",
+                }
+            )
+            continue
+        gate = None
+        if candidate["page_type"] != "record_index":
+            gate = evaluate_hygiene_gates(conn, candidate, wiki_cfg)
+        if gate is not None:
+            held_back.append(gate)
+            continue
+        publishable.append(candidate)
+
+    navigation = _build_navigation_context(conn, publishable)
+    for candidate in publishable:
         target = wiki_root / candidate["target_slug"]
         target_md = target if target.suffix == ".md" else target.with_suffix(".md")
         if "snapshots/" in candidate["target_slug"] and target_md.exists():
             skipped_existing_snapshot.append(candidate["candidate_id"])
             continue
-        if target_md.exists() and not is_managed_wiki_file(target_md):
-            continue
-        gate = evaluate_hygiene_gates(conn, candidate, wiki_cfg)
-        if gate is not None:
-            held_back.append(gate)
-            continue
-        content = build_wiki_page(candidate, conn, now_iso=lambda: now)
+        page_id_pre = compute_page_id(candidate["target_slug"])
+        existing_pre = conn.execute(
+            "SELECT * FROM wiki_pages WHERE page_id = ?", (page_id_pre,)
+        ).fetchone()
+        content = build_wiki_page(
+            candidate,
+            conn,
+            now_iso=lambda: now,
+            navigation=navigation,
+            generated_at=now,
+        )
+        if existing_pre is not None and (
+            (existing_pre["content_hash"] or "") == compute_content_hash(content)
+        ):
+            # Re-render with the prior timestamp so a no-op sync is byte-for-byte
+            # stable, not merely stable after timestamp-stripped hashing.
+            content = build_wiki_page(
+                candidate,
+                conn,
+                now_iso=lambda: now,
+                navigation=navigation,
+                generated_at=existing_pre["generated_at"],
+            )
         # Pre-write snapshot capture: if this is a live page whose content is
         # about to change AND a prior file exists on disk, preserve the old
         # content as a snapshot BEFORE we overwrite it.
-        page_id_pre = compute_page_id(candidate["target_slug"])
         is_live = not candidate["target_slug"].startswith("snapshots/")
         new_hash = compute_content_hash(content)
         snapshot_info: dict | None = None
         if is_live:
-            existing_pre = conn.execute(
-                "SELECT * FROM wiki_pages WHERE page_id = ?", (page_id_pre,)
-            ).fetchone()
             if (
                 existing_pre is not None
                 and (existing_pre["content_hash"] or "") != new_hash
@@ -820,8 +1117,10 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
                 if snapshot_info:
                     snapshots_created.append(snapshot_info)
         target_md.parent.mkdir(parents=True, exist_ok=True)
-        target_md.write_text(content, encoding="utf-8")
-        written.append(candidate["candidate_id"])
+        encoded = content.encode("utf-8")
+        if not target_md.exists() or target_md.read_bytes() != encoded:
+            target_md.write_bytes(encoded)
+            written.append(candidate["candidate_id"])
         persisted.append(
             persist_page(
                 conn,
@@ -1079,6 +1378,7 @@ def get_wiki_lint_result(*, is_managed_file=None, parse_citation=None) -> dict:
             if not is_managed_file(md_path):
                 continue
             rel = md_path.relative_to(KB_ROOT / "wiki").as_posix()
+            is_record_index = rel == "live/index.md"
             citation = parse_citation(md_path)
             if citation is None:
                 issues.append({"file": rel, "issue": "citation_missing", "detail": "No citation block found"})
@@ -1088,7 +1388,7 @@ def get_wiki_lint_result(*, is_managed_file=None, parse_citation=None) -> dict:
                 for record_id in citation.get("supporting_records", "").split(",")
                 if record_id.strip() and record_id.strip() != "none"
             ]
-            if not rec_ids:
+            if not rec_ids and not is_record_index:
                 issues.append({"file": rel, "issue": "orphan_page", "detail": "No supporting record IDs in citation"})
                 continue
             any_active = False
@@ -1102,13 +1402,13 @@ def get_wiki_lint_result(*, is_managed_file=None, parse_citation=None) -> dict:
                 if row is None:
                     issues.append({"file": rel, "issue": "record_missing", "detail": f"Record {record_id} not found in KB"})
                     continue
-                if row["status"] != "ATIVO":
+                if row["status"] != "ATIVO" and not is_record_index:
                     issues.append({"file": rel, "issue": "record_not_active", "detail": f"Record {record_id} status is {row['status']}"})
                 else:
                     any_active = True
                 if page_generated and row["updated_at"] > page_generated:
                     any_record_newer = True
-            if not any_active and rec_ids:
+            if not any_active and rec_ids and not is_record_index:
                 issues.append({"file": rel, "issue": "orphan_page", "detail": "All supporting records are missing or inactive"})
             if any_record_newer:
                 issues.append({"file": rel, "issue": "stale_page", "detail": f"Page generated at {page_generated} but supporting records updated since"})

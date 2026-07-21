@@ -32,7 +32,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.1.7"
+RUNTIME_VERSION = "0.3.0"
 OBSIDIAN_DESIGN_NOTES_REL = (
     Path("state")
     / "runs"
@@ -650,6 +650,7 @@ def open_classic_kb_readonly(root: Path) -> sqlite3.Connection:
     uri = db_path.resolve().as_uri() + "?mode=ro"
     conn = sqlite3.connect(uri, uri=True)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA query_only=ON")
     return conn
 
 
@@ -919,38 +920,36 @@ def infer_compliance_work_type(topic: str | None) -> str:
 
 def compliance_surfaces(work_type: str) -> list[str]:
     base = [
-        "products/kb-wiki-vnext/product.json",
-        "products/kb-wiki-vnext/README.md",
-        "products/kb-wiki-vnext/docs/en/architecture.md",
-        "products/kb-wiki-vnext/docs/en/maintainer-release.md",
-        "docs/development.md",
-        "docs/releasing.md",
-        "tests/test_kb_wiki_vnext_runtime.py",
-        "tests/test_vnext_runtime_parity.py",
+        "core/versions/kb-wiki-vnext/spec-pack/product-intent-prd.pt-br.md",
+        "core/versions/kb-wiki-vnext/spec-pack/README.md",
+        "core/versions/kb-wiki-vnext/spec-pack/release-gates.md",
+        "core/versions/kb-wiki-vnext/spec-pack/test-matrix.md",
+        "core/versions/kb-wiki-vnext/spec-pack/golden-rules-map.md",
+        ".kb/memory/NOW.md",
     ]
     extras = {
         "implementation": [
-            "core/versions/kb-wiki-vnext/runtime/kb_next.py",
-            "tests/test_kb_wiki_vnext_semantic_runtime.py",
-            "tests/test_vnext_pip_channel.py",
+            "core/versions/kb-wiki-vnext/spec-pack/engineer-maintainer-guide.md",
+            "core/versions/kb-wiki-vnext/spec-pack/provenance-chain-spec.md",
+            "core/versions/kb-wiki-vnext/spec-pack/feature-rationale-register.md",
         ],
         "review": [
-            "products/kb-wiki-vnext/docs/en/usage-guide.md",
-            "tests/test_kb_wiki_vnext_semantic_runtime.py",
+            "core/versions/kb-wiki-vnext/spec-pack/operator-runbook.md",
+            "state/runs/",
         ],
         "release": [
-            "products/kb-wiki-vnext/docs/en/admin-installation.md",
-            "products/kb-wiki-vnext/docs/en/upgrade-rollback.md",
-            "tests/test_vnext_runtime_shipping.py",
+            "core/versions/kb-wiki-vnext/spec-pack/packaging-distribution-guide.md",
+            "core/versions/kb-wiki-vnext/spec-pack/migration-rollout-fallback-guide.md",
+            "state/runs/",
         ],
         "track-b": [
-            "docs/provenance-and-continuity.md",
-            "products/kb-wiki-vnext/docs/en/architecture.md",
+            "core/versions/kb-wiki-vnext/spec-pack/provenance-chain-spec.md",
+            "core/versions/kb-wiki-vnext/spec-pack/operator-runbook.md",
         ],
         "packaging": [
+            "core/versions/kb-wiki-vnext/spec-pack/packaging-distribution-guide.md",
             "plugins/kb-wiki-vnext/AGENTS.md",
             "plugins/kb-wiki-vnext/skills/kb-wiki-vnext/SKILL.md",
-            "tests/test_vnext_runtime_shipping.py",
         ],
         "operational": [
             ".kb-next/memory/NOW.md",
@@ -963,8 +962,8 @@ def compliance_required_tests(work_type: str) -> list[str]:
     if work_type == "operational":
         return ["No development test run required for simple operational use."]
     tests = [
-        "python tools\\sync_vnext_runtime.py --check",
-        "python -m pytest -p no:cacheprovider --basetemp=.pytest_tmp_vnext_compliance tests\\test_kb_wiki_vnext_runtime.py tests\\test_kb_wiki_vnext_semantic_runtime.py tests\\test_vnext_runtime_parity.py tests\\test_vnext_pip_channel.py tests\\test_vnext_runtime_shipping.py -q",
+        "python tools\\validate_kb_wiki_vnext_spec_pack.py",
+        "python -m pytest -p no:cacheprovider --basetemp=.pytest_tmp_vnext_compliance tests\\test_kb_wiki_vnext_runtime.py tests\\test_kb_wiki_vnext_semantic_runtime.py tests\\test_kb_wiki_vnext_spec_pack.py tests\\test_build_agent_packages.py -q",
     ]
     if work_type == "packaging":
         tests.append("python -m pytest -p no:cacheprovider tests\\test_build_agent_packages.py -q")
@@ -978,7 +977,7 @@ def compliance_required_evidence(work_type: str) -> list[str]:
             "Do not mutate .kb/ or publish .kb/wiki/live.",
         ]
     evidence = [
-        "Map the requested work to the public product manifest, maintainer release guide, and focused test surface.",
+        "Map the requested work to PRD/master plan, release checkpoint, and test-matrix row.",
         "Record commands and results in a compatible run dossier when implementation, hardening, release, or rollout work occurs.",
         "Record any waiver explicitly with owner approval before bypassing a checkpoint.",
     ]
@@ -991,12 +990,12 @@ def compliance_required_evidence(work_type: str) -> list[str]:
 
 def completion_rule() -> list[str]:
     return [
-        "Public product manifest, architecture, and maintainer release surfaces agree on the release contract.",
-        "vNext runtime mirrors pass python tools\\sync_vnext_runtime.py --check.",
-        "Public vNext pytest suite green.",
+        "Final release dossier signed by Runtime, Provenance, Docs/Spec, QA, Packaging, and Red Team.",
+        "Spec-pack validator green.",
+        "vNext pytest suite green.",
         "Required pilots completed or owner-waived.",
         f"{SOURCE_LINKAGE_TRACK_B_BLOCKER_ID} resolved or explicitly waived for Track B.",
-        "Release decision and evidence are recorded through the approved public release process.",
+        "Canonical KB decision records that vNext is 100% developed against PRD/master plan.",
     ]
 
 
@@ -1045,7 +1044,7 @@ def build_compliance_preflight(root: Path, work_type_arg: str | None, topic: str
         next_allowed_action = (
             "Operational vNext use may proceed with thin memory."
             if work_type == "operational"
-            else "Proceed only with the listed public release mapping, traceability, tests, and evidence."
+            else "Proceed only with the listed PRD/master-plan mapping, traceability, tests, and evidence."
         )
 
     development_contract_required = work_type not in {"operational", "unknown"}
@@ -1058,7 +1057,7 @@ def build_compliance_preflight(root: Path, work_type_arg: str | None, topic: str
         "contract_scope": COMPLIANCE_CONTRACT_SCOPE,
         "development_contract_required": development_contract_required,
         "applicable_gates": (
-            ["Development Compliance Contract", "Public Product Manifest", "Public Documentation/Authority", "Runtime/Test Parity"]
+            ["Development Compliance Contract", "Gate 0 PRD", "Gate 1 Docs/Provenance", "Semantic Memory Gate"]
             if work_type not in {"operational", "unknown"}
             else ["Thin Session Contract"]
         ),
@@ -3989,6 +3988,700 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+class GraphUsageError(ValueError):
+    pass
+
+
+GRAPH_CONTRACT_VERSION = 1
+GRAPH_EDGE_TYPES = ("depends-on", "contradicts", "duplicates")
+GRAPH_BLIND_SPOTS = [
+    "structural verification does not validate content truth or source quality",
+    "snapshot JSON/provenance parity is not checked",
+    "semantic contradiction detection is out of scope",
+]
+
+
+def _graph_result(
+    command: str,
+    subject: dict[str, Any],
+    results: list[Any],
+    *,
+    warnings: list[dict[str, Any] | str] | None = None,
+    blind_spots: list[str] | None = None,
+) -> dict[str, Any]:
+    return {
+        "graph_contract_version": GRAPH_CONTRACT_VERSION,
+        "command": command,
+        "subject": subject,
+        "results": results,
+        "warnings": warnings or [],
+        "blind_spots": blind_spots if blind_spots is not None else GRAPH_BLIND_SPOTS,
+    }
+
+
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+        ).fetchone()
+        is not None
+    )
+
+
+def _record_or_error(conn: sqlite3.Connection, record_id: str) -> sqlite3.Row:
+    row = conn.execute(
+        "SELECT id, domain, status, tags_json, source, source_id, "
+        "supersedes_id, replacement_id, title FROM records WHERE id = ?",
+        (record_id,),
+    ).fetchone()
+    if row is None:
+        raise GraphUsageError(f"record not found: {record_id}")
+    return row
+
+
+def _source_or_error(conn: sqlite3.Connection, source_id: str) -> sqlite3.Row:
+    row = conn.execute("SELECT * FROM sources WHERE source_id = ?", (source_id,)).fetchone()
+    if row is None:
+        raise GraphUsageError(f"source not found: {source_id}")
+    return row
+
+
+def _supersede_assertions(conn: sqlite3.Connection) -> dict[tuple[str, str], set[str]]:
+    assertions: dict[tuple[str, str], set[str]] = {}
+    rows = conn.execute(
+        "SELECT id, supersedes_id, replacement_id FROM records"
+    ).fetchall()
+    for row in rows:
+        if row["supersedes_id"]:
+            assertions.setdefault((row["supersedes_id"], row["id"]), set()).add(
+                "supersedes_id"
+            )
+        if row["replacement_id"]:
+            assertions.setdefault((row["id"], row["replacement_id"]), set()).add(
+                "replacement_id"
+            )
+    if _table_exists(conn, "audit_log"):
+        audit_rows = conn.execute(
+            "SELECT record_id, details_json FROM audit_log "
+            "WHERE action = 'superseded' ORDER BY audit_id"
+        ).fetchall()
+        for row in audit_rows:
+            try:
+                details = json.loads(row["details_json"] or "{}")
+            except json.JSONDecodeError:
+                continue
+            replacement_id = details.get("replacement_id")
+            if isinstance(replacement_id, str) and replacement_id:
+                assertions.setdefault((row["record_id"], replacement_id), set()).add(
+                    "audit_log"
+                )
+    return assertions
+
+
+def _component_paths(
+    subject_id: str, assertions: dict[tuple[str, str], set[str]]
+) -> dict[str, Any]:
+    outgoing: dict[str, set[str]] = {}
+    incoming: dict[str, set[str]] = {}
+    for old_id, new_id in assertions:
+        outgoing.setdefault(old_id, set()).add(new_id)
+        incoming.setdefault(new_id, set()).add(old_id)
+    component = {subject_id}
+    queue = [subject_id]
+    while queue:
+        node = queue.pop()
+        for neighbor in outgoing.get(node, set()) | incoming.get(node, set()):
+            if neighbor not in component:
+                component.add(neighbor)
+                queue.append(neighbor)
+    roots = sorted(node for node in component if not (incoming.get(node, set()) & component))
+    tips = sorted(node for node in component if not (outgoing.get(node, set()) & component))
+    branches = [
+        {"record_id": node, "replacements": sorted(outgoing[node] & component)}
+        for node in sorted(component)
+        if len(outgoing.get(node, set()) & component) > 1
+    ]
+    paths: list[list[str]] = []
+    cycles: list[list[str]] = []
+
+    def walk(node: str, path: list[str]) -> None:
+        if node in path:
+            cycle = path[path.index(node) :] + [node]
+            if cycle not in cycles:
+                cycles.append(cycle)
+            return
+        next_path = path + [node]
+        children = sorted(outgoing.get(node, set()) & component)
+        if not children:
+            paths.append(next_path)
+            return
+        for child in children:
+            walk(child, next_path)
+
+    for root in roots or [subject_id]:
+        walk(root, [])
+    return {
+        "record_ids": sorted(component),
+        "roots": roots,
+        "tips": tips,
+        "branches": branches,
+        "paths": sorted(paths),
+        "cycles": sorted(cycles),
+    }
+
+
+def _current_overlay(
+    record_id: str, assertions: dict[tuple[str, str], set[str]]
+) -> dict[str, Any] | None:
+    component = _component_paths(record_id, assertions)
+    descendants = [
+        path[path.index(record_id) :]
+        for path in component["paths"]
+        if record_id in path and path[-1] != record_id
+    ]
+    if not descendants:
+        return None
+    return {
+        "stored_record_id": record_id,
+        "current_candidates": sorted({path[-1] for path in descendants}),
+        "paths": sorted(descendants),
+    }
+
+
+def cmd_graph_backlinks(args: argparse.Namespace) -> int:
+    root = project_root(args)
+    with open_classic_kb_readonly(root) as conn:
+        _record_or_error(conn, args.record_id)
+        rows = conn.execute(
+            "SELECT p.page_id, w.target_slug, w.page_class, w.page_type, "
+            "w.domain, w.state, w.stored_path "
+            "FROM wiki_page_provenance p "
+            "JOIN wiki_pages w ON w.page_id = p.page_id "
+            "WHERE p.kind = 'record' AND p.ref_id = ? "
+            "ORDER BY w.page_class, w.target_slug, w.page_id",
+            (args.record_id,),
+        ).fetchall()
+    result = _graph_result(
+        "backlinks",
+        {"record_id": args.record_id},
+        [dict(row) for row in rows],
+        blind_spots=[
+            "only stored wiki_page_provenance edges are queried",
+            *GRAPH_BLIND_SPOTS,
+        ],
+    )
+    emit(result, args.json)
+    return 0
+
+
+def cmd_graph_lineage(args: argparse.Namespace) -> int:
+    root = project_root(args)
+    with open_classic_kb_readonly(root) as conn:
+        _record_or_error(conn, args.record_id)
+        assertions = _supersede_assertions(conn)
+        component = _component_paths(args.record_id, assertions)
+        records = {
+            row["id"]: dict(row)
+            for row in conn.execute(
+                "SELECT id, title, status, supersedes_id, replacement_id "
+                f"FROM records WHERE id IN ({','.join('?' for _ in component['record_ids'])})",
+                component["record_ids"],
+            ).fetchall()
+        }
+    edges = [
+        {
+            "from": old_id,
+            "to": new_id,
+            "encodings": sorted(encodings),
+        }
+        for (old_id, new_id), encodings in sorted(assertions.items())
+        if old_id in component["record_ids"] or new_id in component["record_ids"]
+    ]
+    warnings: list[dict[str, Any] | str] = []
+    for edge in edges:
+        if len(edge["encodings"]) < 2:
+            warnings.append(
+                {
+                    "code": "SUPERSEDE_ENCODING_PARTIAL",
+                    "from": edge["from"],
+                    "to": edge["to"],
+                    "encodings": edge["encodings"],
+                }
+            )
+    if component["branches"]:
+        warnings.append(
+            {"code": "SUPERSEDE_BRANCH", "branches": component["branches"]}
+        )
+    if component["cycles"]:
+        warnings.append({"code": "SUPERSEDE_CYCLE", "cycles": component["cycles"]})
+    payload = {
+        **component,
+        "records": [records[item] for item in component["record_ids"] if item in records],
+        "edges": edges,
+    }
+    emit(
+        _graph_result("lineage", {"record_id": args.record_id}, [payload], warnings=warnings),
+        args.json,
+    )
+    return 0
+
+
+def _append_origin(
+    neighbors: dict[str, dict[str, Any]],
+    record_id: str,
+    *,
+    origin: dict[str, Any],
+    row: sqlite3.Row,
+) -> None:
+    entry = neighbors.setdefault(
+        record_id,
+        {
+            "record_id": record_id,
+            "title": row["title"],
+            "status": row["status"],
+            "origins": [],
+        },
+    )
+    key = json.dumps(origin, ensure_ascii=False, sort_keys=True)
+    existing = {
+        json.dumps(item, ensure_ascii=False, sort_keys=True) for item in entry["origins"]
+    }
+    if key not in existing:
+        entry["origins"].append(origin)
+
+
+def cmd_graph_neighbors(args: argparse.Namespace) -> int:
+    root = project_root(args)
+    warnings: list[dict[str, Any] | str] = []
+    with open_classic_kb_readonly(root) as conn:
+        subject = _record_or_error(conn, args.record_id)
+        rows = conn.execute(
+            "SELECT id, title, status, domain, tags_json, source_id FROM records "
+            "WHERE id <> ? ORDER BY id",
+            (args.record_id,),
+        ).fetchall()
+        neighbors: dict[str, dict[str, Any]] = {}
+        subject_tags = {str(item) for item in json_list(subject["tags_json"])}
+        page_rows = conn.execute(
+            "SELECT other.ref_id AS record_id, own.page_id "
+            "FROM wiki_page_provenance own "
+            "JOIN wiki_page_provenance other "
+            "ON other.page_id = own.page_id AND other.kind = 'record' "
+            "WHERE own.kind = 'record' AND own.ref_id = ? AND other.ref_id <> ? "
+            "ORDER BY other.ref_id, own.page_id",
+            (args.record_id, args.record_id),
+        ).fetchall()
+        pages_by_record: dict[str, list[str]] = {}
+        for page in page_rows:
+            pages_by_record.setdefault(page["record_id"], []).append(page["page_id"])
+        by_id = {row["id"]: row for row in rows}
+        for record_id, page_ids in sorted(pages_by_record.items()):
+            if record_id in by_id:
+                _append_origin(
+                    neighbors,
+                    record_id,
+                    row=by_id[record_id],
+                    origin={"kind": "wiki_page", "page_ids": sorted(set(page_ids))},
+                )
+        for row in rows:
+            if subject["domain"] and row["domain"] == subject["domain"]:
+                _append_origin(
+                    neighbors,
+                    row["id"],
+                    row=row,
+                    origin={"kind": "domain", "value": subject["domain"]},
+                )
+            shared_tags = sorted(subject_tags & {str(item) for item in json_list(row["tags_json"])})
+            if shared_tags:
+                _append_origin(
+                    neighbors,
+                    row["id"],
+                    row=row,
+                    origin={"kind": "tag", "values": shared_tags},
+                )
+            if subject["source_id"] and row["source_id"] == subject["source_id"]:
+                _append_origin(
+                    neighbors,
+                    row["id"],
+                    row=row,
+                    origin={"kind": "source", "source_id": subject["source_id"]},
+                )
+        if _table_exists(conn, "record_edges"):
+            edge_rows = conn.execute(
+                "SELECT edge_id, source_record_id, target_record_id, relation_type "
+                "FROM record_edges WHERE removed_at IS NULL "
+                "AND (source_record_id = ? OR target_record_id = ?) ORDER BY edge_id",
+                (args.record_id, args.record_id),
+            ).fetchall()
+            for edge in edge_rows:
+                other_id = (
+                    edge["target_record_id"]
+                    if edge["source_record_id"] == args.record_id
+                    else edge["source_record_id"]
+                )
+                if other_id not in by_id:
+                    continue
+                direction = (
+                    "outgoing" if edge["source_record_id"] == args.record_id else "incoming"
+                )
+                _append_origin(
+                    neighbors,
+                    other_id,
+                    row=by_id[other_id],
+                    origin={
+                        "kind": "typed_edge",
+                        "edge_id": edge["edge_id"],
+                        "relation_type": edge["relation_type"],
+                        "direction": direction,
+                    },
+                )
+        else:
+            warnings.append(
+                {
+                    "code": "TYPED_EDGE_CAPABILITY_UNAVAILABLE",
+                    "required_schema": 6,
+                }
+            )
+        assertions = _supersede_assertions(conn)
+        result_rows = []
+        for record_id in sorted(neighbors):
+            entry = neighbors[record_id]
+            entry["origins"] = sorted(
+                entry["origins"],
+                key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True),
+            )
+            overlay = _current_overlay(record_id, assertions)
+            if overlay:
+                entry["current_overlay"] = overlay
+            result_rows.append(entry)
+    emit(
+        _graph_result(
+            "neighbors", {"record_id": args.record_id}, result_rows, warnings=warnings
+        ),
+        args.json,
+    )
+    return 0
+
+
+def cmd_graph_source_records(args: argparse.Namespace) -> int:
+    root = project_root(args)
+    with open_classic_kb_readonly(root) as conn:
+        source = _source_or_error(conn, args.source_id)
+        reverse_ids = {str(item) for item in json_list(source["record_ids_json"])}
+        forward_rows = conn.execute(
+            "SELECT id, title, status FROM records WHERE source_id = ? ORDER BY id",
+            (args.source_id,),
+        ).fetchall()
+        forward = {row["id"]: row for row in forward_rows}
+        all_ids = sorted(reverse_ids | set(forward))
+        rows = []
+        warnings: list[dict[str, Any] | str] = []
+        for record_id in all_ids:
+            row = forward.get(record_id) or conn.execute(
+                "SELECT id, title, status FROM records WHERE id = ?", (record_id,)
+            ).fetchone()
+            entry = {
+                "record_id": record_id,
+                "title": row["title"] if row else None,
+                "status": row["status"] if row else None,
+                "records_source_id": record_id in forward,
+                "source_record_ids_json": record_id in reverse_ids,
+            }
+            rows.append(entry)
+            if entry["records_source_id"] != entry["source_record_ids_json"]:
+                warnings.append(
+                    {
+                        "code": "SOURCE_ENCODING_MISMATCH",
+                        "record_id": record_id,
+                        "source_id": args.source_id,
+                    }
+                )
+    emit(
+        _graph_result(
+            "source-records", {"source_id": args.source_id}, rows, warnings=warnings
+        ),
+        args.json,
+    )
+    return 0
+
+
+def _issue(code: str, **details: Any) -> dict[str, Any]:
+    return {"code": code, **details}
+
+
+def graph_integrity_issues(conn: sqlite3.Connection) -> tuple[list[dict[str, Any]], list[dict[str, Any] | str]]:
+    issues: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any] | str] = []
+    record_rows = conn.execute(
+        "SELECT id, source_id, supersedes_id, replacement_id FROM records ORDER BY id"
+    ).fetchall()
+    records = {row["id"]: row for row in record_rows}
+    audit_assertions = {
+        edge
+        for edge, encodings in _supersede_assertions(conn).items()
+        if "audit_log" in encodings
+    }
+    for row in record_rows:
+        if row["supersedes_id"]:
+            old_id = row["supersedes_id"]
+            old = records.get(old_id)
+            if old is None:
+                issues.append(
+                    _issue("SUPERSEDE_DANGLING", record_id=row["id"], missing_id=old_id)
+                )
+            elif old["replacement_id"] != row["id"]:
+                issues.append(
+                    _issue(
+                        "SUPERSEDE_RECIPROCAL_MISMATCH",
+                        old_record_id=old_id,
+                        new_record_id=row["id"],
+                        stored_replacement_id=old["replacement_id"],
+                    )
+                )
+            if (old_id, row["id"]) not in audit_assertions:
+                issues.append(
+                    _issue(
+                        "SUPERSEDE_AUDIT_MISMATCH",
+                        old_record_id=old_id,
+                        new_record_id=row["id"],
+                    )
+                )
+        if row["replacement_id"]:
+            replacement = records.get(row["replacement_id"])
+            if replacement is None:
+                issues.append(
+                    _issue(
+                        "REPLACEMENT_DANGLING",
+                        record_id=row["id"],
+                        missing_id=row["replacement_id"],
+                    )
+                )
+            elif replacement["supersedes_id"] != row["id"]:
+                issues.append(
+                    _issue(
+                        "REPLACEMENT_RECIPROCAL_MISMATCH",
+                        old_record_id=row["id"],
+                        new_record_id=row["replacement_id"],
+                        stored_supersedes_id=replacement["supersedes_id"],
+                    )
+                )
+    source_rows = conn.execute(
+        "SELECT source_id, record_ids_json FROM sources ORDER BY source_id"
+    ).fetchall()
+    sources = {row["source_id"]: row for row in source_rows}
+    for row in record_rows:
+        if row["source_id"]:
+            source = sources.get(row["source_id"])
+            if source is None:
+                issues.append(
+                    _issue(
+                        "SOURCE_DANGLING",
+                        record_id=row["id"],
+                        source_id=row["source_id"],
+                    )
+                )
+            elif row["id"] not in {str(item) for item in json_list(source["record_ids_json"])}:
+                issues.append(
+                    _issue(
+                        "SOURCE_RECIPROCAL_MISMATCH",
+                        record_id=row["id"],
+                        source_id=row["source_id"],
+                        missing_from="sources.record_ids_json",
+                    )
+                )
+    for source in source_rows:
+        for record_id in sorted({str(item) for item in json_list(source["record_ids_json"])}):
+            record = records.get(record_id)
+            if record is None:
+                issues.append(
+                    _issue(
+                        "SOURCE_RECORD_DANGLING",
+                        source_id=source["source_id"],
+                        record_id=record_id,
+                    )
+                )
+            elif record["source_id"] != source["source_id"]:
+                issues.append(
+                    _issue(
+                        "SOURCE_RECIPROCAL_MISMATCH",
+                        record_id=record_id,
+                        source_id=source["source_id"],
+                        stored_source_id=record["source_id"],
+                        missing_from="records.source_id",
+                    )
+                )
+    if _table_exists(conn, "wiki_page_provenance"):
+        page_ids = {
+            row[0] for row in conn.execute("SELECT page_id FROM wiki_pages").fetchall()
+        }
+        for row in conn.execute(
+            "SELECT page_id, kind, ref_id FROM wiki_page_provenance "
+            "ORDER BY page_id, kind, ref_id"
+        ).fetchall():
+            if row["page_id"] not in page_ids:
+                issues.append(
+                    _issue(
+                        "PROVENANCE_DANGLING_PAGE",
+                        page_id=row["page_id"],
+                        kind=row["kind"],
+                        ref_id=row["ref_id"],
+                    )
+                )
+            if row["kind"] == "record" and row["ref_id"] not in records:
+                issues.append(
+                    _issue(
+                        "PROVENANCE_DANGLING_RECORD",
+                        page_id=row["page_id"],
+                        record_id=row["ref_id"],
+                    )
+                )
+            elif row["kind"] == "source" and row["ref_id"] not in sources:
+                issues.append(
+                    _issue(
+                        "PROVENANCE_DANGLING_SOURCE",
+                        page_id=row["page_id"],
+                        source_id=row["ref_id"],
+                    )
+                )
+            elif row["kind"] not in {"record", "source"}:
+                issues.append(
+                    _issue(
+                        "PROVENANCE_KIND_INVALID",
+                        page_id=row["page_id"],
+                        kind=row["kind"],
+                        ref_id=row["ref_id"],
+                    )
+                )
+    if _table_exists(conn, "record_edges"):
+        active_keys: dict[tuple[str, str, str], str] = {}
+        for row in conn.execute("SELECT * FROM record_edges ORDER BY edge_id").fetchall():
+            if row["relation_type"] not in GRAPH_EDGE_TYPES:
+                issues.append(
+                    _issue(
+                        "EDGE_TYPE_INVALID",
+                        edge_id=row["edge_id"],
+                        relation_type=row["relation_type"],
+                    )
+                )
+            if row["source_record_id"] == row["target_record_id"]:
+                issues.append(_issue("EDGE_SELF", edge_id=row["edge_id"]))
+            for field in ("source_record_id", "target_record_id"):
+                if row[field] not in records:
+                    issues.append(
+                        _issue(
+                            "EDGE_ENDPOINT_DANGLING",
+                            edge_id=row["edge_id"],
+                            endpoint=field,
+                            record_id=row[field],
+                        )
+                    )
+            if row["removed_at"] is None:
+                key = (
+                    row["source_record_id"],
+                    row["relation_type"],
+                    row["target_record_id"],
+                )
+                if key in active_keys:
+                    issues.append(
+                        _issue(
+                            "EDGE_DUPLICATE_ACTIVE",
+                            edge_id=row["edge_id"],
+                            duplicate_of=active_keys[key],
+                        )
+                    )
+                active_keys[key] = row["edge_id"]
+            elif not row["removed_by"] or not row["removed_by_runtime"]:
+                issues.append(
+                    _issue("EDGE_REMOVAL_METADATA_INVALID", edge_id=row["edge_id"])
+                )
+    else:
+        warnings.append(
+            {"code": "TYPED_EDGE_CAPABILITY_UNAVAILABLE", "required_schema": 6}
+        )
+    issues.sort(key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True))
+    return issues, warnings
+
+
+def cmd_graph_verify(args: argparse.Namespace) -> int:
+    root = project_root(args)
+    with open_classic_kb_readonly(root) as conn:
+        issues, warnings = graph_integrity_issues(conn)
+    result = _graph_result(
+        "verify",
+        {"database": ".kb/kb.db"},
+        issues,
+        warnings=warnings,
+        blind_spots=GRAPH_BLIND_SPOTS,
+    )
+    emit(result, args.json)
+    return 1 if issues else 0
+
+
+def cmd_graph_source_backfill(args: argparse.Namespace) -> int:
+    if args.limit < 1 or args.limit > 3:
+        raise GraphUsageError("--limit must be between 1 and 3")
+    root = project_root(args)
+    with open_classic_kb_readonly(root) as conn:
+        sources = conn.execute(
+            "SELECT source_id, filename, original_path, stored_path, record_ids_json "
+            "FROM sources ORDER BY source_id"
+        ).fetchall()
+        records = conn.execute(
+            "SELECT id, source FROM records "
+            "WHERE source_id IS NULL OR trim(source_id) = '' ORDER BY id"
+        ).fetchall()
+        candidates: list[dict[str, Any]] = []
+        for record in records:
+            source_text = (record["source"] or "").strip()
+            source_folded = source_text.casefold()
+            for source in sources:
+                evidence: list[str] = []
+                reverse_ids = {str(item) for item in json_list(source["record_ids_json"])}
+                if record["id"] in reverse_ids:
+                    evidence.append("source_record_ids_json")
+                if source["source_id"] in source_text:
+                    evidence.append("exact_source_id")
+                for field in ("filename", "original_path", "stored_path"):
+                    value = source[field]
+                    if not value:
+                        continue
+                    raw = str(value)
+                    name = Path(raw.replace("\\", "/")).name
+                    if source_folded == raw.casefold():
+                        evidence.append(f"exact_{field}")
+                    elif name and name.casefold() in source_folded:
+                        evidence.append(f"exact_{field}_basename")
+                if evidence:
+                    candidates.append(
+                        {
+                            "record_id": record["id"],
+                            "source_id": source["source_id"],
+                            "evidence": sorted(set(evidence)),
+                        }
+                    )
+        candidates.sort(
+            key=lambda item: (
+                -len(item["evidence"]),
+                item["record_id"],
+                item["source_id"],
+            )
+        )
+    emit(
+        _graph_result(
+            "source-backfill",
+            {"limit": args.limit, "mutation": False},
+            candidates[: args.limit],
+            blind_spots=[
+                "only exact stored identifiers and paths are candidate evidence",
+                "candidate acceptance requires a separate classic source-link command",
+                *GRAPH_BLIND_SPOTS,
+            ],
+        ),
+        args.json,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="KB/Wiki vNext side-by-side runtime")
     parser.add_argument("--project-root", default=".", help="Project root containing .kb/ and/or .kb-next/")
@@ -4079,6 +4772,39 @@ def build_parser() -> argparse.ArgumentParser:
     proposal_apply.add_argument("--json", action="store_true")
     proposal_apply.set_defaults(func=cmd_proposal_apply)
 
+    graph = sub.add_parser("graph")
+    graph_sub = graph.add_subparsers(dest="graph_command", required=True)
+
+    backlinks = graph_sub.add_parser("backlinks")
+    backlinks.add_argument("record_id")
+    backlinks.add_argument("--json", action="store_true")
+    backlinks.set_defaults(func=cmd_graph_backlinks)
+
+    lineage = graph_sub.add_parser("lineage")
+    lineage.add_argument("record_id")
+    lineage.add_argument("--json", action="store_true")
+    lineage.set_defaults(func=cmd_graph_lineage)
+
+    neighbors = graph_sub.add_parser("neighbors")
+    neighbors.add_argument("record_id")
+    neighbors.add_argument("--json", action="store_true")
+    neighbors.set_defaults(func=cmd_graph_neighbors)
+
+    source_records = graph_sub.add_parser("source-records")
+    source_records.add_argument("source_id")
+    source_records.add_argument("--json", action="store_true")
+    source_records.set_defaults(func=cmd_graph_source_records)
+
+    graph_verify = graph_sub.add_parser("verify")
+    graph_verify.add_argument("--json", action="store_true")
+    graph_verify.set_defaults(func=cmd_graph_verify)
+
+    source_backfill = graph_sub.add_parser("source-backfill")
+    source_backfill.add_argument("--limit", type=int, default=3)
+    source_backfill.add_argument("--json", action="store_true")
+    source_backfill.set_defaults(func=cmd_graph_source_backfill)
+
+
     wiki_plan = sub.add_parser("wiki-synthesis-plan")
     wiki_plan.add_argument("--topic", required=True)
     wiki_plan.add_argument("--domain", required=True)
@@ -4106,6 +4832,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         return args.func(args)
+    except GraphUsageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     except Exception as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
