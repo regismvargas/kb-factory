@@ -86,11 +86,14 @@ def _is_link_or_junction(path: Path) -> bool:
 
 
 def _mirror_safety_error(mirror: Path, release_root: Path | None = None) -> str | None:
-    expected_root = (
-        release_root
-        if release_root is not None and mirror.is_relative_to(release_root)
-        else REPO
-    )
+    expected_root = REPO
+    if release_root is not None:
+        try:
+            mirror.relative_to(release_root)
+        except ValueError:
+            pass
+        else:
+            expected_root = release_root
     if release_root is not None and expected_root == release_root and _is_link_or_junction(expected_root):
         return f"release root is a symlink or junction: {expected_root}"
     try:

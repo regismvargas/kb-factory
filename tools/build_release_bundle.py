@@ -44,11 +44,8 @@ def sha256(path: Path) -> str:
 
 
 def write_json(path: Path, payload: dict[str, object]) -> None:
-    path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 def build_bundle(
@@ -142,11 +139,8 @@ def build_bundle(
 
     checksum_paths = sorted((*copied, manifest_path, provenance_path), key=lambda path: path.name)
     checksums_path = output_dir / "SHA256SUMS.txt"
-    checksums_path.write_text(
-        "".join(f"{sha256(path)}  {path.name}\n" for path in checksum_paths),
-        encoding="ascii",
-        newline="\n",
-    )
+    with checksums_path.open("w", encoding="ascii", newline="\n") as handle:
+        handle.write("".join(f"{sha256(path)}  {path.name}\n" for path in checksum_paths))
     return tuple((*copied, manifest_path, provenance_path, checksums_path))
 
 
