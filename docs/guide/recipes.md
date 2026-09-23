@@ -13,7 +13,7 @@ tiers, supersession), see [concepts](../concepts.md).
 > Throughout, the quoted lines are things **you** say in chat. You can paste them
 > almost verbatim — swap in your own topic. The agent will confirm and, when a
 > record is created or changed, tell you its id (something like
-> `DEC-20260616-…`).
+> `ACME-KB-20260616091500-4f8a2c`, prefixed from the project's slug).
 
 ---
 
@@ -161,11 +161,13 @@ Then, in the *other* agent's session:
 It comes back, with where it came from.
 
 > **Honest scope.** Continuity is *within one project's* `.kb/`. The Cowork and
-> claude.ai export packs are **point-in-time snapshots**, not a live sync — if you
-> rely on them, regenerate them when memory changes (just ask the agent to "close
-> the session and refresh the exports"). The live, always-correct source is the
-> `.kb/` in the repo. See [agent sessions](../agent-sessions.md) for the platform
-> differences in one table.
+> claude.ai export packs on disk are already kept current: every `create`,
+> `supersede`, `resolve`, and `ingest` call refreshes them automatically. What
+> goes stale is a **copy** you uploaded into an actual Cowork or claude.ai
+> project elsewhere; re-export (just ask the agent) and re-upload it before you
+> rely on that copy again. The live, always-correct source is the `.kb/` in the
+> repo. See [agent sessions](../agent-sessions.md) for the platform differences
+> in one table.
 
 <details><summary>Under the hood / for the CLI</summary>
 
@@ -176,9 +178,12 @@ python .kb/kb.py lifecycle session-start --json   # then read .kb/memory/NOW.md
 ```
 
 Cross-agent continuity works because every runtime calls the same
-`python .kb/kb.py …` against the same SQLite file committed in the repo — there's
-no per-agent account and no service to stand up. A record filed via one agent's
-`create` is returned by another agent's `search`, with its source attribution.
+`python .kb/kb.py …` against the same SQLite file in `.kb/`. There's no
+per-agent account and no service to stand up. A linked git worktree (for
+example a per-session desktop worktree) shares the main worktree's `.kb/`
+automatically, so this holds across worktrees too. A record filed via one
+agent's `create` is returned by another agent's `search`, with its source
+attribution.
 
 </details>
 
@@ -195,8 +200,7 @@ no API key.
 > "Record a decision …" / "What did we decide about …?" / "What's still open?"
 
 Everything runs locally. The whole knowledge base is a **single file** you can
-copy, commit to git, diff in a review, or carry on a USB stick to a disconnected
-machine.
+copy, back up, or carry on a USB stick to a disconnected machine.
 
 **To back it up or move it:**
 
@@ -213,8 +217,9 @@ The agent points you at the `.kb/` folder; copying it copies the entire memory.
 <details><summary>Under the hood / for the CLI</summary>
 
 The store is `.kb/kb.db` (SQLite, with an FTS5 full-text index). No `pip install`,
-no daemon, no key. To back up: copy the `.kb/` directory, or just commit it. To
-verify integrity offline:
+no daemon, no key. To back up: copy the `.kb/` directory (a linked git worktree
+already shares the main worktree's `.kb/` automatically, so it needs no separate
+copy). To verify integrity offline:
 
 ```bash
 python .kb/kb.py doctor
@@ -325,7 +330,7 @@ To scaffold a knowledge base manually from the terminal — quickest is the
 published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.5/kb_factory-0.1.5-py3-none-any.whl
 kb-factory init                                      # run in the project root
 # no pip? copy the scaffold instead:
 # cp -r core/templates/kb /path/to/your-project/.kb && python .kb/kb.py init

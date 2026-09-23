@@ -44,7 +44,7 @@ KB Factory lives in a single `.kb/` folder. The fastest way to create it is the
 published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.5/kb_factory-0.1.5-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 ```
@@ -103,8 +103,10 @@ python .kb/kb.py create --category DECISAO --domain architecture \
   --content "Local-first, single file, no external services." --tier HOT
 ```
 
-The command prints the new record's id (for example `DEC-20260615-...`). You'll
-use that id later to supersede it.
+The command prints the new record's id, for example `ACME-KB-20260615143000-a1b2c3`
+(the `<slug>-KB-<timestamp>-<random>` form, prefixed from your project's slug;
+plain `KB-<timestamp>-<random>` if no slug is set). You'll use that id later to
+supersede it.
 
 ## 3. Find it again
 

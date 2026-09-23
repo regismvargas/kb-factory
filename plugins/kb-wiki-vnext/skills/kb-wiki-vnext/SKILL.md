@@ -26,7 +26,10 @@ release gates.
 3. Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
    artifacts only when the task needs them.
 4. Use `lookup` for deterministic targeted retrieval and `semantic-lookup`
-   when external LLM judgment is available.
+   when external LLM judgment is available; add `--domain` to scope either.
+   If `session-start` reports `wiki.status` = `classic_wiki_off`, recommend
+   re-running `activation-wizard --choice kb-wiki`; if it reports pending
+   `wiki_drafts`, point to the `vnext-wiki-drafts` command.
 5. For any planning or execution of vNext development until vNext is 100% developed,
    run `compliance-preflight` for the closest work type before
    planning, editing, review, packaging, rollout, or Track B work. Simple
@@ -40,7 +43,10 @@ release gates.
 - `session-start` and `lookup` do not write canonical `.kb/`, but they append
   operational evidence to `.kb-next/operations.jsonl`.
 - Do not write SQL or edit `.kb/kb.db` directly.
-- Do not publish vNext wiki drafts to `.kb/wiki/live`.
+- Do not publish vNext wiki drafts to `.kb/wiki/live`; the classic runtime
+  generates that directory from records.
+- New projects get their classic `.kb/` from `install-classic`, never from a
+  hand-copied template.
 - Apply durable changes only through `proposal-apply` with explicit approval or
   through the classic `.kb/kb.py` runtime.
 - For HOT overflow or memory hygiene, prefer read-only `hygiene-audit` first;

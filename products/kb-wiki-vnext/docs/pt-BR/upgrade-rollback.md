@@ -63,6 +63,61 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrade Para 0.1.10 (Runtime 0.1.8)
+
+Esta versão corrige o fluxo KB + Wiki. Projetos ativados com
+`--choice kb-wiki` na 0.1.9 ou anterior ficaram com o wiki clássico desligado;
+este upgrade liga o wiki e o mantém atualizado. Rode os passos na raiz de cada
+projeto:
+
+1. Atualize o motor vNext a partir do plugin novo:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (espere `runtime_version` `0.1.8`).
+2. Atualize o motor clássico sem tocar dados nem config:
+   `python .kb-next/runtime/kb_next.py upgrade-classic --json`.
+3. Reaplique a decisão registrada (`sponsor_decision` em
+   `.kb-next/decisions/activation-decision.json`):
+   `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-wiki --json` (ou `--choice kb-alone`).
+   Em `kb-wiki` isso liga `wiki.enabled` e `run_wiki_sync` nos eventos
+   record-filed, source-ingest, session-end e scheduled-maintenance em
+   `.kb/kb.config.json`, preserva as demais chaves, roda o primeiro `wiki-sync`
+   e registra `classic-config-sync` e `classic-wiki-sync` em
+   `.kb-next/operations.jsonl`. Edições em `.kb-next/kb-next.config.json`
+   sobrevivem ao merge.
+4. Projetos só-clássicos que já usam o wiki:
+   `python .kb/kb.py wiki-config --enable --json`.
+5. Normalize caminhos de fonte absolutos legados:
+   `python .kb/kb.py source-relink --dry-run --json` e depois sem `--dry-run`.
+6. Confira `python .kb/kb.py doctor --json`, `python .kb/kb.py wiki-check --json`
+   (`wiki_state` diferente de `off` em `kb-wiki`; `publication.held_back` mostra
+   cada página retida e o motivo) e `session-start --json` (`wiki.status`
+   igual a `aligned`).
+
+Mudanças de comportamento esperadas:
+
+- Comandos além de `init` param com mensagem explícita quando falta
+  `.kb/kb.db`; nada cria KB vazia em silêncio.
+- Em um worktree Git vinculado, o runtime clássico usa o `.kb/` do worktree
+  principal quando ele tem `kb.db`, então worktrees por sessão compartilham
+  uma KB. Use `storage.worktree_scope` igual a `local` para desligar.
+  `doctor --json` mostra a resolução e avisa quando o `kb.db` está versionado.
+- IDs novos levam o prefixo do projeto (`<SLUG>-KB-<utc>-<hex>`). Defina
+  `project.id_prefix` para trocar, ou string vazia para o formato antigo.
+- Comandos de leitura não gravam mais no `kb.db`; a contagem de acesso do `get`
+  é opcional (`tracking.record_access`).
+- `wiki.enabled: true` liga o wiki em qualquer `activation_mode`.
+- `create`, `file`, `supersede`, `resolve` e `ingest` atualizam exports e o
+  wiki habilitado; use `--no-auto-lifecycle` para pular.
+- Comandos novos do runtime: `install-classic`, `upgrade-classic`,
+  `wiki-draft-status` e `session-hint`; `lookup`, `semantic-lookup` e
+  `curation-proposal` aceitam `--domain`. O plugin ganha `vnext-wiki-drafts`.
+
+Rollback deste upgrade: restaure o plugin anterior e rode o `bootstrap` dele
+como abaixo. Volte as chaves do wiki clássico aos valores anteriores só com
+aprovação, usando `changes[].from` da última entrada `classic-config-sync`, e
+restaure o motor clássico anterior com
+`python .kb-next/runtime/kb_next.py upgrade-classic --template <previous-scaffold-dir> --json`.
+
 Para rollback, reinstale o ZIP anterior ou restaure o bundle stand-alone
 anterior. Resolva o runtime pela mesma ladder centrada no artefato e rode:
 

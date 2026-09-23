@@ -10,10 +10,10 @@ Project users, admins, and maintainers who need more than install instructions: 
 
 ## Prerequisites
 
-- KB/Wiki vNext `0.2.0-rc.2` installed through a plugin ZIP or the stand-alone bundle.
-- Component identity recorded by the maintainer: product `0.2.0-rc.2`, KB
-  Lifecycle `0.2.3`, plugin container `0.1.9`, bundled runtime `0.1.7`, Session
-  Gate `0.2.7`, and marketplace `0.3.8`.
+- KB/Wiki vNext `0.2.0-rc.3` installed through a plugin ZIP or the stand-alone bundle.
+- Component identity recorded by the maintainer: product `0.2.0-rc.3`, KB
+  Lifecycle `0.2.4`, plugin container `0.1.10`, bundled runtime `0.1.8`, Session
+  Gate `0.2.8`, and marketplace `0.3.9`.
 - A workspace with `.kb/` available as canonical memory.
 - Python available as `python`.
 - Agreement that `.kb-next/` is operational memory, proposal evidence, and draft materialization, not the canonical source of truth.
@@ -31,9 +31,10 @@ Mutation summary:
 | Command family | `.kb/` | `.kb-next/` |
 |---|---|---|
 | `bootstrap` | no change | installs only `runtime/kb_next.py` |
-| `compliance-preflight`, `source-linkage-audit`, default `semantic-hygiene` | read-only | no write |
+| `install-classic`, `upgrade-classic` | `install-classic` creates a missing `.kb/` from the classic scaffold and runs classic `init`; `upgrade-classic` replaces only `kb.py` and `runtime/*.py` | append operations evidence |
+| `compliance-preflight`, `source-linkage-audit`, default `semantic-hygiene`, `wiki-draft-status`, `session-hint` | read-only | no write |
 | `session-start`, `lookup` | read-only | append operational evidence |
-| activation, semantic, proposal, export, and wiki commands | read-only unless noted below | write governed config, manifests, proposals, drafts, exports, or operations evidence |
+| activation, semantic, proposal, export, and wiki commands | read-only, except `activation-wizard`: `--choice kb-wiki` writes the classic wiki keys in `.kb/kb.config.json` and runs the first `wiki-sync` (publishes `.kb/wiki/live`); `--disable-classic-wiki` turns the classic wiki off | write governed config, manifests, proposals, drafts, exports, or operations evidence |
 | approved `proposal-apply` | mutates only through `.kb/kb.py` | writes apply evidence and operations evidence |
 
 Use the repository layout when running from this repo:
@@ -100,7 +101,7 @@ Stop and ask for explicit approval when an action would create a proposal, write
 
 New project:
 
-1. Ensure `.kb/` exists from the bundled classic template or an existing KB Factory setup.
+1. If `.kb/` is missing, create it with the runtime `install-classic` (`--name`, `--slug`, `--domains`); an existing KB Factory `.kb/` is used as is.
 2. Run `activation-wizard`.
 3. Run `python <resolved-runtime-path> session-start --json`.
 4. Use `lookup` first; use semantic commands only when you can supply or review LLM judgment.
@@ -172,6 +173,69 @@ operations evidence.
 Risks: bootstrapping from an old or unverified artifact installs that exact
 runtime version. Confirm artifact identity and hash first.
 
+### `install-classic`
+
+Purpose: create the classic `.kb/` for a new project from the classic scaffold
+and run classic `init`.
+
+Use when: a new workspace has no `.kb/` yet.
+
+Do not use when: the project already has `.kb/kb.py`; the command then reports
+`action: exists` and changes nothing. It refuses a non-empty `.kb/` that has no
+`kb.py`.
+
+Repository example:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py --project-root ..\acme install-classic --name "Acme Project" --slug acme --domains product,engineering --json
+```
+
+Stand-alone example:
+
+```powershell
+python runtime\kb_next.py --project-root ..\acme install-classic --name "Acme Project" --slug acme --domains product,engineering --json
+```
+
+Expected output: `action: created`, the `template` used, `files_copied`, and
+`seed_imported`. The scaffold comes from `--template`, the stand-alone
+`classic-template/.kb/`, the kb-lifecycle scaffold next to the plugin or in the
+client cache, or `core/templates/kb/` in the authoring repo. `--no-seed` skips
+the scaffold seed records.
+
+Risks: `--slug` becomes the record ID prefix unless `--id-prefix` overrides it;
+ask the project owner for name, slug, and domains instead of inventing them. A
+failed classic `init` removes the copied `.kb/`.
+
+### `upgrade-classic`
+
+Purpose: refresh the classic engine (`.kb/kb.py` and `.kb/runtime/*.py`) from
+the classic scaffold.
+
+Use when: a newer kb-lifecycle scaffold or stand-alone bundle ships engine
+fixes for an existing `.kb/`.
+
+Do not use when: `.kb/` does not exist yet; use `install-classic`.
+
+Repository example:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py --project-root ..\acme upgrade-classic --json
+```
+
+Stand-alone example:
+
+```powershell
+python runtime\kb_next.py --project-root ..\acme upgrade-classic --json
+```
+
+Expected output: `action` equal to `updated` or `unchanged`, the `template`
+used, `changed_files`, `gitignore_added`, and `kb_py_sha256`. Data and config
+(`kb.db`, `memory/`, `sources/`, `wiki/`, `exports/`, `seed/`,
+`kb.config.json`) stay untouched; a missing `.kb/.gitignore` is added.
+
+Risks: the first scaffold found supplies the engine; pass `--template` when
+several versions are installed and you need a specific one.
+
 ### `activation-wizard`
 
 Purpose: choose and record whether the workspace runs as KB-only or KB + Wiki.
@@ -199,6 +263,10 @@ Run activation-wizard in short mode with kb_alone unless the sponsor has explici
 ```
 
 Expected output: activation decision JSON and `.kb-next/` bootstrap surfaces.
+With `kb-wiki`, the JSON also reports `classic_config_sync` (classic wiki keys
+written to `.kb/kb.config.json`) and `classic_wiki_sync` (first `wiki-sync`
+result, `skipped` with `--no-wiki-sync`), recorded in
+`.kb-next/operations.jsonl` as `classic-config-sync` and `classic-wiki-sync`.
 
 Risks: choosing KB + Wiki without sponsor approval can imply a broader wiki workflow than the project authorized.
 
@@ -235,6 +303,35 @@ Start with the client-specific vNext surface, or runtime `session-start`, and re
 Expected output: default reads, required `NOW.md` path, on-demand surfaces.
 
 Risks: skipping this command usually leads to broad, noisy historical loading.
+
+### `session-hint`
+
+Purpose: print the SessionStart hook text for a vNext workspace.
+
+Use when: wiring or checking a client SessionStart hook; the plugin
+SessionStart hook calls this subcommand where hooks are supported.
+
+Do not use when: you need the startup contract itself; use runtime `session-start`.
+
+Repository example:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py session-hint
+```
+
+Stand-alone example:
+
+```powershell
+python runtime\kb_next.py session-hint
+```
+
+Expected output: plain text. In a vNext workspace it points the agent to the
+vNext startup and to `.kb-next/memory/NOW.md` only; with KB + Wiki it adds the
+`wiki-draft-status` reminder for session end. Outside a vNext workspace it
+prints nothing, so the classic kb-lifecycle hook governs.
+
+Risks: it writes nothing. Hook support is client-specific; where hooks are
+disabled, start the session manually.
 
 ### `compliance-preflight`
 
@@ -604,6 +701,42 @@ Expected output: review status, warnings/blockers, and optional materialized `.k
 
 Risks: materialization is not live wiki publication; do not present it as `.kb/wiki/live`.
 
+### `wiki-draft-status`
+
+Purpose: list the wiki topics that need vNext drafts, review, or refresh.
+
+Use when: KB + Wiki is active and you need the draft backlog, for example at
+session end. The plugin command `vnext-wiki-drafts` starts from this list.
+
+Do not use when: the workspace runs KB alone; the command then returns no
+topics and a note to activate `kb-wiki`.
+
+Repository example:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py wiki-draft-status --json
+```
+
+Stand-alone example:
+
+```powershell
+python runtime\kb_next.py wiki-draft-status --json
+```
+
+Conversation prompt:
+
+```text
+Run wiki-draft-status and list the topics that need synthesis, review, or refresh. Do not write drafts yet.
+```
+
+Expected output: `wiki_enabled`, `counts`, and one entry per topic (a domain
+with at least `min_records_per_topic` active records) with `state`
+(`needs_synthesis`, `needs_review`, `stale`, or `current`) and `next_args` for
+`wiki-synthesis-plan` and `wiki-draft-review`.
+
+Risks: it writes neither `.kb/` nor `.kb-next/`; drafts still need
+`wiki-synthesis-plan` and `wiki-draft-review`.
+
 ## Practical Conversation Patterns
 
 Start thin:
@@ -651,12 +784,15 @@ includes `products/kb-wiki-vnext/docs/*/usage-guide.md`.
 
 ## Troubleshooting
 
-If a command fails because `.kb/kb.py` is missing, bootstrap `.kb/` from the
-stand-alone `classic-template/.kb/`. If the vNext runtime is missing, resolve
+If a command fails because `.kb/kb.py` is missing, create `.kb/` with the
+runtime `install-classic` command (it uses the stand-alone
+`classic-template/.kb/` or the kb-lifecycle scaffold). If the vNext runtime is missing, resolve
 the plugin or stand-alone artifact runtime and run `bootstrap`; do not ask the
 user to hand-place the file. If a command asks for judgment, prefer
 `--judgment @path` after reviewing first-pass candidates. If a workflow would
-change `.kb/kb.db`, stop unless the operation is an approved `proposal-apply`.
+change records in `.kb/kb.db`, stop unless the operation is an approved
+`proposal-apply`. The classic `wiki-sync` run by `kb-wiki` activation and
+`install-classic` also write `kb.db`; that is expected.
 
 ## Related
 

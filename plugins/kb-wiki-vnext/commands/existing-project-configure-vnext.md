@@ -35,4 +35,15 @@ record a guided activation decision. Keep `.kb/` canonical.
 6. If the user supplied guided answers, run:
    `python .kb-next/runtime/kb_next.py activation-wizard --mode guided --answers '<json>' --json`
 7. If the user only chooses a mode, run short mode with `kb-alone` or `kb-wiki`.
+   Re-running the wizard merges into the existing config: operator edits are
+   kept and only `activation`, `wiki.enabled`, `wiki.surfaces` and
+   `project.root` are rewritten (`config_merge.changed_keys` lists them).
+   - `kb-wiki` enables the classic wiki in `.kb/kb.config.json` (preserving
+     every other key), turns on lifecycle wiki sync and runs the initial
+     `wiki-sync`. Use this to repair projects activated before 0.1.10, whose
+     classic wiki stayed off.
+   - `kb-alone` keeps an already enabled classic wiki unless the user asks to
+     turn it off; then add `--disable-classic-wiki`.
+   Every classic change is recorded as `classic-config-sync` (with previous
+   values) and `classic-wiki-sync` in `.kb-next/operations.jsonl`.
 8. Do not publish `.kb-next` wiki drafts into `.kb/wiki/live`.

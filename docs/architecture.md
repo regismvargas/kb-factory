@@ -109,9 +109,13 @@ A project can carry two sibling directories:
   external-adapter scaffolding (e.g. Obsidian/static-Markdown).
 
 The boundary is a safety property: the harness in `.kb-next/` treats `.kb/` as
-the authority and never mutates it directly. Lifecycle, sync, and export events
-are recorded as a lineage in `.kb-next/operations.jsonl`, but durable knowledge
-only ever changes by creating or superseding a record in `.kb/` through the CLI.
+the authority and does not write records directly. Activating KB + Wiki is the
+one step that reaches into `.kb/` itself: it edits the wiki keys in
+`.kb/kb.config.json` and runs the first wiki-sync, publishing `.kb/wiki/live`.
+Lifecycle, sync, and export events are recorded as a lineage in
+`.kb-next/operations.jsonl`, but durable knowledge (the records) only ever
+changes by creating or superseding a record in `.kb/` through the CLI, or
+through an approved `proposal-apply`.
 
 If you only need a knowledge base, you only need `.kb/`. `.kb-next/` exists for
 projects running the fuller session/wiki/adapter lifecycle.
@@ -124,7 +128,7 @@ into two delivery copies:
 - `core/templates/kb/runtime/` — the scaffold a project vendors as `.kb/runtime/`
   (via `kb-factory init` or by copying the template).
 - `kb_factory/_scaffold/runtime/` — bundled into the pip wheel so
-  The wheel attached to GitHub release `v0.1.4` ships the engine offline. It is generated from the
+  The wheel attached to GitHub release `v0.1.5` ships the engine offline. It is generated from the
   template by `tools/sync_package_scaffold.py` and kept honest by
   `tests/test_packaging.py`.
 

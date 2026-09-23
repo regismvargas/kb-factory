@@ -10,10 +10,10 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.2` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.2`,
-  KB Lifecycle `0.2.3`, container de plugin `0.1.9`, runtime incluído `0.1.7`,
-  Session Gate `0.2.7` e marketplace `0.3.8`.
+- KB/Wiki vNext `0.2.0-rc.3` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.3`,
+  KB Lifecycle `0.2.4`, container de plugin `0.1.10`, runtime incluído `0.1.8`,
+  Session Gate `0.2.8` e marketplace `0.3.9`.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
@@ -31,9 +31,10 @@ Resumo de mutações:
 | Família de comandos | `.kb/` | `.kb-next/` |
 |---|---|---|
 | `bootstrap` | sem mudança | instala apenas `runtime/kb_next.py` |
-| `compliance-preflight`, `source-linkage-audit`, `semantic-hygiene` padrão | read-only | sem escrita |
+| `install-classic`, `upgrade-classic` | `install-classic` cria a `.kb/` ausente a partir do scaffold clássico e roda o `init` clássico; `upgrade-classic` substitui apenas `kb.py` e `runtime/*.py` | append de evidência operacional |
+| `compliance-preflight`, `source-linkage-audit`, `semantic-hygiene` padrão, `wiki-draft-status`, `session-hint` | read-only | sem escrita |
 | `session-start`, `lookup` | read-only | append de evidência operacional |
-| ativação, semântica, propostas, export e wiki | read-only, salvo indicação abaixo | escreve config, manifests, propostas, drafts, exports ou evidência operacional governada |
+| ativação, semântica, propostas, export e wiki | read-only, exceto `activation-wizard`: `--choice kb-wiki` grava as chaves da wiki clássica em `.kb/kb.config.json` e roda o primeiro `wiki-sync` (publica `.kb/wiki/live`); `--disable-classic-wiki` desliga a wiki clássica | escreve config, manifests, propostas, drafts, exports ou evidência operacional governada |
 | `proposal-apply` aprovado | muta apenas por `.kb/kb.py` | escreve evidência de apply e operações |
 
 Use o layout do repositório ao rodar deste repo:
@@ -100,7 +101,7 @@ Pare e peça aprovação explícita quando a ação criar proposta, escrever dra
 
 Projeto novo:
 
-1. Garanta que `.kb/` existe a partir do template clássico do bundle ou de um workspace KB Factory existente.
+1. Se a pasta `.kb/` estiver ausente, crie-a com o `install-classic` do runtime (`--name`, `--slug`, `--domains`); uma `.kb/` KB Factory existente é usada como está.
 2. Rode `activation-wizard`.
 3. Rode `python <caminho-do-runtime> session-start --json`.
 4. Use `lookup` primeiro; use comandos semânticos apenas quando houver julgamento LLM fornecido ou revisável.
@@ -171,6 +172,69 @@ evidência operacional.
 Riscos: bootstrap a partir de artefato antigo ou não verificado instala aquela
 versão exata. Confirme identidade e hash do artefato antes.
 
+### `install-classic`
+
+Propósito: criar a `.kb/` clássica de um projeto novo a partir do scaffold
+clássico e rodar o `init` clássico.
+
+Use quando: um workspace novo ainda não tem `.kb/`.
+
+Não use quando: o projeto já tem `.kb/kb.py`; o comando então informa
+`action: exists` e não muda nada. Ele recusa uma `.kb/` não vazia que não tenha
+`kb.py`.
+
+Exemplo no repositório:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py --project-root ..\acme install-classic --name "Acme Project" --slug acme --domains product,engineering --json
+```
+
+Exemplo stand-alone:
+
+```powershell
+python runtime\kb_next.py --project-root ..\acme install-classic --name "Acme Project" --slug acme --domains product,engineering --json
+```
+
+Saída esperada: `action: created`, o `template` usado, `files_copied` e
+`seed_imported`. O scaffold vem de `--template`, do `classic-template/.kb/` do
+stand-alone, do scaffold do kb-lifecycle ao lado do plugin ou no cache do
+cliente, ou de `core/templates/kb/` no repo de autoria. `--no-seed` pula os
+registros seed do scaffold.
+
+Riscos: `--slug` vira o prefixo dos IDs de registro, salvo `--id-prefix`; peça
+ao dono do projeto nome, slug e domínios em vez de inventá-los. Um `init`
+clássico que falha remove a `.kb/` copiada.
+
+### `upgrade-classic`
+
+Propósito: atualizar o engine clássico (`.kb/kb.py` e `.kb/runtime/*.py`) a
+partir do scaffold clássico.
+
+Use quando: um scaffold kb-lifecycle ou bundle stand-alone mais novo traz
+correções de engine para uma `.kb/` existente.
+
+Não use quando: `.kb/` ainda não existe; use `install-classic`.
+
+Exemplo no repositório:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py --project-root ..\acme upgrade-classic --json
+```
+
+Exemplo stand-alone:
+
+```powershell
+python runtime\kb_next.py --project-root ..\acme upgrade-classic --json
+```
+
+Saída esperada: `action` igual a `updated` ou `unchanged`, o `template` usado,
+`changed_files`, `gitignore_added` e `kb_py_sha256`. Dados e config (`kb.db`,
+`memory/`, `sources/`, `wiki/`, `exports/`, `seed/`, `kb.config.json`) ficam
+intactos; um `.kb/.gitignore` ausente é adicionado.
+
+Riscos: o primeiro scaffold encontrado fornece o engine; passe `--template`
+quando houver várias versões instaladas e você precisar de uma específica.
+
 ### `activation-wizard`
 
 Propósito: escolher e registrar se o workspace opera como KB-only ou KB + Wiki.
@@ -198,6 +262,10 @@ Rode activation-wizard em modo short com kb_alone, exceto se o sponsor aprovou e
 ```
 
 Saída esperada: JSON de decisão de ativação e superfícies bootstrap em `.kb-next/`.
+Com `kb-wiki`, o JSON também informa `classic_config_sync` (chaves da wiki
+clássica gravadas em `.kb/kb.config.json`) e `classic_wiki_sync` (resultado do
+primeiro `wiki-sync`, `skipped` com `--no-wiki-sync`), registrados em
+`.kb-next/operations.jsonl` como `classic-config-sync` e `classic-wiki-sync`.
 
 Riscos: escolher KB + Wiki sem aprovação pode implicar um fluxo de wiki mais amplo do que o projeto autorizou.
 
@@ -234,6 +302,35 @@ Comece com a superfície vNext específica do cliente ou com o runtime `session-
 Saída esperada: leituras padrão, caminho obrigatório de `NOW.md` e superfícies sob demanda.
 
 Riscos: pular este comando costuma levar a carregamento histórico amplo e ruidoso.
+
+### `session-hint`
+
+Propósito: imprimir o texto do hook SessionStart para um workspace vNext.
+
+Use quando: configurar ou conferir um hook SessionStart do cliente; o hook
+SessionStart do plugin chama este subcomando onde hooks são suportados.
+
+Não use quando: você precisa do contrato de startup em si; use o runtime `session-start`.
+
+Exemplo no repositório:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py session-hint
+```
+
+Exemplo stand-alone:
+
+```powershell
+python runtime\kb_next.py session-hint
+```
+
+Saída esperada: texto simples. Em workspace vNext ele aponta o agente para o
+startup vNext e apenas para `.kb-next/memory/NOW.md`; com KB + Wiki acrescenta
+o lembrete de `wiki-draft-status` para o fim da sessão. Fora de workspace vNext
+não imprime nada, e o hook clássico do kb-lifecycle governa.
+
+Riscos: não escreve nada. O suporte a hooks depende do cliente; onde hooks
+estiverem desativados, inicie a sessão manualmente.
 
 ### `compliance-preflight`
 
@@ -604,6 +701,42 @@ Saída esperada: status da revisão, warnings/blockers e caminhos opcionais mate
 
 Riscos: materialização não é publicação live; não apresente como `.kb/wiki/live`.
 
+### `wiki-draft-status`
+
+Propósito: listar os tópicos de wiki que precisam de drafts vNext, revisão ou atualização.
+
+Use quando: KB + Wiki está ativo e você precisa do backlog de drafts, por
+exemplo no fim da sessão. O comando de plugin `vnext-wiki-drafts` parte desta lista.
+
+Não use quando: o workspace opera só com KB; o comando então não retorna
+tópicos e traz uma nota para ativar `kb-wiki`.
+
+Exemplo no repositório:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py wiki-draft-status --json
+```
+
+Exemplo stand-alone:
+
+```powershell
+python runtime\kb_next.py wiki-draft-status --json
+```
+
+Prompt conversacional:
+
+```text
+Rode wiki-draft-status e liste os tópicos que precisam de síntese, revisão ou atualização. Ainda não escreva drafts.
+```
+
+Saída esperada: `wiki_enabled`, `counts` e uma entrada por tópico (um domínio
+com pelo menos `min_records_per_topic` registros ativos) com `state`
+(`needs_synthesis`, `needs_review`, `stale` ou `current`) e `next_args` para
+`wiki-synthesis-plan` e `wiki-draft-review`.
+
+Riscos: não escreve em `.kb/` nem em `.kb-next/`; drafts ainda exigem
+`wiki-synthesis-plan` e `wiki-draft-review`.
+
 ## Practical Conversation Patterns / Padrões Práticos De Conversa
 
 Começar fino:
@@ -651,13 +784,16 @@ stand-alone inclui `products/kb-wiki-vnext/docs/*/usage-guide.md`.
 
 ## Troubleshooting / Solução De Problemas
 
-Se um comando falhar porque `.kb/kb.py` está ausente, faça bootstrap de `.kb/`
-pelo `classic-template/.kb/` do stand-alone. Se o runtime vNext estiver ausente,
+Se um comando falhar porque `.kb/kb.py` está ausente, crie `.kb/` com o
+comando `install-classic` do runtime (ele usa o `classic-template/.kb/` do
+stand-alone ou o scaffold do kb-lifecycle). Se o runtime vNext estiver ausente,
 resolva o runtime do plugin ou artefato stand-alone e rode `bootstrap`; não peça
 ao usuário para posicionar o arquivo manualmente. Se um comando pedir
 julgamento, prefira `--judgment @path` depois de revisar os candidatos da
-primeira passagem. Se um fluxo puder alterar `.kb/kb.db`, pare, exceto quando a
-operação for um `proposal-apply` aprovado.
+primeira passagem. Se um fluxo puder alterar registros em `.kb/kb.db`, pare,
+exceto quando a operação for um `proposal-apply` aprovado. O `wiki-sync`
+clássico rodado pela ativação `kb-wiki` e o `install-classic` também escrevem
+em `kb.db`; isso é esperado.
 
 ## Related / Relacionados
 

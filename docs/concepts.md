@@ -197,7 +197,10 @@ Putting it together, a normal session looks like:
 3. **File new knowledge** as typed records (`create`), each in its category.
 4. **Supersede** when meaning changes; **update** for routing only; **resolve**
    open items.
-5. **Regenerate** the thin surfaces (`export`) so the next session starts clean.
+5. **The thin surfaces stay current on their own.** Every `create`, `supersede`,
+   `resolve`, and `ingest` call refreshes `NOW.md` and friends on disk; run
+   `export` only when you need to refresh a copy uploaded to Cowork or
+   claude.ai.
 
 > **Advanced.** Beyond this core loop, the CLI exposes governance and
 > maintenance operations — `ingest` and `source-verify` for provenance, the

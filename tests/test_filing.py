@@ -78,7 +78,8 @@ class TestFileCommand:
             "--title", "Key insight on market dynamics",
             "--content", "The LATAM market shows strong growth potential due to demographic shifts.",
         )
-        assert record["id"].startswith("KB-")
+        # Generated IDs carry the project prefix derived from project.slug.
+        assert record["id"].startswith("TEST-KB-KB-")
         assert record["category"] == "APRENDIZADO"
         assert record["domain"] == "test_domain"
         assert "filed-answer" in record["tags"]

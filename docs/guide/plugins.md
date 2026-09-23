@@ -55,7 +55,10 @@ The skill is named `kb-wiki-maintainer`. It maps your phrasing to CLI calls like
 `python .kb/kb.py lifecycle session-start --json`, `… ingest <path>`,
 `… create --category DECISAO …`, `… search "<query>"`, and `… wiki-sync`.
 In Claude Code, the SessionStart hook injects a short reminder to read
-`.kb/memory/NOW.md`. There are **no slash commands** — everything is skill- or
+`.kb/memory/NOW.md`. If the project has also activated vNext (a
+`.kb-next/kb-next.config.json` is present), the hook defers to vNext instead
+and does not ask for `.kb/memory/NOW.md`; vNext reads `.kb-next/memory/NOW.md`
+by default. There are **no slash commands** — everything is skill- or
 hook-driven. Runs on Claude Code, Cowork, and Codex.
 
 </details>
@@ -103,12 +106,16 @@ pulls more in on demand, which keeps each conversation cheap. When the agent
 wants to change durable memory, it *proposes* the change first; nothing touches
 your canonical knowledge base until you approve.
 
-**What you'll notice in chat — 12 slash commands**, grouped by what you're doing:
+**What you'll notice in chat — 13 slash commands**, grouped by what you're doing:
 
 *Running a thin session*
 - `/vnext-session-start` — start a session reading only `NOW.md` by default.
 - `/vnext-session-end` — close the session, recording useful evidence; durable
   changes go through the reviewed apply step rather than being written silently.
+
+*Drafting wiki pages*
+- `/vnext-wiki-drafts`: draft, review, and materialize the vNext wiki pages
+  that `session-start` or `/vnext-session-end` flagged as pending.
 
 *Setting up a brand-new project*
 - `/new-project-wizard` — the guided path: bootstraps a fresh workspace, routes

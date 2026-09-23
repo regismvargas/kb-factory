@@ -20,7 +20,7 @@ from pathlib import Path
 from validate_vnext_product import validate
 
 
-DEFAULT_VERSION = "0.2.0-rc.2"
+DEFAULT_VERSION = "0.2.0-rc.3"
 PRODUCT_DIR = Path("products/kb-wiki-vnext")
 DEFAULT_OUTPUT_DIR = Path("dist/vnext")
 
@@ -53,7 +53,14 @@ def repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
 
 
-def _is_forbidden_source(path: Path) -> bool:
+def _is_forbidden_source(path: Path, root: Path | None = None) -> bool:
+    # Relative to the tree being bundled, so a checkout that lives under a
+    # `worktrees/` directory (desktop sessions) does not exclude itself.
+    if root is not None:
+        try:
+            path = path.relative_to(root)
+        except ValueError:
+            pass
     parts = set(path.parts)
     if parts & FORBIDDEN_PARTS:
         return True
@@ -61,7 +68,7 @@ def _is_forbidden_source(path: Path) -> bool:
         return True
     if path.suffix in FORBIDDEN_SUFFIXES:
         return True
-    normalized = path.as_posix()
+    normalized = "/" + path.as_posix()
     if "/.kb/wiki/live/" in normalized:
         return True
     if "/state/runs/" in normalized:
@@ -87,7 +94,7 @@ def _iter_tree_files(source: Path) -> list[Path]:
     for path in sorted(source.rglob("*")):
         if _is_reparse_point(path):
             continue
-        if path.is_file() and not _is_forbidden_source(path):
+        if path.is_file() and not _is_forbidden_source(path, source):
             files.append(path)
     return files
 

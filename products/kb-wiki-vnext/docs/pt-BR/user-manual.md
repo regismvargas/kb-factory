@@ -11,21 +11,21 @@ Usuários de projeto que recebem o ZIP de plugin ou o bundle stand-alone de um m
 ## Prerequisites / Pré-requisitos
 
 - Python disponível como `python`.
-- Workspace com pasta `.kb/` criada pelo template clássico do bundle ou por um workspace KB Factory existente.
+- Workspace com pasta `.kb/` criada pelo `install-classic` do runtime ou por um workspace KB Factory existente.
 - Um canal instalado: plugin Codex, plugin Claude Code, plugin Claude Cowork ou bundle stand-alone.
 
 ## Passos
 
 Escolha o pacote certo para o cliente:
 
-- Codex: `kb-wiki-vnext-plugin-0.1.9.zip`
-- Claude Code: `kb-wiki-vnext-claude-plugin-0.1.9.zip`
-- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.1.9.zip`
-- Stand-alone: `kb-wiki-vnext-0.2.0-rc.2-standalone.zip`
+- Codex: `kb-wiki-vnext-plugin-0.1.10.zip`
+- Claude Code: `kb-wiki-vnext-claude-plugin-0.1.10.zip`
+- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.1.10.zip`
+- Stand-alone: `kb-wiki-vnext-0.2.0-rc.3-standalone.zip`
 
 Produto, KB Lifecycle, container de plugin, runtime incluído, Session Gate e
-marketplace têm linhas de versão separadas: `0.2.0-rc.2`, `0.2.3`, `0.1.9`,
-`0.1.7`, `0.2.7` e `0.3.8`. Registre todos os valores aplicáveis durante
+marketplace têm linhas de versão separadas: `0.2.0-rc.3`, `0.2.4`, `0.1.10`,
+`0.1.8`, `0.2.8` e `0.3.9`. Registre todos os valores aplicáveis durante
 instalação ou upgrade.
 
 Em instalação por plugin, use `existing-project-activate-vnext` para resolver o
@@ -81,8 +81,9 @@ a `.kb-next/operations.jsonl`, mas não pode alterar `.kb/` canônica nem public
 
 ## Troubleshooting / Solução De Problemas
 
-Se o runtime não encontrar `.kb/kb.py`, copie `classic-template/.kb/` do bundle
-stand-alone para um projeto novo como `.kb/`; nunca sobrescreva `.kb/` existente.
+Se o runtime não encontrar `.kb/kb.py`, rode o comando `install-classic` dele
+no projeto novo; ele copia o `classic-template/.kb/` do stand-alone (ou o
+scaffold do kb-lifecycle) e nunca sobrescreve `.kb/` existente.
 Se `.kb-next/runtime/kb_next.py` estiver ausente, faça bootstrap a partir do
 engine do plugin instalado ou do stand-alone. No Cowork, use a ação namespaced
 exposta pela UI do plugin, invoque o skill em linguagem natural ou rode o

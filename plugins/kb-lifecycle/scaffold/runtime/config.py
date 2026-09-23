@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import copy
 import json
+import uuid
 
 from .constants import LIFECYCLE_DEFAULTS
 from .paths import CONFIG_PATH
@@ -29,5 +31,17 @@ def load_config() -> dict:
             "hot_review_days": 7,
             "cold_after_days": 90,
         },
-        "lifecycle": LIFECYCLE_DEFAULTS,
+        "lifecycle": copy.deepcopy(LIFECYCLE_DEFAULTS),
     }
+
+
+def write_config(config: dict) -> None:
+    """Atomically replace kb.config.json, preserving key order and every key."""
+    tmp = CONFIG_PATH.with_name(f".{CONFIG_PATH.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(config, indent=2, ensure_ascii=False) + "\n")
+        tmp.replace(CONFIG_PATH)
+    finally:
+        if tmp.exists():
+            tmp.unlink()

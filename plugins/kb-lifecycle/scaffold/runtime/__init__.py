@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from .cli import LIFECYCLE_EVENTS, build_parser
-from .config import load_config
+from .config import load_config, write_config
 from .constants import CATEGORIES, LIFECYCLE_DEFAULTS, STATUSES, TIERS
-from .db import connect
+from .db import connect, connect_readonly
 from .doctor import cmd_doctor, get_doctor_checks
 from .exports import (
     build_export_artifacts,
@@ -32,7 +32,16 @@ from .maintenance import (
     prune_snapshots,
 )
 from .oplog import cmd_oplog, get_recent_operations, log_operation
-from .paths import CONFIG_PATH, DB_PATH, KB_ROOT, ensure_dirs, memory_path
+from .paths import (
+    CONFIG_PATH,
+    DB_PATH,
+    KB_ROOT,
+    KB_ROOT_INFO,
+    ensure_dirs,
+    linked_worktree_main_root,
+    memory_path,
+    resolve_kb_root,
+)
 from .filing_policy import evaluate_filing
 from .records import (
     base_record_from_args,
@@ -50,6 +59,9 @@ from .records import (
     cmd_update,
     fetch_filtered,
     insert_record,
+    new_record_id,
+    record_id_prefix,
+    render_placeholders,
     validate_record,
 )
 from .schema import ensure_schema
@@ -59,13 +71,16 @@ from .sources import (
     cmd_ingest,
     cmd_source_content,
     cmd_source_info,
+    cmd_source_relink,
     cmd_source_status,
     cmd_source_update,
     cmd_source_verify,
     cmd_sources,
     cmd_summarize_status,
     compute_file_hash,
+    portable_path,
     register_source,
+    resolve_stored_path,
     source_exists,
     source_exists_by_hash,
     update_source_record_ids,
@@ -73,12 +88,18 @@ from .sources import (
 )
 from .wiki import (
     WIKI_DEFAULTS,
+    WIKI_SYNC_EVENTS,
+    apply_wiki_enabled,
     cmd_wiki_check,
+    cmd_wiki_config,
     compute_soft_signals,
     compute_wiki_hard_signals,
     compute_wiki_state,
     get_wiki_check_result,
     get_wiki_config,
+    preview_publication,
+    resolve_wiki_state,
+    wiki_sync_allowed,
 )
 from .wiki_candidates import (
     cmd_wiki_candidates,
@@ -111,6 +132,7 @@ __all__ = [
     "CONFIG_PATH",
     "DB_PATH",
     "KB_ROOT",
+    "KB_ROOT_INFO",
     "LIFECYCLE_DEFAULTS",
     "LIFECYCLE_EVENTS",
     "STATUSES",
@@ -118,8 +140,10 @@ __all__ = [
     "WIKI_CITATION_FENCE",
     "WIKI_CITATION_MARKER",
     "WIKI_DEFAULTS",
+    "WIKI_SYNC_EVENTS",
     "apply_cold_demotions",
     "apply_stale_hot_demotions",
+    "apply_wiki_enabled",
     "base_record_from_args",
     "build_audit_tiers_result",
     "build_consolidate_result",
@@ -139,9 +163,9 @@ __all__ = [
     "cmd_create",
     "cmd_doctor",
     "cmd_export",
+    "cmd_get",
     "cmd_hygiene_audit",
     "cmd_ingest",
-    "cmd_get",
     "cmd_init",
     "cmd_lifecycle",
     "cmd_list",
@@ -152,16 +176,18 @@ __all__ = [
     "cmd_search",
     "cmd_source_content",
     "cmd_source_info",
+    "cmd_source_relink",
     "cmd_source_status",
     "cmd_source_update",
     "cmd_source_verify",
     "cmd_sources",
-    "cmd_summarize_status",
     "cmd_stats",
+    "cmd_summarize_status",
     "cmd_supersede",
     "cmd_update",
     "cmd_wiki_candidates",
     "cmd_wiki_check",
+    "cmd_wiki_config",
     "cmd_wiki_lint",
     "cmd_wiki_pages",
     "cmd_wiki_sync",
@@ -173,6 +199,7 @@ __all__ = [
     "compute_wiki_hard_signals",
     "compute_wiki_state",
     "connect",
+    "connect_readonly",
     "ensure_dirs",
     "ensure_schema",
     "evaluate_filing",
@@ -181,27 +208,36 @@ __all__ = [
     "get_db_wiki_checks",
     "get_doctor_checks",
     "get_duplicate_groups",
-    "get_recent_operations",
     "get_lifecycle_config",
+    "get_recent_operations",
     "get_wiki_check_result",
     "get_wiki_config",
     "get_wiki_lint_result",
     "insert_record",
     "is_managed_wiki_file",
+    "linked_worktree_main_root",
     "list_wiki_pages",
     "load_config",
     "log_action",
     "log_operation",
     "mark_stale_pages",
     "memory_path",
+    "new_record_id",
     "now_iso",
     "parse_citation_block",
     "persist_page",
+    "portable_path",
+    "preview_publication",
     "prune_snapshots",
     "reconcile_wiki_pages",
     "record_exists",
+    "record_id_prefix",
     "refresh_exports",
     "register_source",
+    "render_placeholders",
+    "resolve_kb_root",
+    "resolve_stored_path",
+    "resolve_wiki_state",
     "row_to_dict",
     "source_exists",
     "source_exists_by_hash",
@@ -210,5 +246,7 @@ __all__ = [
     "upsert_fts",
     "validate_record",
     "verify_sources",
+    "wiki_sync_allowed",
+    "write_config",
     "write_text",
 ]

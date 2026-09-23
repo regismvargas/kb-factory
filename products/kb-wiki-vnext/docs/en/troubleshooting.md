@@ -37,7 +37,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirm product package:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip
 ```
 
 For runtime examples and safe conversation prompts, see the [detailed usage guide](usage-guide.md).
@@ -53,8 +53,12 @@ not. Session Gate installs should expose `gate-session-start` and route
 
 ## Troubleshooting
 
-If `.kb/kb.py` is missing in a new project, bootstrap from
-`classic-template/.kb/`; never overwrite an existing `.kb/`. If plugin install
+If `.kb/kb.py` is missing in a new project, run the runtime
+`install-classic --name <title> --slug <slug> --domains <a,b>`, which finds
+the stand-alone `classic-template/.kb/` or the kb-lifecycle scaffold; it never
+overwrites an existing `.kb/`. If `wiki-check` reports `off` after a KB + Wiki
+activation, re-run `activation-wizard --choice kb-wiki` to sync
+`.kb/kb.config.json`. If plugin install
 fails, confirm the package matches the platform, contains `runtime/kb_next.py`,
 and omits generic `session-start` / `session-end` command files. If bootstrap
 returns `action: self` during upgrade or rollback, resolve the replacement or

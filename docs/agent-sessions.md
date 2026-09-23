@@ -18,7 +18,8 @@ vice-versa.
 Once a plugin is installed (see [installation.md](installation.md)):
 
 - **Slash commands** appear in the `/` menu — type `/` to see them.
-  `kb-wiki-vnext` adds 12 (`/vnext-session-start`, `/new-project-wizard`, …);
+  `kb-wiki-vnext` adds 13 (`/vnext-session-start`, `/new-project-wizard`,
+  `/vnext-wiki-drafts`, …);
   `session-gate` adds 2 (`/gate-session-start`, `/gate-session-end`);
   `kb-lifecycle` adds none — it works through its skill.
 - **An auto-triggering skill.** `kb-lifecycle`'s `kb-wiki-maintainer` skill
@@ -27,8 +28,11 @@ Once a plugin is installed (see [installation.md](installation.md)):
   KB" — or simply when the workspace has a `.kb/`.
 - **(Claude Code only) a session-start hook.** When you open a project that has
   a `.kb/`, `kb-lifecycle` injects a short reminder so the agent loads
-  `.kb/memory/NOW.md` *before* assuming anything. Cowork doesn't do this
-  automatically — that's what `session-gate` is for.
+  `.kb/memory/NOW.md` *before* assuming anything. If the project has also
+  activated vNext (a `.kb-next/kb-next.config.json` is present), the hook
+  defers to vNext instead: it does not ask the agent to read `.kb/memory/NOW.md`,
+  and the agent reads `.kb-next/memory/NOW.md` by default. Cowork doesn't do
+  this automatically. That's what `session-gate` is for.
 
 ## First session — in Claude Code
 

@@ -2,7 +2,7 @@
 
 Cross-tool distribution package for KB Factory memory lifecycle and derived wiki workflows.
 
-Release-candidate version: `0.2.3`.
+Release-candidate version: `0.2.4`.
 
 ## Purpose
 
@@ -35,7 +35,7 @@ The plugin is intentionally thin. It does not own durable memory. It points the 
 
 The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
 use the Plugins settings and the public `regismvargas/kb-factory` marketplace,
-or upload `kb-lifecycle-plugin-0.2.3.zip` when file-based installation is
+or upload `kb-lifecycle-plugin-0.2.4.zip` when file-based installation is
 available. CLI-only users can copy `skills/kb-wiki-maintainer/` to
 `~/.codex/skills/kb-wiki-maintainer/`.
 
@@ -74,10 +74,10 @@ This builds:
 
 By default the artifacts are saved under:
 
-- `dist/agent-packages/kb-lifecycle-plugin-0.2.3.zip`
-- `dist/agent-packages/kb-lifecycle-claude-plugin-0.2.3.zip`
-- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.2.3.zip`
-- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.3.zip`
+- `dist/agent-packages/kb-lifecycle-plugin-0.2.4.zip`
+- `dist/agent-packages/kb-lifecycle-claude-plugin-0.2.4.zip`
+- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.2.4.zip`
+- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.4.zip`
 
 The version in `.claude-plugin/plugin.json` is the package authority. Rebuilds
 at the same version refresh source-controlled artifacts but do not force an

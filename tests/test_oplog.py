@@ -103,9 +103,17 @@ class TestSchemaV4:
 
 
 class TestLifecycleLogging:
+    def test_read_only_session_start_writes_no_operation(self, oplog_kb):
+        """A plain session-start only reads, so kb.db stays untouched."""
+        count_before = _op_count(oplog_kb, "lifecycle")
+        db_before = (oplog_kb / "kb.db").read_bytes()
+        _run(oplog_kb, "lifecycle", "session-start")
+        assert _op_count(oplog_kb, "lifecycle") == count_before
+        assert (oplog_kb / "kb.db").read_bytes() == db_before
+
     def test_lifecycle_creates_operation_entry(self, oplog_kb):
         count_before = _op_count(oplog_kb, "lifecycle")
-        _run(oplog_kb, "lifecycle", "session-start")
+        _run(oplog_kb, "lifecycle", "session-end")
         count_after = _op_count(oplog_kb, "lifecycle")
         assert count_after == count_before + 1
 
@@ -114,10 +122,10 @@ class TestLifecycleLogging:
         assert len(ops) >= 1
         op = ops[0]
         assert op["category"] == "lifecycle"
-        assert op["event"] == "session-start"
+        assert op["event"] == "session-end"
         assert "actions_run" in op["details"]
         assert "counts" in op["details"]
-        assert op["summary"].startswith("Lifecycle session-start:")
+        assert op["summary"].startswith("Lifecycle session-end:")
 
     def test_lifecycle_summary_is_short(self, oplog_kb):
         ops = _run(oplog_kb, "oplog", "--category", "lifecycle", "--limit", "1")
@@ -208,10 +216,24 @@ class TestNegativeChecks:
         _run(oplog_kb, "create",
             "--category", "FATO", "--domain", "test_domain",
             "--title", "Oplog negative test", "--content", "Should not log operation",
-            "--source", "test",
+            "--source", "test", "--no-auto-lifecycle",
         )
         count_after = _op_count(oplog_kb)
         assert count_after == count_before, "Record CRUD must NOT create operation entry"
+
+    def test_record_crud_logs_only_the_derived_refresh(self, oplog_kb):
+        """create fires record-filed; only that lifecycle run is logged."""
+        count_before = _op_count(oplog_kb)
+        lifecycle_before = _op_count(oplog_kb, "lifecycle")
+        _run(oplog_kb, "create",
+            "--category", "FATO", "--domain", "test_domain",
+            "--title", "Oplog lifecycle test", "--content", "Refreshes derived surfaces",
+            "--source", "test",
+        )
+        assert _op_count(oplog_kb) - count_before == 1
+        assert _op_count(oplog_kb, "lifecycle") - lifecycle_before == 1
+        ops = _run(oplog_kb, "oplog", "--category", "lifecycle", "--limit", "1")
+        assert ops[0]["event"] == "record-filed"
 
     def test_ingest_still_register_only(self, oplog_kb):
         records_before = _run_raw(oplog_kb, "SELECT COUNT(*) AS n FROM records")[0]["n"]

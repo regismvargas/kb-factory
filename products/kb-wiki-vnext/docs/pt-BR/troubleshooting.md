@@ -36,7 +36,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirmar pacote de produto:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip
 ```
 
 Para exemplos de runtime e prompts seguros de conversa, veja o [guia de uso detalhado](usage-guide.md).
@@ -51,8 +51,12 @@ Gate deve rotear `.kb-next/` antes do `.kb/` clássico.
 
 ## Troubleshooting / Solução De Problemas
 
-Se `.kb/kb.py` estiver ausente em projeto novo, faça bootstrap com
-`classic-template/.kb/`; nunca sobrescreva `.kb/` existente. Se a instalação do
+Se `.kb/kb.py` estiver ausente em projeto novo, rode `install-classic
+--name <título> --slug <slug> --domains <a,b>` do runtime, que encontra o
+`classic-template/.kb/` do stand-alone ou o scaffold do kb-lifecycle; ele nunca
+sobrescreve `.kb/` existente. Se o `wiki-check` mostrar `off` depois de ativar
+KB + Wiki, rode de novo `activation-wizard --choice kb-wiki` para sincronizar
+`.kb/kb.config.json`. Se a instalação do
 plugin falhar, confira se o pacote corresponde à plataforma, contém
 `runtime/kb_next.py` e omite arquivos genéricos `session-start` / `session-end`.
 Se o bootstrap retornar `action: self` durante upgrade ou rollback, resolva o

@@ -7,6 +7,39 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-23
+
+### Fixed
+- KB + Wiki now has a flow: `activation-wizard --choice kb-wiki` enables the
+  classic wiki in `.kb/kb.config.json` (keeping every other key), turns on
+  lifecycle wiki sync, runs the first `wiki-sync`, and records the steps in
+  `.kb-next/operations.jsonl`. Re-activation merges instead of rewriting the
+  vNext config.
+- The scaffold enables `run_wiki_sync` on record-filed, source-ingest,
+  session-end and scheduled-maintenance, and the shipped `kb.py` fires those
+  lifecycle hooks after `create`, `file`, `supersede`, `resolve`, `ingest` and
+  `init --seed`; pages publish without a manual `wiki-sync`.
+- `wiki.enabled: true` means on in every activation mode; `wiki-check` reports
+  publishable and held-back pages with reasons.
+- Commands other than `init` fail closed when `.kb/kb.db` is missing; a linked
+  Git worktree uses the main worktree KB; read commands never write `kb.db`;
+  source paths are stored KB-relative (`source-relink` migrates older KBs).
+- Plugin commands cite only paths that exist; SessionStart hooks no longer
+  give conflicting default reads; `lookup` accepts `--domain`.
+- `kb-factory vnext-init` defaults to `kb-alone`, like the plugin commands.
+
+### Added
+- `kb.py init --name --slug --domains --id-prefix`, project-prefixed record
+  IDs, `kb.py wiki-config`, `kb.py source-relink`.
+- vNext runtime `install-classic`, `upgrade-classic`, `wiki-draft-status`,
+  `session-hint`; plugin command `vnext-wiki-drafts`.
+- `kb-factory init --name/--slug/--domains/--id-prefix/--no-seed`.
+
+### Changed
+- Release lines: Python package `0.1.5`, catalog `0.3.9`, kb-lifecycle
+  `0.2.4`, kb-wiki-vnext `0.1.10`, session-gate `0.2.8`, vNext runtime `0.1.8`,
+  stand-alone product `0.2.0-rc.3`.
+
 ## [0.1.4] - 2026-07-19
 
 ### Added

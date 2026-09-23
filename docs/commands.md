@@ -41,7 +41,7 @@ tiers** are `HOT` (always surfaced at session start), `WARM` (the default), and
 `COLD` (archived). Use [`update`](#update) only for *routing metadata* (tier,
 tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
-> **Getting the CLI:** install the `v0.1.4` GitHub release wheel (see
+> **Getting the CLI:** install the `v0.1.5` GitHub release wheel (see
 > [installation.md](installation.md)), then `kb-factory init` scaffolds
 > a project's `.kb/` (and `kb-factory update` refreshes it later). After that, the
 > commands on this page run as `python .kb/kb.py <command>` from the project root.
@@ -59,13 +59,14 @@ CLI — but they run exactly the CLI verbs documented on this page. See
 - **kb-lifecycle** — no slash commands; its `kb-wiki-maintainer` skill auto-runs
   session-start, `ingest`, `create`/`file`, `search`, and `wiki-sync` when you
   ask in plain language.
-- **kb-wiki-vnext** — 12 commands:
+- **kb-wiki-vnext** — 13 commands:
 
   | Command(s) | Does |
   |---|---|
   | `/vnext-session-start`, `/vnext-session-end` | start a thin session / close it |
   | `/new-project-wizard`, `/new-project-init-kb-alone`, `/new-project-init-kb-wiki`, `/new-project-verify-install` | bootstrap a new project |
   | `/existing-project-diagnose`, `/existing-project-activate-vnext`, `/existing-project-configure-vnext`, `/existing-project-verify-install`, `/existing-project-upgrade-vnext`, `/existing-project-rollback-vnext` | set up / migrate an existing project |
+  | `/vnext-wiki-drafts` | draft and review vNext wiki pages for topics that need them |
 
 - **session-gate** — `/gate-session-start`, `/gate-session-end` (Cowork session
   boundaries; routes to whichever KB plugins are present).
@@ -81,11 +82,15 @@ The typed knowledge store. This is the canonical group.
 ### `init`
 
 ```bash
-python .kb/kb.py init [--seed <path>]
+python .kb/kb.py init [--name <title>] [--slug <slug>] [--domains <d1,d2>] [--id-prefix <prefix>] [--seed <path>]
 ```
 
-Creates the SQLite store and schema in `.kb/`. Run once per project. `--seed`
-optionally loads an initial set of records from a file.
+Creates the SQLite store and schema in `.kb/`. Run once per project. `--name`,
+`--slug`, and `--domains` set the project title, slug, and comma-separated
+initial KB domains. `--id-prefix` overrides the generated record ID prefix
+(default: derived from `--slug`; pass an empty string to keep the unprefixed
+`KB-<timestamp>-<hex>` form). `--seed` optionally loads an initial set of
+records from a file.
 
 ### `create`
 
@@ -116,6 +121,7 @@ python .kb/kb.py create \
 | `--valid-until` | no | — | Expiry date for assumptions (`YYYY-MM-DD`) |
 | `--observed-at` | no | — | When the fact was observed |
 | `--id` | no | auto | Override the generated record id |
+| `--no-auto-lifecycle` | no | — | Skip the automatic NOW/HOT/INDEX (and wiki-sync) refresh |
 | `--json` | no | — | Machine-readable output |
 
 ### `search`
@@ -177,7 +183,7 @@ python .kb/kb.py supersede <record_id> \
 
 Flags: `--title`, `--content`, `--tier`, `--tier-reason`, `--review-after`,
 `--valid-until`, `--source`, `--source-id`, `--tags`, `--confidence`,
-`--new-id`, `--json`.
+`--new-id`, `--no-auto-lifecycle`, `--json`.
 
 ### `resolve`
 
@@ -186,6 +192,8 @@ Closes a `PENDENCIA` (open item) with a required note.
 ```bash
 python .kb/kb.py resolve <record_id> --notes "Shipped in #421"
 ```
+
+Flags: `--notes` (required), `--no-auto-lifecycle`, `--json`.
 
 ### `pending`
 
@@ -260,6 +268,16 @@ python .kb/kb.py source-verify --json            # full integrity check
 
 `source-status` also accepts `--domain`. These are read-only.
 
+### `source-relink`
+
+```bash
+python .kb/kb.py source-relink [--dry-run] [--json]
+```
+
+Rewrites legacy absolute source paths as KB-relative paths, for example after
+moving or re-cloning a project directory. `--dry-run` shows the plan without
+writing.
+
 ---
 
 ## Wiki
@@ -270,6 +288,7 @@ canonical.
 
 | Command | Purpose |
 |---|---|
+| `wiki-config` | Enable or disable the derived wiki and its lifecycle sync (`--enable`, `--disable`, `--no-sync`, `--json`) |
 | `wiki-check` | Report wiki configuration / readiness (`--json`) |
 | `wiki-candidates` | Records eligible for wiki pages (`--domain`, `--json`) |
 | `wiki-sync` | Regenerate wiki pages from records (`--domain`, `--force`, `--json`) |
@@ -450,7 +469,7 @@ not need these and can stick to `create`.
 
 | Command | Purpose |
 |---|---|
-| `file --filing-type <answer\|analysis\|synthesis>` | File a record tagged with how it was produced (same flags as `create`, plus `--no-auto-lifecycle`) |
+| `file --filing-type <answer\|analysis\|synthesis>` | File a record tagged with how it was produced (same flags as `create`) |
 | `filing-status` | Report filing activity by domain (`--domain`, `--json`) |
 | `filing-policy` | Show the active filing policy (`--json`) |
 | `analysis-status` | Coverage of analysis filings (`--domain`, `--json`) |

@@ -44,6 +44,11 @@ vNext, Session Gate, and classic KB lifecycle commands cannot collide.
    read-only `python .kb/kb.py hygiene-audit --json`; use
    `semantic-hygiene --write-proposals` only when governed proposal evidence is
    explicitly needed.
+9. If `session-start` reports `wiki.status` = `classic_wiki_off`, tell the
+   user that KB + Wiki is active but the classic wiki is off and recommend
+   `existing-project-configure-vnext` with `kb-wiki`. If `wiki_drafts` shows
+   topics to synthesize, review or refresh, mention the `vnext-wiki-drafts`
+   command; do not start it unprompted.
 
 Do not load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, or
 historical artifacts unless the current task requires them.

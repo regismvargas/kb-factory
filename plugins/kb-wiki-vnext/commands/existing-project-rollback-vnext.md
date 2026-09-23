@@ -21,5 +21,10 @@ reverted without changing canonical `.kb/` memory.
    `installed_sha256`; `action: self` is not rollback proof.
 6. Do not delete or rewrite `.kb/`. Preserve `.kb-next/` evidence unless the
    user explicitly approves archival or removal.
+   If the classic wiki settings must also return to their pre-upgrade values,
+   read the last `classic-config-sync` entry in `.kb-next/operations.jsonl`:
+   each `changes[]` item carries the key path and its previous (`from`)
+   value. Restore them only with the user's approval, then run
+   `python .kb/kb.py wiki-check --json` to confirm the resulting state.
 7. Run `existing-project-verify-install` and report the restored version,
    bootstrap action, retained evidence paths, and follow-up items.

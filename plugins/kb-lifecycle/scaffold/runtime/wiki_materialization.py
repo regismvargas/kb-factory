@@ -5,10 +5,16 @@ import json
 from pathlib import Path
 
 from .config import load_config
-from .db import connect
+from .db import connect, connect_readonly
 from .helpers import now_iso
 from .paths import KB_ROOT, ensure_dirs
-from .wiki import get_wiki_config
+from .wiki import (
+    compute_soft_signals,
+    compute_wiki_hard_signals,
+    compute_wiki_state,
+    get_wiki_config,
+    wiki_sync_allowed,
+)
 
 
 WIKI_CITATION_MARKER = "<!-- kb-wiki-managed -->"
@@ -750,25 +756,44 @@ def reconcile_obsolete_pages(conn, keep_page_ids, *, domain=None, now=None) -> d
     return {"removed_count": len(removed), "removed_page_ids": removed}
 
 
+def _skipped_sync(reason: str) -> dict:
+    return {
+        "written": [],
+        "written_count": 0,
+        "skipped_review_required": [],
+        "skipped_existing_snapshot": [],
+        "total_candidates": 0,
+        "skipped_reason": reason,
+        "persisted_pages": [],
+        "reconcile": {"orphaned_count": 0, "orphaned_page_ids": []},
+        "obsolete_removed": {"removed_count": 0, "removed_page_ids": []},
+        "snapshots_created": [],
+        "stale": {"staled_count": 0, "staled_page_ids": []},
+        "held_back": [],
+    }
+
+
 def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provider, now_iso) -> dict:
     config = load_config()
     ensure_dirs(config)
     wiki_cfg = get_wiki_config(config)
-    if not wiki_cfg.get("enabled", False) and not force:
-        return {
-            "written": [],
-            "written_count": 0,
-            "skipped_review_required": [],
-            "skipped_existing_snapshot": [],
-            "total_candidates": 0,
-            "skipped_reason": "wiki_disabled",
-            "persisted_pages": [],
-            "reconcile": {"orphaned_count": 0, "orphaned_page_ids": []},
-            "obsolete_removed": {"removed_count": 0, "removed_page_ids": []},
-            "snapshots_created": [],
-            "stale": {"staled_count": 0, "staled_page_ids": []},
-            "held_back": [],
-        }
+    if not force and not wiki_cfg.get("enabled", False):
+        # Same decision as wiki-check: an explicitly enabled wiki always syncs;
+        # otherwise only signal/profile modes may sync once signals are met.
+        if wiki_cfg.get("activation_mode", "manual") not in ("signal", "profile"):
+            return _skipped_sync("wiki_disabled")
+        probe = connect_readonly()
+        try:
+            state = compute_wiki_state(
+                wiki_cfg,
+                compute_wiki_hard_signals(probe, wiki_cfg.get("eligibility", {})),
+                compute_soft_signals(probe),
+                0,
+            )
+        finally:
+            probe.close()
+        if not wiki_sync_allowed(state):
+            return _skipped_sync("wiki_not_eligible")
     conn = connect()
     reconcile = reconcile_wiki_pages(conn)
     candidates = candidate_provider(conn, config, wiki_cfg)
@@ -898,7 +923,7 @@ def cmd_wiki_sync(args, *, emit, candidate_provider, now_iso, log_operation=None
         candidate_provider=candidate_provider,
         now_iso=now_iso,
     )
-    if log_operation is not None and result.get("skipped_reason") != "wiki_disabled":
+    if log_operation is not None and not result.get("skipped_reason"):
         from .db import connect as _connect
 
         conn = _connect()
@@ -918,7 +943,16 @@ def cmd_wiki_sync(args, *, emit, candidate_provider, now_iso, log_operation=None
             ),
         )
     if result.get("skipped_reason") == "wiki_disabled":
-        print("Wiki is disabled in config. Use --force to sync anyway, or set wiki.enabled = true.")
+        if args.json:
+            emit(result, True)
+            return
+        print("Wiki is disabled in config. Run `kb.py wiki-config --enable`, or use --force to sync once.")
+        return
+    if result.get("skipped_reason") == "wiki_not_eligible":
+        if args.json:
+            emit(result, True)
+            return
+        print("Wiki signals are not met for this activation_mode. Use --force to sync once.")
         return
     if args.json:
         emit(result, True)
@@ -1030,7 +1064,7 @@ def list_wiki_pages(
 
 
 def cmd_wiki_pages(args, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     pages = list_wiki_pages(
         conn,
         state=getattr(args, "state", None),
@@ -1067,7 +1101,7 @@ def get_wiki_lint_result(*, is_managed_file=None, parse_citation=None) -> dict:
     is_managed_file = is_managed_file or is_managed_wiki_file
     parse_citation = parse_citation or parse_citation_block
     load_config()
-    conn = connect()
+    conn = connect_readonly()
     issues: list[dict] = []
     # Lint only the live wiki. Snapshots are immutable history: they are meant to
     # be old and to cite the state they froze (records later superseded/resolved),

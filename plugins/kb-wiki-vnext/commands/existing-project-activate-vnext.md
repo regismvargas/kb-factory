@@ -32,8 +32,12 @@ explicitly asks for KB + Wiki.
    runtime could be resolved at all, the plugin install is broken — report that
    and stop; do not ask the user to hand-place the runtime.
 5. Run activation from the workspace runtime (`--choice kb-wiki` only if the
-   user asked for KB + Wiki):
+   user asked for KB + Wiki, or if `.kb/kb.config.json` already has
+   `wiki.enabled: true`):
    `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-alone --json`
+   With `kb-wiki` the wizard also enables the classic wiki and its lifecycle
+   sync and runs the first `wiki-sync`; `kb-alone` never turns an enabled
+   classic wiki off unless `--disable-classic-wiki` is passed.
 6. Invoke the `vnext-session-start` plugin command when the client exposes it;
    in a shell run
    `python .kb-next/runtime/kb_next.py session-start --json`

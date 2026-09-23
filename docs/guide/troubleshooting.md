@@ -40,9 +40,10 @@ Remember there are three separate plugins, and each carries different things:
   Code, a hook that loads your project memory at session start). So if you
   installed *only* this one, an empty slash menu is expected — drive it by asking
   in plain language instead.
-- **kb-wiki-vnext** — this is the one with the 12 slash commands (session
-  start/end, the new-project wizard, the existing-project setup and migration
-  commands). If you want those `/` commands, this is the plugin to install.
+- **kb-wiki-vnext** — this is the one with the 13 slash commands (session
+  start/end, wiki drafting, the new-project wizard, the existing-project setup
+  and migration commands). If you want those `/` commands, this is the plugin
+  to install.
 - **session-gate** — adds `/gate-session-start` and `/gate-session-end` for
   Cowork.
 
@@ -168,10 +169,12 @@ python .kb/kb.py list --category DECISAO --domain architecture
 ```
 
 One caveat about *exported* surfaces (the snapshots some agents read on
-claude.ai or in Cowork): those are **point-in-time exports**, not a live view of
-the store. If you've made meaningful changes, regenerate the export so the
-snapshot doesn't go stale. The canonical store is always the `.kb/` SQLite
-database — never an export.
+claude.ai or in Cowork): the export files on disk already refresh automatically
+with every `create`, `supersede`, `resolve`, and `ingest` call, so they are not
+what goes stale. What goes stale is a **copy** you uploaded into an actual
+claude.ai or Cowork project elsewhere; re-export and re-upload it before you
+rely on that copy again. The canonical store is always the `.kb/` SQLite
+database, never an export.
 
 </details>
 

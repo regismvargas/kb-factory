@@ -18,7 +18,7 @@ one, two, or all three.
 | Plugin | What it owns | Slash commands | Auto-triggering skill | Session hook | Platforms |
 |---|---|---|---|---|---|
 | **kb-lifecycle** | the everyday `.kb/` workflow | — (skill-driven) | `kb-wiki-maintainer` | ✅ SessionStart (Claude Code) | Code · Cowork · Codex |
-| **kb-wiki-vnext** | thin-session model + governed proposals (`.kb-next/`) | **12** (`/vnext-*`, `/existing-project-*`, `/new-project-*`) | `kb-wiki-vnext` | informational only | Code · Cowork · Codex |
+| **kb-wiki-vnext** | thin-session model + governed proposals (`.kb-next/`) | **13** (`/vnext-*`, `/existing-project-*`, `/new-project-*`) | `kb-wiki-vnext` | informational only | Code · Cowork · Codex |
 | **session-gate** | nothing — detects & routes | **2** (`/gate-session-start`, `/gate-session-end`) | `session-gate` | — | Cowork (primarily) · Code · Codex |
 
 **The short version:** start with **kb-lifecycle** (the everyday workflow). Add
@@ -66,12 +66,17 @@ its working state (proposals, manifests, draft wiki) in a separate `.kb-next/`.
   migrating a project**, or you want changes to go through a review/proposal step
   rather than being written directly.
 
-**Slash commands (12):**
+**Slash commands (13):**
 
 *Session*
 - `/vnext-session-start` — start a thin session; read only `NOW.md` by default.
 - `/vnext-session-end` — close the session, recording useful evidence; durable
   changes are routed through the governed apply step, not written silently.
+
+*Wiki drafts*
+- `/vnext-wiki-drafts`: draft, review, and materialize pending vNext wiki
+  pages; run it when `session-start` or `/vnext-session-end` reports a
+  drafting backlog.
 
 *Set up / migrate an existing project*
 - `/existing-project-diagnose` — read-only check of an existing (or legacy)

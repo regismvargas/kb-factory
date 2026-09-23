@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -32,6 +33,13 @@ SCAFFOLD_VNEXT = Path(__file__).resolve().parent / "_scaffold_vnext"
 VNEXT_ENGINE_REL = Path("runtime") / "kb_next.py"
 VNEXT_VERSION_MARKER = ".kb-next-version"
 VNEXT_MODES = ("kb-alone", "kb-wiki")
+# Same default as the kb-wiki-vnext plugin commands: KB + Wiki only on request.
+VNEXT_DEFAULT_MODE = "kb-alone"
+
+
+def _default_slug(project: Path) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "-", project.name.lower()).strip("-")
+    return slug or "project"
 
 
 def _copy_tree(src: Path, dst: Path) -> None:
@@ -66,8 +74,18 @@ def cmd_init(args: argparse.Namespace) -> int:
             continue
         _copy_item(item.name, dest)
     (dest / VERSION_MARKER).write_text(__version__ + "\n", encoding="utf-8")
-    subprocess.run([sys.executable, str(dest / "kb.py"), "init"], cwd=str(dest), check=True)
-    print(f"Initialized KB Factory {__version__} at {dest}")
+    project = dest.parent
+    slug = args.slug or _default_slug(project)
+    cmd = [sys.executable, str(dest / "kb.py"), "init", "--slug", slug, "--name", args.name or project.name]
+    if args.domains:
+        cmd += ["--domains", args.domains]
+    if args.id_prefix is not None:
+        cmd += ["--id-prefix", args.id_prefix]
+    seed = dest / "seed" / "initial_records.jsonl"
+    if not args.no_seed and seed.is_file():
+        cmd += ["--seed", str(seed)]
+    subprocess.run(cmd, cwd=str(dest), check=True)
+    print(f"Initialized KB Factory {__version__} at {dest} (slug={slug})")
     return 0
 
 
@@ -78,6 +96,8 @@ def cmd_update(args: argparse.Namespace) -> int:
         return 1
     for name in ENGINE:
         _copy_item(name, dest)
+    if not (dest / ".gitignore").exists() and (SCAFFOLD / ".gitignore").is_file():
+        shutil.copy2(SCAFFOLD / ".gitignore", dest / ".gitignore")
     (dest / VERSION_MARKER).write_text(__version__ + "\n", encoding="utf-8")
     print(
         f"Updated the .kb/ runtime at {dest} to {__version__}. "
@@ -142,6 +162,11 @@ def main(argv=None) -> int:
     init_p = sub.add_parser("init", help="Scaffold a .kb/ into a project and initialize it")
     init_p.add_argument("path", nargs="?", default=".", help="project directory (default: cwd)")
     init_p.add_argument("--force", action="store_true", help="overwrite an existing .kb/")
+    init_p.add_argument("--name", help="project display name (default: directory name)")
+    init_p.add_argument("--slug", help="project slug and record ID prefix (default: from directory name)")
+    init_p.add_argument("--domains", help="comma-separated KB domains")
+    init_p.add_argument("--id-prefix", dest="id_prefix", help="record ID prefix override")
+    init_p.add_argument("--no-seed", action="store_true", help="do not import the scaffold seed records")
     init_p.set_defaults(func=cmd_init)
 
     update_p = sub.add_parser("update", help="Refresh the .kb/ engine to this version (keeps data)")
@@ -151,7 +176,12 @@ def main(argv=None) -> int:
     vinit_p = sub.add_parser("vnext-init", help="Install + activate KB/Wiki vNext (.kb-next/) in a project")
     vinit_p.add_argument("path", nargs="?", default=".", help="project directory (default: cwd)")
     vinit_p.add_argument("--force", action="store_true", help="re-activate an existing .kb-next/")
-    vinit_p.add_argument("--mode", choices=VNEXT_MODES, default="kb-wiki", help="activation mode (default: kb-wiki)")
+    vinit_p.add_argument(
+        "--mode",
+        choices=VNEXT_MODES,
+        default=VNEXT_DEFAULT_MODE,
+        help=f"activation mode (default: {VNEXT_DEFAULT_MODE}; kb-wiki also enables the classic wiki)",
+    )
     vinit_p.set_defaults(func=cmd_vnext_init)
 
     vupdate_p = sub.add_parser("vnext-update", help="Refresh the .kb-next/ engine to this version (keeps data)")

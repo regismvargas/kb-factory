@@ -31,6 +31,9 @@ This command does not mutate canonical `.kb/` after initial bootstrap. Its
    Skip the runtime checks and use the direct `NOW.md` read from step 4 to
    confirm data presence. Recommend reinstalling/upgrading the vNext plugin;
    do not ask the user to hand-place the runtime.
-7. Report whether the project is ready for normal plugin/slash `vnext-session-start`
+7. For KB + Wiki (`activation_mode` = `kb_wiki` in the runtime `session-start` JSON), also run
+   `python .kb/kb.py wiki-check --json` and confirm `wiki_state` is not `off`
+   and the runtime `session-start` JSON reports `wiki.status` = `aligned`.
+8. Report whether the project is ready for normal plugin/slash `vnext-session-start`
    use and
    the resolved runtime command for shell sessions, or report degraded mode.

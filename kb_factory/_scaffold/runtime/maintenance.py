@@ -6,16 +6,9 @@ import sqlite3
 from pathlib import Path
 
 from .config import load_config
-from .db import connect
+from .db import connect, connect_readonly
 from .helpers import log_action, now_iso, row_to_dict, upsert_fts
-from .paths import DB_PATH, KB_ROOT
-
-
-def connect_readonly() -> sqlite3.Connection:
-    uri = DB_PATH.resolve().as_uri() + "?mode=ro"
-    conn = sqlite3.connect(uri, uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
+from .paths import KB_ROOT
 
 
 def build_audit_tiers_result(conn: sqlite3.Connection, config: dict) -> dict:
@@ -370,7 +363,7 @@ def build_consolidate_result(
 
 def cmd_audit_tiers(args: argparse.Namespace, *, emit) -> None:
     config = load_config()
-    conn = connect()
+    conn = connect_readonly()
     result = build_audit_tiers_result(conn, config)
     emit(result, True)
 

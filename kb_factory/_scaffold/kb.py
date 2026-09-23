@@ -37,10 +37,11 @@ from runtime.sources import (
     cmd_ingest as runtime_cmd_ingest,
     cmd_source_content as runtime_cmd_source_content,
     cmd_source_info as runtime_cmd_source_info,
-    cmd_sources as runtime_cmd_sources,
+    cmd_source_relink as runtime_cmd_source_relink,
     cmd_source_status as runtime_cmd_source_status,
-    cmd_source_verify as runtime_cmd_source_verify,
     cmd_source_update as runtime_cmd_source_update,
+    cmd_source_verify as runtime_cmd_source_verify,
+    cmd_sources as runtime_cmd_sources,
     cmd_summarize_status as runtime_cmd_summarize_status,
 )
 from runtime.lifecycle import (
@@ -50,6 +51,7 @@ from runtime.lifecycle import (
     get_lifecycle_config as runtime_get_lifecycle_config,
 )
 from runtime.maintenance import (
+    apply_cold_demotions as runtime_apply_cold_demotions,
     apply_stale_hot_demotions as runtime_apply_stale_hot_demotions,
     build_audit_tiers_result as runtime_build_audit_tiers_result,
     build_hygiene_audit_result as runtime_build_hygiene_audit_result,
@@ -79,6 +81,7 @@ from runtime.records import (
 from runtime.wiki import (
     WIKI_DEFAULTS as RUNTIME_WIKI_DEFAULTS,
     cmd_wiki_check as runtime_cmd_wiki_check,
+    cmd_wiki_config as runtime_cmd_wiki_config,
     compute_soft_signals as runtime_compute_soft_signals,
     compute_wiki_hard_signals as runtime_compute_wiki_hard_signals,
     compute_wiki_state as runtime_compute_wiki_state,
@@ -150,11 +153,16 @@ def format_record(row: dict) -> str:
 
 
 def cmd_init(args):
-    runtime_cmd_init(args, emit=emit, bulk_import_fn=cmd_bulk_import)
+    runtime_cmd_init(
+        args,
+        emit=emit,
+        bulk_import_fn=cmd_bulk_import,
+        lifecycle_hook=fire_lifecycle,
+    )
 
 
 def cmd_create(args):
-    runtime_cmd_create(args, emit=emit)
+    runtime_cmd_create(args, emit=emit, lifecycle_hook=fire_lifecycle)
 
 
 def cmd_list(args):
@@ -174,11 +182,11 @@ def cmd_update(args):
 
 
 def cmd_supersede(args):
-    runtime_cmd_supersede(args, emit=emit)
+    runtime_cmd_supersede(args, emit=emit, lifecycle_hook=fire_lifecycle)
 
 
 def cmd_resolve(args):
-    runtime_cmd_resolve(args, emit=emit)
+    runtime_cmd_resolve(args, emit=emit, lifecycle_hook=fire_lifecycle)
 
 
 def cmd_pending(args):
@@ -197,8 +205,48 @@ def cmd_harden(args):
     runtime_cmd_harden(args, emit=emit)
 
 
+def fire_lifecycle(event_name: str):
+    """Run a lifecycle event silently after a write (record-filed, source-ingest).
+
+    Calls build_lifecycle_result directly (not cmd_lifecycle) so the triggering
+    command's output is not polluted by lifecycle JSON. Its side effects
+    (exports refresh, wiki check and sync when enabled, oplog) still run.
+    Exceptions propagate; the runtime isolates them as warnings.
+    """
+    import argparse as _argparse
+    from runtime.lifecycle import build_lifecycle_result as _build
+
+    ns = _argparse.Namespace(
+        event=event_name,
+        refresh_exports=False,
+        apply_demotions=False,
+        sync_wiki=False,
+        force_wiki_sync=False,
+        domain=None,
+        json=True,
+    )
+    _build(
+        ns,
+        now_iso=now_iso,
+        build_audit_tiers_result=build_audit_tiers_result,
+        apply_stale_hot_demotions=apply_stale_hot_demotions,
+        refresh_exports=refresh_exports,
+        get_wiki_check_result=get_wiki_check_result,
+        get_wiki_lint_result=get_wiki_lint_result,
+        sync_wiki=sync_wiki,
+        log_operation=runtime_log_operation,
+        apply_cold_demotions=apply_cold_demotions,
+        prune_snapshots=prune_snapshots,
+    )
+
+
 def cmd_file(args):
-    runtime_cmd_file(args, emit=emit, log_operation=runtime_log_operation)
+    runtime_cmd_file(
+        args,
+        emit=emit,
+        log_operation=runtime_log_operation,
+        lifecycle_hook=fire_lifecycle,
+    )
 
 
 def cmd_filing_status(args):
@@ -232,7 +280,12 @@ def cmd_export(args):
 
 
 def cmd_ingest(args):
-    runtime_cmd_ingest(args, emit=emit, log_operation=runtime_log_operation)
+    runtime_cmd_ingest(
+        args,
+        emit=emit,
+        log_operation=runtime_log_operation,
+        lifecycle_hook=fire_lifecycle,
+    )
 
 
 def cmd_sources(args):
@@ -267,6 +320,10 @@ def cmd_source_update(args):
     runtime_cmd_source_update(args, emit=emit, log_operation=runtime_log_operation)
 
 
+def cmd_source_relink(args):
+    runtime_cmd_source_relink(args, emit=emit, log_operation=runtime_log_operation)
+
+
 # ---------------------------------------------------------------------------
 # Thin wrappers — operation log
 # ---------------------------------------------------------------------------
@@ -295,6 +352,10 @@ def get_duplicate_groups(conn):
 
 def apply_stale_hot_demotions(conn, reason):
     return runtime_apply_stale_hot_demotions(conn, reason)
+
+
+def apply_cold_demotions(conn, reason):
+    return runtime_apply_cold_demotions(conn, reason)
 
 
 def cmd_audit_tiers(args):
@@ -368,6 +429,15 @@ def get_wiki_check_result(config=None, conn=None):
 
 def cmd_wiki_check(args):
     runtime_cmd_wiki_check(args, emit=emit, candidate_provider=generate_wiki_candidates)
+
+
+def cmd_wiki_config(args):
+    runtime_cmd_wiki_config(
+        args,
+        emit=emit,
+        sync_wiki=sync_wiki,
+        log_operation=runtime_log_operation,
+    )
 
 
 def cmd_wiki_candidates(args):
@@ -459,6 +529,8 @@ def cmd_lifecycle(args):
         get_wiki_lint_result=get_wiki_lint_result,
         sync_wiki=sync_wiki,
         log_operation=runtime_log_operation,
+        apply_cold_demotions=apply_cold_demotions,
+        prune_snapshots=prune_snapshots,
     )
 
 
@@ -496,11 +568,13 @@ def build_parser():
             "source-status": cmd_source_status,
             "source-verify": cmd_source_verify,
             "source-update": cmd_source_update,
+            "source-relink": cmd_source_relink,
             "oplog": cmd_oplog,
             "audit-tiers": cmd_audit_tiers,
             "hygiene-audit": cmd_hygiene_audit,
             "consolidate": cmd_consolidate,
             "doctor": cmd_doctor,
+            "wiki-config": cmd_wiki_config,
             "wiki-check": cmd_wiki_check,
             "wiki-candidates": cmd_wiki_candidates,
             "wiki-sync": cmd_wiki_sync,

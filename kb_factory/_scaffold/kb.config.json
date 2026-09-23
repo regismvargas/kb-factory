@@ -44,7 +44,7 @@
         "refresh_exports": true,
         "run_wiki_check": true,
         "run_wiki_lint": false,
-        "run_wiki_sync": false
+        "run_wiki_sync": true
       },
       "record_filed": {
         "run_audit": false,
@@ -52,7 +52,7 @@
         "refresh_exports": true,
         "run_wiki_check": true,
         "run_wiki_lint": false,
-        "run_wiki_sync": false
+        "run_wiki_sync": true
       },
       "session_end": {
         "run_audit": true,
@@ -62,7 +62,7 @@
         "refresh_exports": true,
         "run_wiki_check": false,
         "run_wiki_lint": true,
-        "run_wiki_sync": false
+        "run_wiki_sync": true
       },
       "scheduled_maintenance": {
         "run_audit": true,
@@ -72,9 +72,15 @@
         "refresh_exports": true,
         "run_wiki_check": true,
         "run_wiki_lint": true,
-        "run_wiki_sync": false
+        "run_wiki_sync": true
       }
     }
+  },
+  "storage": {
+    "worktree_scope": "shared"
+  },
+  "tracking": {
+    "record_access": false
   },
   "agent_protocol": {
     "consult_before_assuming": true,

@@ -12,7 +12,7 @@ Maintainers responsible for packaging, QA, and controlled distribution.
 
 - Work on a branch with a reversible baseline tag.
 - Keep unrelated dirty files out of the release commit.
-- Do not publish generated wiki output into `.kb/wiki/live`.
+- Do not publish vNext draft output into `.kb/wiki/live`.
 
 ## Steps
 
@@ -20,13 +20,13 @@ Build:
 
 ```powershell
 python tools\build_agent_packages.py --scope vnext
-python tools\build_vnext_standalone.py --version 0.2.0-rc.2
+python tools\build_vnext_standalone.py --version 0.2.0-rc.3
 ```
 
 Validate:
 
 ```powershell
-python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip
 python tools\sync_vnext_runtime.py --check
 python -m pytest -p no:cacheprovider tests -q
 ```
@@ -34,7 +34,7 @@ python -m pytest -p no:cacheprovider tests -q
 Audit hashes:
 
 ```powershell
-Get-FileHash dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip -Algorithm SHA256
+Get-FileHash dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip -Algorithm SHA256
 Get-ChildItem dist\agent-packages\*vnext*.zip,dist\agent-packages\session-gate-*.zip | Get-FileHash -Algorithm SHA256
 ```
 

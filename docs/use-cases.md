@@ -46,7 +46,7 @@ overwritten when the new one landed.
 The old record is retained and linked to the one that replaced it:
 
 ```bash
-python .kb/kb.py supersede REC-... \
+python .kb/kb.py supersede <record_id> \
   --title "Move to SQLite + FTS5 for full-text search" \
   --content "Lexical search was needed; plain SQLite couldn't query content."
 ```
@@ -74,12 +74,15 @@ python .kb/kb.py create --category APRENDIZADO --domain build \
 ```
 
 The next agent's `search "windows path"` returns it, with its source. The shared
-substrate is the SQLite file in the repo — no service to stand up, no per-agent
-account.
+substrate is the `.kb/` SQLite file in the project's main worktree, which linked
+git worktrees (for example per-session desktop worktrees) share automatically.
+There is no service to stand up and no per-agent account.
 
 > **Honest scope.** Continuity is *project-scoped* and lives in one canonical
-> store. The Cowork and claude.ai surfaces are **point-in-time exports**, not a
-> live sync — regenerate them when canonical memory changes or they go stale.
+> store. The Cowork and claude.ai export surfaces are **point-in-time
+> exports**; the files on disk refresh automatically with every write, but a
+> **copy** you uploaded into an actual Cowork or claude.ai project elsewhere
+> stays as it was until you re-export and re-upload it.
 
 ## 4. Offline, air-gapped, or zero-infrastructure work
 
@@ -89,9 +92,9 @@ an API key.
 
 **With KB Factory.** The entire runtime is the **Python standard library plus
 SQLite** — no network calls, no external store, no key. It runs fully offline,
-and the whole knowledge base backs up as a single file you can copy, commit, or
-diff. This makes it viable in environments where hosted memory layers are simply
-not an option.
+and the whole knowledge base backs up as a single file you can copy or carry
+with you. This makes it viable in environments where hosted memory layers are
+simply not an option.
 
 ## 5. Curated project memory instead of auto-captured noise
 

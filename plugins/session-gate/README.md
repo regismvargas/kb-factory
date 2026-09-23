@@ -4,7 +4,7 @@ Thin session-boundary wrapper for Codex, Claude Code, and Claude Cowork
 workspaces that may use KB/Wiki vNext, KB-lifecycle, CASE Companion, or a
 combination of those surfaces.
 
-Release-candidate version: `0.2.7`.
+Release-candidate version: `0.2.8`.
 
 ## Purpose
 
@@ -36,10 +36,10 @@ routes startup and closeout back to them.
 
 ## Distribution
 
-- Codex: `dist/agent-packages/session-gate-plugin-0.2.7.zip`
-- Claude Code: `dist/agent-packages/session-gate-claude-plugin-0.2.7.zip`
-- Claude Cowork: `dist/agent-packages/session-gate-cowork-plugin-0.2.7.zip`
+- Codex: `dist/agent-packages/session-gate-plugin-0.2.8.zip`
+- Claude Code: `dist/agent-packages/session-gate-claude-plugin-0.2.8.zip`
+- Claude Cowork: `dist/agent-packages/session-gate-cowork-plugin-0.2.8.zip`
 
 The Codex CLI has no plugin-management command. Use the Codex app Plugins
 settings with the public marketplace, or upload
-`session-gate-plugin-0.2.7.zip` when file-based installation is available.
+`session-gate-plugin-0.2.8.zip` when file-based installation is available.

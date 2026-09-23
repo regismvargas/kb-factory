@@ -230,8 +230,10 @@ step, never automatically.
 
 **Are the Cowork and claude.ai surfaces a live sync of my KB?**
 No. They are **point-in-time exports**. There is one canonical SQLite store; the
-exports are snapshots that go stale if you don't regenerate them. Re-export after
-meaningful changes if an agent reads those surfaces.
+export files on disk refresh automatically on every `create`, `supersede`,
+`resolve`, and `ingest` call. What can go stale is a **copy** you already
+uploaded into an actual Cowork or claude.ai project; re-export and re-upload it
+after meaningful changes if an agent reads that copy.
 
 **Does updating a record overwrite the old one?**
 No. KB Factory is **append-only**. `update` only changes routing metadata

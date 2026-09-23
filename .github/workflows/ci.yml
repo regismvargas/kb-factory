@@ -58,10 +58,10 @@ jobs:
 
       - name: Build and validate standalone product
         run: |
-          python tools/build_vnext_standalone.py --version 0.2.0-rc.2
-          python tools/validate_vnext_product.py --json --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+          python tools/build_vnext_standalone.py --version 0.2.0-rc.3
+          python tools/validate_vnext_product.py --json --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.3-standalone.zip
 
       - name: Build and validate Python distributions
         run: |
           python -m build
-          python -m twine check dist/kb_factory-0.1.4*
+          python -m twine check dist/kb_factory-0.1.5*

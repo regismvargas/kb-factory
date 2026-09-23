@@ -34,5 +34,14 @@ operational evidence to `.kb-next/operations.jsonl`.
    the runtime.
 5. If `.kb-next/` is absent but `.kb/` exists, report that the workspace is an
    existing classic KB project and recommend `existing-project-activate-vnext`.
-6. Do not run activation, copy templates, publish wiki output, or mutate
+6. If `.kb/kb.py` exists, run the read-only checks
+   `python .kb/kb.py doctor --json` and `python .kb/kb.py wiki-check --json`.
+   Report `storage.resolution` (a linked Git worktree uses the main worktree
+   KB), `storage.warnings` (for example a tracked `kb.db`), `wiki_state`,
+   `lifecycle_sync_events` and `publication.held_back_by_reason`.
+7. If `session-start` reported `wiki.status` = `classic_wiki_off` (KB + Wiki
+   chosen but the classic wiki is off, the pre-0.1.10 activation defect),
+   recommend `existing-project-configure-vnext` with `kb-wiki`, which syncs
+   `.kb/kb.config.json` and publishes the first pages.
+8. Do not run activation, copy templates, publish wiki output, or mutate
    `.kb/kb.db`.

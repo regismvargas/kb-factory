@@ -3,13 +3,15 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import sqlite3
+import sys
 import uuid
 from pathlib import Path
 
 from .constants import CATEGORIES, STATUSES, TIERS
-from .config import load_config
-from .db import connect
+from .config import load_config, write_config
+from .db import connect, connect_readonly
 from .schema import disable_hardening, enable_hardening, hardening_enabled
 from .filing_policy import evaluate_filing, get_filing_policy
 from .helpers import log_action, now_iso, record_exists, row_to_dict, upsert_fts
@@ -36,6 +38,9 @@ __all__ = [
     "cmd_update",
     "fetch_filtered",
     "insert_record",
+    "new_record_id",
+    "record_id_prefix",
+    "render_placeholders",
     "validate_record",
 ]
 
@@ -44,6 +49,91 @@ FILING_TYPES = {
     "analysis": "filed-analysis",
     "synthesis": "filed-synthesis",
 }
+
+PLACEHOLDER_RE = re.compile(r"\{\{([A-Z0-9_]+)\}\}")
+DATE_OFFSET_RE = re.compile(r"ISO_DATE_PLUS_(\d+)D")
+SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9._-]*$")
+
+
+def _is_real_value(value) -> bool:
+    text = str(value or "").strip()
+    return bool(text) and "{{" not in text
+
+
+def derive_id_prefix(slug: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", "-", slug.upper()).strip("-")
+
+
+def record_id_prefix(config: dict | None = None) -> str:
+    """Project prefix for generated record IDs.
+
+    `project.id_prefix` wins (an explicit empty string keeps the legacy
+    unprefixed format); otherwise the prefix derives from `project.slug`, so
+    records from different KBs never collide when they are merged.
+    """
+    config = config if config is not None else load_config()
+    project = config.get("project") or {}
+    if "id_prefix" in project and project["id_prefix"] is not None:
+        return derive_id_prefix(str(project["id_prefix"])) if _is_real_value(project["id_prefix"]) else ""
+    slug = str(project.get("slug") or "").strip()
+    if _is_real_value(slug) and SLUG_RE.match(slug.lower()):
+        return derive_id_prefix(slug)
+    return ""
+
+
+def new_record_id(config: dict | None = None) -> str:
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d%H%M%S")
+    token = uuid.uuid4().hex[:6]
+    prefix = record_id_prefix(config)
+    return f"{prefix}-KB-{stamp}-{token}" if prefix else f"KB-{stamp}-{token}"
+
+
+def placeholder_values(config: dict) -> dict:
+    project = config.get("project") or {}
+    now = dt.datetime.now(dt.timezone.utc)
+    values = {"ISO_TIMESTAMP": now.replace(microsecond=0).isoformat().replace("+00:00", "Z")}
+    if _is_real_value(project.get("name")):
+        values["PROJECT_TITLE"] = str(project["name"])
+    if _is_real_value(project.get("slug")):
+        values["PROJECT_SLUG"] = str(project["slug"])
+    prefix = record_id_prefix(config)
+    if prefix:
+        # Seed templates spell record IDs as `{{PROJECT_NAME}}-KB-0001`.
+        values["ID_PREFIX"] = prefix
+        values["PROJECT_NAME"] = prefix
+    return values
+
+
+def render_placeholders(text: str, values: dict, *, label: str) -> str:
+    today = dt.date.today()
+
+    def replace(match: re.Match) -> str:
+        key = match.group(1)
+        if key in values:
+            return values[key]
+        offset = DATE_OFFSET_RE.fullmatch(key)
+        if offset:
+            return (today + dt.timedelta(days=int(offset.group(1)))).isoformat()
+        return match.group(0)
+
+    rendered = PLACEHOLDER_RE.sub(replace, text)
+    unresolved = sorted(set(PLACEHOLDER_RE.findall(rendered)))
+    if unresolved:
+        raise SystemExit(
+            f"{label} has unresolved placeholders {unresolved}; run "
+            "`kb.py init --name <title> --slug <slug>` (or set project.name/slug in "
+            "kb.config.json) before importing it."
+        )
+    return rendered
+
+
+def _run_lifecycle_hook(lifecycle_hook, event: str, args: argparse.Namespace) -> None:
+    if lifecycle_hook is None or getattr(args, "no_auto_lifecycle", False):
+        return
+    try:
+        lifecycle_hook(event)
+    except Exception as exc:  # lifecycle is best-effort; never break the write
+        print(f"Warning: {event} lifecycle hook failed: {exc}", file=sys.stderr)
 
 
 def validate_record(data: dict) -> None:
@@ -57,7 +147,7 @@ def validate_record(data: dict) -> None:
 
 def base_record_from_args(args: argparse.Namespace) -> dict:
     timestamp = now_iso()
-    record_id = args.id or f"KB-{dt.datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:6]}"
+    record_id = args.id or new_record_id()
     tags = [tag.strip() for tag in (args.tags or "").split(",") if tag.strip()]
     return {
         "id": record_id,
@@ -164,44 +254,104 @@ def fetch_filtered(conn: sqlite3.Connection, base_sql: str, params: list, args: 
 # ---------------------------------------------------------------------------
 
 
-def cmd_init(args: argparse.Namespace, *, emit, bulk_import_fn=None) -> None:
+def _apply_init_identity(config: dict, args: argparse.Namespace) -> bool:
+    """Apply `init --name/--slug/--domains/--id-prefix` to the config dict."""
+    project = config.setdefault("project", {})
+    changed = False
+    name = getattr(args, "name", None)
+    slug = getattr(args, "slug", None)
+    prefix = getattr(args, "id_prefix", None)
+    domains = getattr(args, "domains", None)
+    if slug is not None:
+        slug = slug.strip().lower()
+        if not SLUG_RE.match(slug):
+            raise SystemExit(
+                f"Invalid --slug {slug!r}: use lowercase letters, digits, '.', '_' or '-'."
+            )
+        if project.get("slug") != slug:
+            project["slug"] = slug
+            changed = True
+    if name is not None:
+        name = name.strip()
+        if not name:
+            raise SystemExit("--name must not be empty")
+        if project.get("name") != name:
+            project["name"] = name
+            changed = True
+    elif slug is not None and not _is_real_value(project.get("name")):
+        project["name"] = slug
+        changed = True
+    if prefix is not None:
+        normalized = derive_id_prefix(prefix) if prefix.strip() else ""
+        if project.get("id_prefix") != normalized:
+            project["id_prefix"] = normalized
+            changed = True
+    elif slug is not None and not _is_real_value(project.get("id_prefix")):
+        project["id_prefix"] = derive_id_prefix(slug)
+        changed = True
+    if domains is not None:
+        values = [item.strip() for item in domains.split(",") if item.strip()]
+        if not values:
+            raise SystemExit("--domains needs at least one domain")
+        if config.get("domains") != values:
+            config["domains"] = values
+            changed = True
+    return changed
+
+
+def cmd_init(args: argparse.Namespace, *, emit, bulk_import_fn=None, lifecycle_hook=None) -> None:
     config = load_config()
+    if _apply_init_identity(config, args):
+        write_config(config)
     ensure_dirs(config)
-    conn = connect()
+    conn = connect(create=True)
     conn.close()
     if args.seed:
         args.path = args.seed
         if bulk_import_fn is not None:
             bulk_import_fn(args)
+        # First derived surfaces (exports, and wiki pages when enabled).
+        _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
     emit({"__plain__": True, "text": f"KB initialized at {KB_ROOT}"}, False)
 
 
-def cmd_create(args: argparse.Namespace, *, emit) -> None:
+def cmd_create(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> None:
     conn = connect()
     data = base_record_from_args(args)
-    emit(insert_record(conn, data), args.json)
+    result = insert_record(conn, data)
+    _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
+    emit(result, args.json)
 
 
 def cmd_list(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     emit(fetch_filtered(conn, "SELECT * FROM records", [], args), args.json)
 
 
+def record_access_tracking_enabled(config: dict | None = None) -> bool:
+    config = config if config is not None else load_config()
+    return bool((config.get("tracking") or {}).get("record_access", False))
+
+
 def cmd_get(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    # Reads stay read-only unless the project opts into access tracking;
+    # a counter bump on every `get` used to rewrite kb.db (binary diff).
+    tracking = record_access_tracking_enabled()
+    conn = connect() if tracking else connect_readonly()
     row = conn.execute("SELECT * FROM records WHERE id = ?", (args.record_id,)).fetchone()
     if row is None:
         raise SystemExit(f"Record not found: {args.record_id}")
-    conn.execute(
-        "UPDATE records SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
-        (now_iso(), args.record_id),
-    )
-    conn.commit()
+    if tracking:
+        conn.execute(
+            "UPDATE records SET access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
+            (now_iso(), args.record_id),
+        )
+        conn.commit()
     emit(row_to_dict(row), args.json)
 
 
 def cmd_search(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     try:
         base_sql = (
             "SELECT r.* FROM records_fts f "
@@ -246,7 +396,7 @@ def cmd_update(args: argparse.Namespace, *, emit) -> None:
     cmd_get(argparse.Namespace(record_id=args.record_id, json=args.json), emit=emit)
 
 
-def cmd_supersede(args: argparse.Namespace, *, emit) -> None:
+def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> None:
     conn = connect()
     old_row = conn.execute("SELECT * FROM records WHERE id = ?", (args.record_id,)).fetchone()
     if old_row is None:
@@ -284,10 +434,11 @@ def cmd_supersede(args: argparse.Namespace, *, emit) -> None:
     upsert_fts(conn, old["id"])
     log_action(conn, old["id"], "superseded", {"replacement_id": new_data["id"]})
     conn.commit()
+    _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
     emit(new_data, args.json)
 
 
-def cmd_resolve(args: argparse.Namespace, *, emit) -> None:
+def cmd_resolve(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> None:
     conn = connect()
     conn.execute(
         """
@@ -306,11 +457,12 @@ def cmd_resolve(args: argparse.Namespace, *, emit) -> None:
     upsert_fts(conn, args.record_id)
     log_action(conn, args.record_id, "resolve", {"notes": args.notes})
     conn.commit()
+    _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
     cmd_get(argparse.Namespace(record_id=args.record_id, json=args.json), emit=emit)
 
 
 def cmd_pending(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     today = dt.date.today().isoformat()
     payload = {
         "open_pending": fetch_filtered(
@@ -338,7 +490,7 @@ def cmd_pending(args: argparse.Namespace, *, emit) -> None:
 
 
 def cmd_stats(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     summary = {
         "total_records": conn.execute("SELECT COUNT(*) FROM records").fetchone()[0],
         "by_category": dict(conn.execute("SELECT category, COUNT(*) FROM records GROUP BY category").fetchall()),
@@ -357,8 +509,6 @@ def cmd_file(
     lifecycle_hook=None,
 ) -> None:
     """Thin convenience wrapper: create a KB record with explicit filing intent."""
-    import sys as _sys
-
     conn = connect()
     data = base_record_from_args(args)
     filing_tag = FILING_TYPES[args.filing_type]
@@ -376,9 +526,9 @@ def cmd_file(
             lines.append(f"  [{v['issue']}] {v['field']}: {v['detail']}")
         raise SystemExit("\n".join(lines))
     if violations and enforcement_mode == "advisory":
-        print("Filing advisory warnings:", file=_sys.stderr)
+        print("Filing advisory warnings:", file=sys.stderr)
         for v in violations:
-            print(f"  [{v['issue']}] {v['field']}: {v['detail']}", file=_sys.stderr)
+            print(f"  [{v['issue']}] {v['field']}: {v['detail']}", file=sys.stderr)
 
     result = insert_record(conn, data, action="file")
     if log_operation is not None:
@@ -399,23 +549,13 @@ def cmd_file(
             },
             summary=f"Filed {args.filing_type}: {data['title']}",
         )
-    if (
-        lifecycle_hook is not None
-        and not getattr(args, "no_auto_lifecycle", False)
-    ):
-        try:
-            lifecycle_hook("record-filed")
-        except Exception as exc:  # lifecycle is best-effort; never break filing
-            print(
-                f"Warning: record-filed lifecycle hook failed: {exc}",
-                file=_sys.stderr,
-            )
+    _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
     emit(result, args.json)
 
 
 def cmd_filing_status(args: argparse.Namespace, *, emit) -> None:
     """Show counts and distribution of filed records by type, domain, confidence."""
-    conn = connect()
+    conn = connect_readonly()
     tag_clauses = " OR ".join(
         f"tags_json LIKE '%{tag}%'" for tag in FILING_TYPES.values()
     )
@@ -542,13 +682,18 @@ def cmd_harden(args: argparse.Namespace, *, emit) -> None:
 
 def cmd_bulk_import(args: argparse.Namespace, *, emit) -> None:
     path = Path(args.path)
-    if not path.is_absolute():
+    if not path.is_absolute() and not path.exists():
+        # Relative seed paths resolve from the working directory first
+        # (`--seed .kb/seed/...` from the project root), then from the KB root.
         path = KB_ROOT / path
     if not path.exists():
         raise SystemExit(f"Seed file not found: {path}")
     conn = connect()
     imported = 0
-    for line in path.read_text(encoding="utf-8-sig").splitlines():
+    text = path.read_text(encoding="utf-8-sig")
+    if PLACEHOLDER_RE.search(text):
+        text = render_placeholders(text, placeholder_values(load_config()), label=str(path))
+    for line in text.splitlines():
         if not line.strip():
             continue
         data = json.loads(line)

@@ -17,7 +17,12 @@ Session start is thin:
 - Read only `.kb-next/memory/NOW.md` by default.
 - Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
   artifacts only on demand.
-- Use targeted `lookup` or `semantic-lookup` before opening broad memory.
+- Use targeted `lookup` or `semantic-lookup` before opening broad memory;
+  `--domain` scopes both.
+- When KB + Wiki is active, `session-start` reports `wiki.status` and the
+  `wiki_drafts` backlog. `classic_wiki_off` means the classic wiki must be
+  re-synced with `activation-wizard --choice kb-wiki`; pending drafts go
+  through the `vnext-wiki-drafts` command.
 - For any planning or execution of vNext development until vNext is 100% developed,
   run runtime `compliance-preflight` after thin vNext session-start and before
   planning or editing. Simple operational use does not require the development
@@ -29,7 +34,8 @@ Governance boundaries:
 - `.kb-next/` stores vNext proposals, manifests, draft wiki pages, materialized
   vNext wiki surfaces, and operations evidence.
 - Do not write SQL or edit `.kb/kb.db` directly.
-- Do not publish vNext drafts to `.kb/wiki/live`.
+- Do not publish vNext drafts to `.kb/wiki/live`; the classic runtime owns that
+  directory and refreshes it on lifecycle events.
 - Canonical record changes must go through `.kb/kb.py` or vNext
   `proposal-apply`, which itself calls the classic runtime.
 - HOT overflow governance must start read-only. Use

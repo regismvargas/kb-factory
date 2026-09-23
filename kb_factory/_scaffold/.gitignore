@@ -1,0 +1,5 @@
+# SQLite write-ahead side files: read-only commands may leave them behind.
+kb.db-shm
+kb.db-wal
+__pycache__/
+*.pyc

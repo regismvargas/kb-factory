@@ -15,17 +15,17 @@ Admins, desenvolvedores, revisores e maintainers que avaliam o pacote RC.
 
 ## Modelo Operacional
 
-`.kb/` é a memória canônica. `.kb-next/` é evidência, proposta, draft, materialização e memória operacional dos fluxos vNext. O runtime vNext pode ler `.kb/` por superfícies suportadas, mas mutação canônica deve passar por `proposal-apply`, que delega para `.kb/kb.py`.
+`.kb/` é a memória canônica. `.kb-next/` é evidência, proposta, draft, materialização e memória operacional dos fluxos vNext. O runtime vNext pode ler `.kb/` por superfícies suportadas, mas mutação canônica de registros deve passar por `proposal-apply`, que delega para `.kb/kb.py`.
 
 Mapa de plataforma:
 
 | Plataforma | Artefato | Estrutura interna | Capacidades principais |
 | --- | --- | --- | --- |
-| Codex | `kb-wiki-vnext-plugin-0.1.9.zip` | `.codex-plugin`, skills, comandos e runtime `0.1.7` | `vnext-session-start`, comandos de setup, lookup, compliance preflight, propostas |
-| Claude Code | `kb-wiki-vnext-claude-plugin-0.1.9.zip` | manifesto Claude, skills, comandos/hooks e runtime `0.1.7` | fluxos guiados de memória e comandos explícitos |
-| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.1.9.zip` | pacote Cowork, runtime `0.1.7` e orientação de sessão manual | `vnext-session-start` manual, comandos de setup, sem depender de hooks automáticos |
-| Session Gate | `session-gate-*-0.2.7.zip` | detector de plugin mais comandos `gate-session-*` | rotear `.kb-next/` primeiro, depois `.kb/` clássico e CASE quando presentes |
-| Stand-alone | `kb-wiki-vnext-0.2.0-rc.2-standalone.zip` | runtime, template clássico, plugin source, docs, tools | bootstrap e distribuição controlada por admin |
+| Codex | `kb-wiki-vnext-plugin-0.1.10.zip` | `.codex-plugin`, skills, comandos e runtime `0.1.8` | `vnext-session-start`, comandos de setup, lookup, compliance preflight, propostas |
+| Claude Code | `kb-wiki-vnext-claude-plugin-0.1.10.zip` | manifesto Claude, skills, comandos/hooks e runtime `0.1.8` | fluxos guiados de memória e comandos explícitos |
+| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.1.10.zip` | pacote Cowork, runtime `0.1.8` e orientação de sessão manual | `vnext-session-start` manual, comandos de setup, sem depender de hooks automáticos |
+| Session Gate | `session-gate-*-0.2.8.zip` | detector de plugin mais comandos `gate-session-*` | rotear `.kb-next/` primeiro, depois `.kb/` clássico e CASE quando presentes |
+| Stand-alone | `kb-wiki-vnext-0.2.0-rc.3-standalone.zip` | runtime, template clássico, plugin source, docs, tools | bootstrap e distribuição controlada por admin |
 
 Plugin instala capacidades no cliente. Skills descrevem comportamento do agente. Commands expõem workflows chamáveis. Hooks são conveniências específicas de plataforma e não são assumidos no Cowork.
 
@@ -37,12 +37,12 @@ As linhas de versão são identidades independentes de componentes:
 
 | Componente | Versão |
 |---|---|
-| Release candidate do produto | `0.2.0-rc.2` |
-| KB Lifecycle | `0.2.3` |
-| Container do plugin vNext | `0.1.9` |
-| Engine `kb_next.py` incluído | `0.1.7` |
-| Session Gate | `0.2.7` |
-| Marketplace | `0.3.8` |
+| Release candidate do produto | `0.2.0-rc.3` |
+| KB Lifecycle | `0.2.4` |
+| Container do plugin vNext | `0.1.10` |
+| Engine `kb_next.py` incluído | `0.1.8` |
+| Session Gate | `0.2.8` |
+| Marketplace | `0.3.9` |
 
 O engine incluído faz bootstrap de uma cópia estável em
 `.kb-next/runtime/kb_next.py`. Sessões normais usam essa cópia. Upgrade e
@@ -55,8 +55,12 @@ Usar o runtime atual do workspace como sua própria origem retorna
 Escritas operacionais em `.kb-next/` não são escritas canônicas.
 `session-start` e `lookup` anexam evidência operacional; comandos semânticos e
 de wiki podem escrever manifests, propostas, drafts ou materializações. Apenas
-`proposal-apply` aprovado pode cruzar para `.kb/` canônica, sempre por
-`.kb/kb.py`.
+`proposal-apply` aprovado escreve registros na `.kb/` canônica, sempre por
+`.kb/kb.py`. Comandos de setup também escrevem dentro de `.kb/`:
+`activation-wizard --choice kb-wiki` grava as chaves da wiki clássica em
+`.kb/kb.config.json` e roda o primeiro `wiki-sync` clássico (que publica
+`.kb/wiki/live`); `install-classic` cria `.kb/` a partir do scaffold clássico;
+`upgrade-classic` atualiza apenas `kb.py` e `runtime/`.
 
 ## Verification / Verificação
 

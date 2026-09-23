@@ -164,11 +164,51 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         """
     )
     config = load_config()
-    conn.execute(
-        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', ?)",
-        (str(config.get("schema_version", 5)),),
-    )
+    schema_version = str(config.get("schema_version", 5))
+    current = conn.execute(
+        "SELECT value FROM schema_meta WHERE key = 'schema_version'"
+    ).fetchone()
+    # Rewriting an identical row still changes the database file bytes, which
+    # made every command (reads included) produce a binary diff of kb.db.
+    if current is None or current[0] != schema_version:
+        conn.execute(
+            "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('schema_version', ?)",
+            (schema_version,),
+        )
     conn.commit()
+
+
+REQUIRED_TABLES = frozenset(
+    {
+        "schema_meta",
+        "records",
+        "audit_log",
+        "records_fts",
+        "sources",
+        "operations",
+        "wiki_pages",
+        "wiki_page_provenance",
+        "wiki_snapshots",
+    }
+)
+
+
+def schema_is_current(conn: sqlite3.Connection) -> bool:
+    """True when every migration in ensure_schema is already applied.
+
+    Read-only commands use this to skip ensure_schema (and its write
+    transaction) on an up-to-date database.
+    """
+    tables = {
+        row[0]
+        for row in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'"
+        ).fetchall()
+    }
+    if not REQUIRED_TABLES.issubset(tables):
+        return False
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(records)").fetchall()}
+    return "source_id" in columns
 
 
 # ---------------------------------------------------------------------------

@@ -2,13 +2,13 @@
 
 KB/Wiki vNext is packaged here as a controlled, stand-alone release candidate for team/admin distribution.
 
-Version: `0.2.0-rc.2`
-Current audited plugin component line: `0.1.9`
+Version: `0.2.0-rc.3`
+Current audited plugin component line: `0.1.10`
 
-Bundled runtime engine: `0.1.7`
-KB Lifecycle companion line: `0.2.3`
-Session Gate companion line: `0.2.7`
-Marketplace line: `0.3.8`
+Bundled runtime engine: `0.1.8`
+KB Lifecycle companion line: `0.2.4`
+Session Gate companion line: `0.2.8`
+Marketplace line: `0.3.9`
 
 ## Start Here
 
@@ -37,13 +37,13 @@ Português:
 ## Maintainer Commands
 
 ```powershell
-python tools\build_vnext_standalone.py --version 0.2.0-rc.2
-python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+python tools\build_vnext_standalone.py --version 0.2.0-rc.3
+python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip
 ```
 
 ## Authority Boundary
 
-`.kb/` remains canonical. `.kb-next/` is the vNext operational, proposal, evidence, draft, and materialization layer. The approved bridge back to canonical memory is `proposal-apply` through `.kb/kb.py`; product tooling must not mutate `.kb/kb.db` directly or publish into `.kb/wiki/live`.
+`.kb/` remains canonical. `.kb-next/` is the vNext operational, proposal, evidence, draft, and materialization layer. The approved bridge back to canonical memory is `proposal-apply` through `.kb/kb.py`; product tooling must not mutate `.kb/kb.db` directly, and vNext drafts (`.kb-next/wiki`) never publish into `.kb/wiki/live`. KB + Wiki activation (`activation-wizard --choice kb-wiki`) enables the classic wiki and runs the first classic `wiki-sync` through `.kb/kb.py`; that classic sync is what publishes `.kb/wiki/live`.
 
 ## Related
 

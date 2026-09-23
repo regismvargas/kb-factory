@@ -4,7 +4,7 @@ import argparse
 import json
 import sqlite3
 
-from .db import connect
+from .db import connect_readonly
 from .helpers import now_iso
 
 __all__ = [
@@ -51,7 +51,7 @@ def get_recent_operations(
 
 
 def cmd_oplog(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     ops = get_recent_operations(conn, category=args.category, limit=args.limit)
     if args.json:
         emit(ops, True)

@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from .config import load_config
-from .db import connect
+from .db import connect_readonly
 from .helpers import now_iso
 from .paths import ensure_dirs, memory_path
 
@@ -144,7 +144,7 @@ def build_export_artifacts(config: dict, conn: sqlite3.Connection) -> dict:
 def refresh_exports() -> dict:
     config = load_config()
     ensure_dirs(config)
-    conn = connect()
+    conn = connect_readonly()
     artifacts = build_export_artifacts(config, conn)
     write_text(Path(artifacts["paths"]["now"]), artifacts["documents"]["now"])
     write_text(Path(artifacts["paths"]["index"]), artifacts["documents"]["index"])

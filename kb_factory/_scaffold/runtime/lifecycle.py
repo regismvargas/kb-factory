@@ -4,9 +4,14 @@ import sqlite3
 
 from .config import load_config
 from .constants import LIFECYCLE_DEFAULTS
-from .db import connect
+from .db import connect, connect_readonly
 from .filing_policy import build_filing_suggestions, get_filing_policy
-from .paths import KB_ROOT, ensure_dirs, memory_path
+from .paths import KB_ROOT, KB_ROOT_INFO, ensure_dirs, memory_path
+
+# Actions that only read the KB. A run made solely of these (a plain
+# session-start) leaves kb.db byte-identical: no oplog row is written.
+READ_ONLY_ACTIONS = frozenset({"audit_tiers", "wiki_check", "wiki_lint"})
+DB_MUTATING_FLAGS = ("apply_demotions", "apply_cold_demotions", "prune_snapshots")
 
 
 def get_lifecycle_config(config: dict) -> dict:
@@ -35,6 +40,14 @@ def build_session_paths(config: dict) -> dict:
     if wiki_index.exists():
         paths["wiki_index"] = str(wiki_index)
     return paths
+
+
+def _wrote_state(result: dict) -> bool:
+    actions = set(result["actions_run"]) - READ_ONLY_ACTIONS
+    sync = result.get("wiki_sync") or {}
+    if "wiki_sync" in actions and sync.get("skipped_reason"):
+        actions.discard("wiki_sync")
+    return bool(actions)
 
 
 def build_lifecycle_counts(conn: sqlite3.Connection) -> dict:
@@ -84,7 +97,8 @@ def build_lifecycle_result(
     if getattr(args, "prune_snapshots", False):
         event_cfg["prune_snapshots"] = True
 
-    conn = connect()
+    mutating = any(event_cfg.get(flag) for flag in DB_MUTATING_FLAGS)
+    conn = connect() if mutating else connect_readonly()
     counts = build_lifecycle_counts(conn)
     filing_policy = get_filing_policy(config)
     result = {
@@ -92,6 +106,11 @@ def build_lifecycle_result(
         "generated_at": now_iso(),
         "event_config": event_cfg,
         "paths": build_session_paths(config),
+        "kb_root": {
+            "path": str(KB_ROOT),
+            "resolution": KB_ROOT_INFO.get("resolution"),
+            "main_worktree_root": KB_ROOT_INFO.get("main_worktree_root"),
+        },
         "counts": counts,
         "filing_suggestions": build_filing_suggestions(filing_policy, counts),
         "actions_run": [],
@@ -136,9 +155,9 @@ def build_lifecycle_result(
         result["wiki_sync"] = sync_wiki(domain=args.domain, force=args.force_wiki_sync)
         result["actions_run"].append("wiki_sync")
 
-    if log_operation is not None:
+    if log_operation is not None and _wrote_state(result):
         log_operation(
-            conn,
+            conn if mutating else connect(),
             "lifecycle",
             args.event,
             {

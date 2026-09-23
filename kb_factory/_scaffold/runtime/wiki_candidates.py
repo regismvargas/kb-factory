@@ -6,7 +6,7 @@ import json
 import sqlite3
 
 from .config import load_config
-from .db import connect
+from .db import connect_readonly
 from .wiki import get_wiki_config
 
 __all__ = [
@@ -161,7 +161,7 @@ def generate_wiki_candidates(conn: sqlite3.Connection, config: dict, wiki_cfg: d
 def cmd_wiki_candidates(args: argparse.Namespace, *, emit) -> None:
     config = load_config()
     wiki_cfg = get_wiki_config(config)
-    conn = connect()
+    conn = connect_readonly()
     candidates = generate_wiki_candidates(conn, config, wiki_cfg)
     if args.domain:
         candidates = [c for c in candidates if args.domain in c["target_slug"]]

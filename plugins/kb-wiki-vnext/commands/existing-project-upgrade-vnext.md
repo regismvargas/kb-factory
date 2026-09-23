@@ -24,6 +24,22 @@ classic `.kb/` as canonical memory.
    Require an `action` of `created`, `updated`, or `exists` with the expected
    new runtime version, and require `source_sha256` to equal
    `installed_sha256`. An `action` of `self` is not upgrade proof.
-6. Do not overwrite `.kb/`. Run `existing-project-verify-install` using the
+6. Refresh the classic engine without touching data or config:
+   `python .kb-next/runtime/kb_next.py upgrade-classic --json`
+   It copies only `kb.py` and `runtime/*.py` from the installed kb-lifecycle
+   scaffold (never `kb.db`, `memory/`, `sources/`, `wiki/` or
+   `kb.config.json`). If no classic template resolves, report it and continue
+   with the vNext upgrade only.
+7. Re-apply the recorded activation mode so the classic config is aligned
+   (read `sponsor_decision` from `.kb-next/decisions/activation-decision.json`):
+   `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-wiki --json`
+   (use `--choice kb-alone` when that is the recorded decision)
+   The wizard merges and keeps operator edits; for `kb-wiki` it enables the
+   classic wiki and its lifecycle sync (the fix for projects activated before
+   0.1.10) and records `classic-config-sync` in `.kb-next/operations.jsonl`.
+8. Normalize legacy absolute source paths once:
+   `python .kb/kb.py source-relink --json` (use `--dry-run` first to preview).
+9. Do not overwrite `.kb/` data. Run `existing-project-verify-install` using the
    refreshed `.kb-next/runtime/kb_next.py`.
-7. Report old/new versions, ZIP name, bootstrap action, and verification result.
+10. Report old/new versions, ZIP name, bootstrap action, classic engine files
+    changed, classic config sync, and verification result.

@@ -18,6 +18,14 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
 
     init_p = sub.add_parser("init")
     init_p.add_argument("--seed")
+    init_p.add_argument("--name", help="Project display name (renders {{PROJECT_TITLE}})")
+    init_p.add_argument("--slug", help="Project slug; also the default record ID prefix")
+    init_p.add_argument("--domains", help="Comma-separated KB domains")
+    init_p.add_argument(
+        "--id-prefix",
+        dest="id_prefix",
+        help="Record ID prefix (default: derived from --slug; empty keeps KB-<ts>-<hex>)",
+    )
     init_p.set_defaults(func=command_handlers["init"])
 
     create = sub.add_parser("create")
@@ -36,6 +44,7 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     create.add_argument("--confidence", type=float, default=0.8)
     create.add_argument("--observed-at", dest="observed_at")
     create.add_argument("--source-id", dest="source_id")
+    create.add_argument("--no-auto-lifecycle", dest="no_auto_lifecycle", action="store_true")
     create.add_argument("--json", action="store_true")
     create.set_defaults(func=command_handlers["create"])
 
@@ -114,12 +123,14 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     supersede.add_argument("--tags")
     supersede.add_argument("--confidence", type=float)
     supersede.add_argument("--source-id", dest="source_id")
+    supersede.add_argument("--no-auto-lifecycle", dest="no_auto_lifecycle", action="store_true")
     supersede.add_argument("--json", action="store_true")
     supersede.set_defaults(func=command_handlers["supersede"])
 
     resolve = sub.add_parser("resolve")
     resolve.add_argument("record_id")
     resolve.add_argument("--notes", required=True)
+    resolve.add_argument("--no-auto-lifecycle", dest="no_auto_lifecycle", action="store_true")
     resolve.add_argument("--json", action="store_true")
     resolve.set_defaults(func=command_handlers["resolve"])
 
@@ -206,6 +217,13 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     source_update.add_argument("--json", action="store_true")
     source_update.set_defaults(func=command_handlers["source-update"])
 
+    source_relink = sub.add_parser(
+        "source-relink", help="Rewrite legacy absolute source paths as KB-relative paths"
+    )
+    source_relink.add_argument("--dry-run", dest="dry_run", action="store_true")
+    source_relink.add_argument("--json", action="store_true")
+    source_relink.set_defaults(func=command_handlers["source-relink"])
+
     oplog_p = sub.add_parser("oplog")
     oplog_p.add_argument("--category")
     oplog_p.add_argument("--limit", type=int, default=20)
@@ -234,6 +252,15 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     )
     harden_p.add_argument("--json", action="store_true")
     harden_p.set_defaults(func=command_handlers["harden"])
+
+    wiki_config = sub.add_parser(
+        "wiki-config", help="Enable or disable the derived wiki and its lifecycle sync"
+    )
+    wiki_config.add_argument("--enable", action="store_true")
+    wiki_config.add_argument("--disable", action="store_true")
+    wiki_config.add_argument("--no-sync", dest="no_sync", action="store_true", help="Skip the initial wiki-sync")
+    wiki_config.add_argument("--json", action="store_true")
+    wiki_config.set_defaults(func=command_handlers["wiki-config"])
 
     wiki_check = sub.add_parser("wiki-check")
     wiki_check.add_argument("--json", action="store_true")

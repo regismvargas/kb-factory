@@ -19,15 +19,15 @@ import validate_vnext_product as product_validator  # noqa: E402
 
 
 PUBLIC_ARCHIVES = {
-    "kb-lifecycle-plugin-0.2.3.zip",
-    "kb-lifecycle-claude-plugin-0.2.3.zip",
-    "kb-lifecycle-cowork-plugin-0.2.3.zip",
-    "kb-wiki-vnext-plugin-0.1.9.zip",
-    "kb-wiki-vnext-claude-plugin-0.1.9.zip",
-    "kb-wiki-vnext-cowork-plugin-0.1.9.zip",
-    "session-gate-plugin-0.2.7.zip",
-    "session-gate-claude-plugin-0.2.7.zip",
-    "session-gate-cowork-plugin-0.2.7.zip",
+    "kb-lifecycle-plugin-0.2.4.zip",
+    "kb-lifecycle-claude-plugin-0.2.4.zip",
+    "kb-lifecycle-cowork-plugin-0.2.4.zip",
+    "kb-wiki-vnext-plugin-0.1.10.zip",
+    "kb-wiki-vnext-claude-plugin-0.1.10.zip",
+    "kb-wiki-vnext-cowork-plugin-0.1.10.zip",
+    "session-gate-plugin-0.2.8.zip",
+    "session-gate-claude-plugin-0.2.8.zip",
+    "session-gate-cowork-plugin-0.2.8.zip",
 }
 
 

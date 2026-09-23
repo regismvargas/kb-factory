@@ -23,35 +23,58 @@ using the session flows below:
 - If the public Python package is installed, run `kb-factory init` in the
   project root.
 - Otherwise copy this plugin's bundled `scaffold/` directory to `.kb/`, then
-  run `python .kb/kb.py init`. Every platform-specific Lifecycle artifact must
-  carry this scaffold from the canonical `core/templates/kb/` source.
+  run `python .kb/kb.py init --name "<Project Title>" --slug <project-slug> --domains <a,b,c> --seed .kb/seed/initial_records.jsonl`.
+  The flags render the `{{...}}` placeholders and prefix record IDs with the
+  slug (`<SLUG>-KB-...`); ask the user for them instead of inventing them.
+  Every platform-specific Lifecycle artifact must carry this scaffold from the
+  canonical `core/templates/kb/` source.
+- With KB/Wiki vNext installed, `kb_next.py install-classic` performs the same
+  copy and init.
 
 Confirm the result with `python .kb/kb.py stats`, and do not create a second
-plugin-owned memory store.
+plugin-owned memory store. Every command except `init` refuses to run when
+`.kb/kb.db` is missing; it never creates an empty KB silently.
+
+In a linked Git worktree (for example a per-session desktop worktree) the
+runtime uses the main worktree's `.kb/` when it has a `kb.db`, so every session
+shares one KB. `python .kb/kb.py doctor --json` shows the resolution under
+`storage`; set `storage.worktree_scope` to `local` in `kb.config.json` (or
+`KB_FACTORY_WORKTREE_SCOPE=local`) only when a worktree needs its own KB.
 
 ## Session Start
 
 Use the bootstrap mode that matches the session purpose. When in doubt, start thin.
 
+In a KB/Wiki vNext workspace (`.kb-next/kb-next.config.json` exists), defer to
+vNext: use the plugin command `vnext-session-start` (runtime equivalent:
+`python .kb-next/runtime/kb_next.py session-start --json`) and read only
+`.kb-next/memory/NOW.md` by default. Classic NOW, HOT, and INDEX then become
+on-demand reads; the modes below apply to workspaces without vNext.
+
+`python .kb/kb.py lifecycle session-start --json` reports the resolved memory
+files under `paths` (`now`, `hot`, `index`). When a linked Git worktree shares
+the main worktree's KB (see above), they point at the main worktree's `.kb/`;
+read those paths instead of local `.kb/memory/` copies.
+
 ### Thin Bootstrap (default for consumer-project sessions)
 
 1. Run `python .kb/kb.py lifecycle session-start --json`.
-2. Read `.kb/memory/NOW.md`.
+2. Read `paths.now` from that output (the resolved `NOW.md`).
 3. Stop. Load richer context only when the conversation demands it.
 
 ### Standard Bootstrap (when the active working set is clearly needed)
 
 1. Run `python .kb/kb.py lifecycle session-start --json`.
-2. Read `.kb/memory/NOW.md`.
-3. Read `.kb/memory/HOT.md`.
+2. Read `paths.now` (the resolved `NOW.md`).
+3. Read `paths.hot` (the resolved `HOT.md`).
 4. Search or check pending as needed based on the conversation topic.
 
 ### Deep Review Bootstrap (audit, close-out, dispatch, or review sessions only)
 
 1. Run `python .kb/kb.py lifecycle session-start --json`.
-2. Read `.kb/memory/NOW.md`.
-3. Read `.kb/memory/HOT.md`.
-4. Read `.kb/memory/INDEX.md`.
+2. Read `paths.now` (the resolved `NOW.md`).
+3. Read `paths.hot` (the resolved `HOT.md`).
+4. Read `paths.index` (the resolved `INDEX.md`).
 5. Load wiki, dispatch packs, references, and other materials as needed for the review scope.
 
 ### On-Demand Loading (all modes)
@@ -90,8 +113,7 @@ These surfaces are always available during the conversation but are not preloade
 4. Read the source and create KB records linked to it:
    - `python .kb/kb.py create --category FATO --domain <domain> --title "..." --content "..." --source-id <source_id> --json`
    - Use `--source-id` on `create` and `supersede` to link records to their originating source.
-5. Run `python .kb/kb.py lifecycle source-ingest --json`.
-6. If the wiki should be materialized immediately, run `python .kb/kb.py lifecycle source-ingest --sync-wiki --json`.
+5. No lifecycle step is needed afterward: `ingest` runs the `source-ingest` lifecycle event and each `create` runs `record-filed`; both refresh exports and, when the wiki is enabled, sync `.kb/wiki/live` (skipped with `--no-auto-lifecycle`). `python .kb/kb.py lifecycle source-ingest --json` remains an optional manual re-run.
 
 ### Summarize Sources
 
@@ -254,13 +276,27 @@ Other page types use a flat bullet-list format.
 
 All wiki pages remain deterministic and rebuildable from DB state.
 
+### Turning The Wiki On
+
+Run `python .kb/kb.py wiki-config --enable --json` once. It sets
+`wiki.enabled = true`, enables `run_wiki_sync` on the `record_filed`,
+`source_ingest`, `session_end` and `scheduled_maintenance` lifecycle events
+(keeping every other config key), and runs the first `wiki-sync`. From then
+on `create`, `file`, `supersede`, `resolve`, `ingest` and
+`lifecycle session-end` keep `.kb/wiki/live` current with no manual sync.
+`wiki-config --disable` turns it off. `wiki-check --json` reports the state,
+`lifecycle_sync_events`, and under `publication` which candidates would
+publish and which are held back by a hygiene gate (with the reason).
+
 ### Wiki Activation Modes
 
-The `activation_mode` field in `wiki` config controls how the wiki becomes active:
+The `activation_mode` field in `wiki` config controls how the wiki becomes
+active when it is not explicitly enabled:
 
-- **`manual`** (default): Wiki requires `wiki.enabled = true` in config. Current behavior.
-- **`signal`**: Wiki activates automatically when hard and soft signal thresholds pass. `enabled = true` acts as an override that bypasses signal checks.
-- **`profile`**: Profile presets set eligibility thresholds. Requires `project_profile` to be set. `enabled = true` acts as an override.
+- `wiki.enabled = true` always turns the wiki on, in every mode; signals never veto an explicit opt-in.
+- **`manual`** (default): with `enabled = false` the wiki stays off.
+- **`signal`**: with `enabled = false` the wiki activates when the hard and soft signal thresholds pass.
+- **`profile`**: like `signal`, with thresholds from `project_profile` presets.
 
 Available profiles (set via `wiki.project_profile`):
 
@@ -277,13 +313,21 @@ User-specified eligibility thresholds in config always override profile presets.
 Review recent operational events: `python .kb/kb.py oplog --json`.
 Filter by category: `python .kb/kb.py oplog --category lifecycle --json`.
 
-The operation log tracks lifecycle runs and ingest events as an immutable audit trail. It does not track individual record changes (see `audit_log` for that).
+The operation log tracks lifecycle runs and ingest events as an immutable audit trail. It does not track individual record changes (see `audit_log` for that). A read-only `python .kb/kb.py lifecycle session-start` writes no row, and read commands (`list`, `get`, `search`, `stats`, `pending`, `wiki-check`, `doctor`) open the database read-only, so reading never changes `kb.db`. Record access counting is opt-in (`tracking.record_access`).
+
+## Source Paths
+
+New sources are stored with KB-relative paths, so the KB survives a move or a
+fresh clone. For KBs created before 0.2.4, run
+`python .kb/kb.py source-relink --dry-run --json` and then without
+`--dry-run` to rewrite legacy absolute paths.
 
 ## Session End
 
 If shell access is available:
 
-1. Run `python .kb/kb.py lifecycle session-end --json`.
+1. Run `python .kb/kb.py lifecycle session-end --json`. When the wiki is
+   enabled this also syncs `.kb/wiki/live`.
 2. For HOT overflow or semantic hygiene, run read-only
    `python .kb/kb.py hygiene-audit --json` before any maintenance action.
 3. If the project needs a stronger retention pass, run

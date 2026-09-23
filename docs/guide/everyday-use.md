@@ -302,11 +302,13 @@ confidence, source, tags. See [`supersede`](../commands.md#supersede),
 
 ## 5. End the session
 
-When you're done, close the session. This isn't bookkeeping for its own sake — it
-**regenerates the thin surfaces** (the `NOW.md` and friends that the *next*
-session will read) so they reflect everything you just recorded. Skip it and the
-next session starts from a slightly stale summary; the canonical store is still
-correct, but the always-loaded snapshot lags behind.
+When you're done, close the session. `NOW.md` and the other thin surfaces are
+already current: every `create`, `file`, `supersede`, `resolve`, and `ingest`
+call refreshes them on disk as it runs. Closing the session instead records the
+close-out event, runs a light consolidation/hygiene pass, and refreshes the
+point-in-time export packs (the copies you'd upload to Cowork or claude.ai).
+Skip it and the canonical store and the on-disk `NOW.md` stay correct and
+current; only an export pack you uploaded elsewhere goes stale.
 
 > "Let's close the session."
 

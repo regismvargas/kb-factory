@@ -6,10 +6,10 @@ import json
 import mimetypes
 import shutil
 import sqlite3
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 from .config import load_config
-from .db import connect
+from .db import connect, connect_readonly
 from .helpers import log_action, now_iso
 from .paths import KB_ROOT
 
@@ -19,13 +19,16 @@ __all__ = [
     "cmd_ingest",
     "cmd_source_content",
     "cmd_source_info",
+    "cmd_source_relink",
     "cmd_source_status",
     "cmd_source_update",
     "cmd_source_verify",
     "cmd_sources",
     "cmd_summarize_status",
     "compute_file_hash",
+    "portable_path",
     "register_source",
+    "resolve_stored_path",
     "source_exists",
     "source_exists_by_hash",
     "update_source_record_ids",
@@ -33,6 +36,55 @@ __all__ = [
 ]
 
 SOURCES_DIR = KB_ROOT / "sources"
+
+
+def _is_absolute_text(raw: str) -> bool:
+    return PureWindowsPath(raw).is_absolute() or PurePosixPath(raw).is_absolute() or (
+        len(raw) >= 2 and raw[1] == ":"
+    )
+
+
+def _path_name(raw: str) -> str:
+    return PureWindowsPath(raw).name if "\\" in raw else PurePosixPath(raw).name
+
+
+def portable_path(path: Path, base: Path) -> str:
+    """POSIX path relative to ``base`` when inside it, else the absolute path.
+
+    Stored source paths are written relative to the KB root so a project keeps
+    working after it is moved, cloned elsewhere, or opened from a worktree.
+    """
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(base.resolve()).as_posix()
+    except ValueError:
+        return str(resolved)
+
+
+def resolve_stored_path(
+    stored_path: str | None,
+    source_id: str | None = None,
+    filename: str | None = None,
+) -> Path:
+    """Locate a source file recorded in the `sources` table.
+
+    Relative paths resolve against the KB root. Absolute paths written by older
+    runtimes are honoured while they exist; once the project has moved they are
+    re-rooted under this KB's ``sources/<source_id>/<filename>``.
+    """
+    raw = str(stored_path or "").strip()
+    if raw and not _is_absolute_text(raw):
+        return KB_ROOT.joinpath(*PurePosixPath(raw.replace("\\", "/")).parts)
+    if raw:
+        candidate = Path(raw)
+        if candidate.is_file():
+            return candidate
+    name = filename or (_path_name(raw) if raw else "")
+    if source_id and name:
+        rerooted = SOURCES_DIR / source_id / name
+        if rerooted.is_file():
+            return rerooted
+    return Path(raw) if raw else SOURCES_DIR / str(source_id or "")
 
 
 def source_exists(conn: sqlite3.Connection, source_id: str) -> bool:
@@ -158,8 +210,8 @@ def cmd_ingest(
     source_data = {
         "source_id": source_id,
         "filename": path.name,
-        "original_path": str(path.resolve()),
-        "stored_path": str(stored_path),
+        "original_path": portable_path(path, KB_ROOT.parent),
+        "stored_path": portable_path(stored_path, KB_ROOT),
         "content_hash": content_hash,
         "file_size": path.stat().st_size,
         "mime_type": mime_type,
@@ -194,7 +246,7 @@ def cmd_ingest(
 
 
 def cmd_sources(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     sql = "SELECT * FROM sources"
     params: list = []
     if args.domain:
@@ -210,7 +262,7 @@ def cmd_sources(args: argparse.Namespace, *, emit) -> None:
 
 
 def cmd_source_info(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     row = conn.execute(
         "SELECT * FROM sources WHERE source_id = ?", (args.source_id,)
     ).fetchone()
@@ -220,7 +272,7 @@ def cmd_source_info(args: argparse.Namespace, *, emit) -> None:
 
 
 def cmd_summarize_status(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     sql = "SELECT * FROM sources"
     params: list = []
     if getattr(args, "domain", None):
@@ -250,7 +302,7 @@ def cmd_summarize_status(args: argparse.Namespace, *, emit) -> None:
 
 
 def cmd_analysis_status(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     sql = "SELECT * FROM sources"
     params: list = []
     if getattr(args, "domain", None):
@@ -300,7 +352,7 @@ def cmd_source_content(args: argparse.Namespace, *, emit, log_operation=None) ->
     ).fetchone()
     if row is None:
         raise SystemExit(f"Source not found: {args.source_id}")
-    stored = Path(row["stored_path"])
+    stored = resolve_stored_path(row["stored_path"], row["source_id"], row["filename"])
     if not stored.exists():
         raise SystemExit(f"Source file missing from disk: {stored}")
     text, encoding = _read_text_content(stored)
@@ -356,7 +408,7 @@ def build_source_status(
             "SELECT COUNT(*) AS n FROM records WHERE source_id = ? AND status = 'ATIVO'",
             (sid,),
         ).fetchone()
-        stored = Path(src["stored_path"])
+        stored = resolve_stored_path(src["stored_path"], sid, src["filename"])
         stored_exists = stored.is_file()
         hash_ok: bool | None = None
         if stored_exists:
@@ -390,7 +442,7 @@ def build_source_status(
 
 
 def cmd_source_status(args: argparse.Namespace, *, emit) -> None:
-    conn = connect()
+    conn = connect_readonly()
     result = build_source_status(
         conn,
         domain=getattr(args, "domain", None),
@@ -405,7 +457,7 @@ def verify_sources(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM sources").fetchall()
     violations: list[dict] = []
     for src in rows:
-        stored = Path(src["stored_path"])
+        stored = resolve_stored_path(src["stored_path"], src["source_id"], src["filename"])
         if not stored.is_file():
             violations.append({
                 "source_id": src["source_id"],
@@ -496,3 +548,78 @@ def cmd_source_update(args: argparse.Namespace, *, emit, log_operation=None) -> 
         "SELECT * FROM sources WHERE source_id = ?", (args.source_id,)
     ).fetchone()
     emit(_source_row_to_dict(new_row), args.json)
+
+
+def _portable_original(raw: str | None) -> str | None:
+    if not raw or not _is_absolute_text(raw):
+        return raw
+    candidate = Path(raw)
+    try:
+        return candidate.resolve().relative_to(KB_ROOT.parent.resolve()).as_posix()
+    except (OSError, ValueError):
+        return raw
+
+
+def cmd_source_relink(args: argparse.Namespace, *, emit, log_operation=None) -> None:
+    """Rewrite legacy absolute source paths as KB-relative paths.
+
+    Only paths whose file is found (in place or re-rooted under this KB's
+    sources/ directory) are rewritten; content hashes are never touched.
+    """
+    conn = connect()
+    rows = conn.execute(
+        "SELECT source_id, filename, original_path, stored_path FROM sources ORDER BY source_id"
+    ).fetchall()
+    changed: list[dict] = []
+    unresolved: list[dict] = []
+    for row in rows:
+        resolved = resolve_stored_path(row["stored_path"], row["source_id"], row["filename"])
+        if not resolved.is_file():
+            unresolved.append({"source_id": row["source_id"], "stored_path": row["stored_path"]})
+            continue
+        new_stored = portable_path(resolved, KB_ROOT)
+        new_original = _portable_original(row["original_path"])
+        if new_stored == row["stored_path"] and new_original == row["original_path"]:
+            continue
+        changed.append(
+            {
+                "source_id": row["source_id"],
+                "stored_path": {"from": row["stored_path"], "to": new_stored},
+                "original_path": {"from": row["original_path"], "to": new_original},
+            }
+        )
+        if not args.dry_run:
+            conn.execute(
+                "UPDATE sources SET stored_path = ?, original_path = ? WHERE source_id = ?",
+                (new_stored, new_original, row["source_id"]),
+            )
+            log_action(conn, row["source_id"], "source_relink", {"stored_path": new_stored})
+    if changed and not args.dry_run:
+        conn.commit()
+        if log_operation is not None:
+            log_operation(
+                conn,
+                "source_update",
+                "relink",
+                {"changed": len(changed), "unresolved": len(unresolved)},
+                summary=f"Relinked {len(changed)} source path(s) as KB-relative",
+            )
+    payload = {
+        "total_sources": len(rows),
+        "changed_count": len(changed),
+        "unresolved_count": len(unresolved),
+        "dry_run": bool(args.dry_run),
+        "changed": changed,
+        "unresolved": unresolved,
+    }
+    if args.json:
+        emit(payload, True)
+        return
+    suffix = " (dry run)" if args.dry_run else ""
+    lines = [
+        f"Source relink{suffix}: {len(changed)} changed, "
+        f"{len(unresolved)} unresolved, {len(rows)} total"
+    ]
+    lines.extend(f"  {item['source_id']}: {item['stored_path']['to']}" for item in changed)
+    lines.extend(f"  unresolved {item['source_id']}: {item['stored_path']}" for item in unresolved)
+    emit({"__plain__": True, "text": "\n".join(lines)}, False)

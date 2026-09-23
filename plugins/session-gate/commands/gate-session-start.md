@@ -47,9 +47,9 @@ default read.
 1. If the detector reports `runtime_ref`, run
    `python <runtime_ref> session-start --json`.
 2. If `runtime_ref` is absent, resolve the runtime in this order and use the
-   first runnable path: `.kb-next/runtime/kb_next.py`,
-   `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py`, an installed client-plugin path
-   matching `**/kb-wiki-vnext/runtime/kb_next.py`, then
+   first runnable path: `.kb-next/runtime/kb_next.py`, an installed client-plugin
+   path matching `**/kb-wiki-vnext/runtime/kb_next.py` (the engine ships with
+   the kb-wiki-vnext plugin; this session-gate plugin carries no runtime), then
    `core/versions/kb-wiki-vnext/runtime/kb_next.py` in the authoring monorepo.
 3. Read only `.kb-next/memory/NOW.md`.
 4. Stop. HOT, INDEX, wiki pages, and historical artifacts remain on demand.

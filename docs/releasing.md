@@ -9,13 +9,13 @@ The coordinated release has independent version lines:
 
 | Surface | Version |
 |---|---:|
-| GitHub/Python release | `0.1.4` |
-| Marketplace metadata | `0.3.8` |
-| kb-lifecycle | `0.2.3` |
-| kb-wiki-vnext plugin | `0.1.9` |
-| session-gate | `0.2.7` |
-| vNext runtime | `0.1.7` |
-| vNext stand-alone product | `0.2.0-rc.2` |
+| GitHub/Python release | `0.1.5` |
+| Marketplace metadata | `0.3.9` |
+| kb-lifecycle | `0.2.4` |
+| kb-wiki-vnext plugin | `0.1.10` |
+| session-gate | `0.2.8` |
+| vNext runtime | `0.1.8` |
+| vNext stand-alone product | `0.2.0-rc.3` |
 
 ## 1. Validate the source tree
 
@@ -59,9 +59,9 @@ python tools/organize_agent_packages.py --check
 ## 3. Build and validate the stand-alone product
 
 ```bash
-python tools/build_vnext_standalone.py --version 0.2.0-rc.2
+python tools/build_vnext_standalone.py --version 0.2.0-rc.3
 python tools/validate_vnext_product.py --json \
-  --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.2-standalone.zip
+  --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.3-standalone.zip
 ```
 
 The bundle contains the public product docs, plugin, runtime, classic template,
@@ -73,18 +73,18 @@ writes a SHA-256 sidecar.
 
 ```bash
 python -m build
-python -m twine check dist/kb_factory-0.1.4*
+python -m twine check dist/kb_factory-0.1.5*
 ```
 
 Inspect the wheel and source distribution before publication. They must include
 `kb_factory/_scaffold/kb.py`, the classic runtime mirror, and
 `kb_factory/_scaffold_vnext/runtime/kb_next.py`.
 
-For `v0.1.4`, attach the wheel and source distribution to the GitHub release.
+For `v0.1.5`, attach the wheel and source distribution to the GitHub release.
 The supported install command is:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.4/kb_factory-0.1.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.5/kb_factory-0.1.5-py3-none-any.whl
 ```
 
 PyPI is optional. Upload only when a project token or trusted-publishing flow is
@@ -96,7 +96,7 @@ is visible on PyPI.
 After CI is green on the release commit:
 
 1. Fast-forward `main` to the validated commit.
-2. Create and push tag `v0.1.4`.
+2. Create and push tag `v0.1.5`.
 3. Create the GitHub release from `CHANGELOG.md`.
 4. Attach the nine plugin ZIPs, platform manifest, stand-alone ZIP and checksum,
    wheel, and source distribution.

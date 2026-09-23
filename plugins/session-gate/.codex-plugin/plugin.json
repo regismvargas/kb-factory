@@ -1,6 +1,6 @@
 {
   "name": "session-gate",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Thin cross-client session-boundary wrapper for KB-lifecycle and CASE Companion. Detects which canonical surfaces apply and routes startup and closeout without duplicating durable memory or CASE canon.",
   "author": {
     "name": "KB Factory"

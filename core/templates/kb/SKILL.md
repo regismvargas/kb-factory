@@ -27,6 +27,10 @@ Use the bootstrap mode that matches the session purpose. When in doubt, start th
 4. Read `.kb/memory/INDEX.md`.
 5. Load additional surfaces as needed for the review scope.
 
+In a linked Git worktree (for example a per-session desktop worktree) the
+runtime uses the main worktree KB; read the `paths.now` that `session-start`
+reports instead of the worktree copy of `.kb/memory/NOW.md`.
+
 ### On-demand loading (all modes)
 
 These surfaces are always available but not preloaded:

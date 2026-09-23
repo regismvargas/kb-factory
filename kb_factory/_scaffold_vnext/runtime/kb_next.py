@@ -11,7 +11,7 @@ import stat
 import subprocess
 import sys
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import quote
 from uuid import uuid4
@@ -32,7 +32,14 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.1.7"
+RUNTIME_VERSION = "0.1.8"
+# Classic lifecycle events that keep an enabled classic wiki current. Mirrors
+# WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
+CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
+WORKTREE_SCOPE_ENV = "KB_FACTORY_WORKTREE_SCOPE"
+# Domains with at least this many active records get a wiki topic, matching the
+# classic domain_overview candidate threshold.
+WIKI_TOPIC_MIN_RECORDS = 3
 OBSIDIAN_DESIGN_NOTES_REL = (
     Path("state")
     / "runs"
@@ -186,6 +193,122 @@ def project_root(args: argparse.Namespace) -> Path:
 
 def kb_next_root(root: Path) -> Path:
     return root / ".kb-next"
+
+
+def _read_small_text(path: Path) -> str | None:
+    try:
+        return path.read_text(encoding="utf-8-sig", errors="replace").strip()
+    except OSError:
+        return None
+
+
+def linked_worktree_main_root(project_root: Path) -> Path | None:
+    """Main worktree root when ``project_root`` is a linked Git worktree.
+
+    Same resolution as the classic runtime (core/runtime/paths.py): a `.git`
+    file whose gitdir carries a `commondir` pointer, i.e. the data reported by
+    `git rev-parse --git-common-dir`. Submodules have no `commondir`.
+    """
+    dotgit = project_root / ".git"
+    if not dotgit.is_file():
+        return None
+    text = _read_small_text(dotgit)
+    if not text or not text.lower().startswith("gitdir:"):
+        return None
+    gitdir = Path(text.split(":", 1)[1].strip())
+    if not gitdir.is_absolute():
+        gitdir = project_root / gitdir
+    common_text = _read_small_text(gitdir / "commondir")
+    if not common_text:
+        return None
+    common = Path(common_text)
+    if not common.is_absolute():
+        common = gitdir / common
+    try:
+        common = common.resolve()
+        if common.name != ".git" or not common.is_dir():
+            return None
+        main_root = common.parent
+        if main_root.resolve() == project_root.resolve():
+            return None
+    except OSError:
+        return None
+    return main_root
+
+
+def _classic_worktree_scope(local_kb: Path) -> str:
+    env_value = os.environ.get(WORKTREE_SCOPE_ENV, "").strip().lower()
+    if env_value in ("shared", "local"):
+        return env_value
+    text = _read_small_text(local_kb / "kb.config.json")
+    if text:
+        try:
+            storage = json.loads(text).get("storage")
+        except (ValueError, AttributeError):
+            storage = None
+        if isinstance(storage, dict):
+            value = str(storage.get("worktree_scope", "")).strip().lower()
+            if value in ("shared", "local"):
+                return value
+    return "shared"
+
+
+def classic_kb_root(root: Path) -> Path:
+    """The classic `.kb/` this workspace reads, including linked worktrees.
+
+    A per-session linked worktree shares the main worktree KB (when it exists)
+    so vNext reads the same database the classic runtime writes.
+    """
+    local = root / ".kb"
+    main_root = linked_worktree_main_root(root)
+    if main_root is None or _classic_worktree_scope(local) == "local":
+        return local
+    candidate = main_root / ".kb"
+    if (candidate / "kb.db").is_file():
+        return candidate
+    return local
+
+
+def classic_kb_resolution(root: Path) -> dict[str, Any]:
+    kb_root = classic_kb_root(root)
+    return {
+        "path": str(kb_root),
+        "resolution": "main_worktree" if kb_root != root / ".kb" else "local",
+        "main_worktree_root": str(linked_worktree_main_root(root) or "") or None,
+    }
+
+
+def _is_absolute_text(raw: str) -> bool:
+    return PureWindowsPath(raw).is_absolute() or PurePosixPath(raw).is_absolute() or (
+        len(raw) >= 2 and raw[1] == ":"
+    )
+
+
+def resolve_source_file(root: Path, source: dict[str, Any]) -> Path | None:
+    """Locate a classic source file from its `sources` row.
+
+    Relative stored paths (classic runtime 0.2.4+) resolve against the classic
+    KB root; legacy absolute paths are honoured while they exist and are
+    re-rooted under `sources/<source_id>/<filename>` once the project moved.
+    """
+    raw = str(source.get("stored_path") or "").strip()
+    if not raw:
+        return None
+    kb_root = classic_kb_root(root)
+    if not _is_absolute_text(raw):
+        return kb_root.joinpath(*PurePosixPath(raw.replace("\\", "/")).parts)
+    candidate = Path(raw)
+    if candidate.is_file():
+        return candidate
+    name = source.get("filename") or (
+        PureWindowsPath(raw).name if "\\" in raw else PurePosixPath(raw).name
+    )
+    source_id = source.get("source_id")
+    if source_id and name:
+        rerooted = kb_root / "sources" / str(source_id) / str(name)
+        if rerooted.is_file():
+            return rerooted
+    return candidate
 
 
 def config_path(root: Path) -> Path:
@@ -423,7 +546,8 @@ def build_config(root: Path, decision: dict[str, Any]) -> dict[str, Any]:
             "root": ".kb-next",
         },
         "project": {
-            "root": str(root),
+            # Relative on purpose: the workspace keeps working after a move.
+            "root": ".",
         },
         "activation": decision,
         "classic_kb": {
@@ -444,6 +568,7 @@ def build_config(root: Path, decision: dict[str, Any]) -> dict[str, Any]:
             "on_demand_reads": [
                 "HOT.md",
                 ".kb/memory/INDEX.md",
+                ".kb/memory/NOW.md",
                 "kb_search",
                 "wiki_index_when_active",
                 "historical_artifacts_with_allowed_reason",
@@ -480,9 +605,67 @@ def build_config(root: Path, decision: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """Recursive merge where ``overlay`` wins; lists and scalars are replaced."""
+    merged: dict[str, Any] = dict(base)
+    for key, value in overlay.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def flatten_keys(payload: Any, prefix: str = "") -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {prefix: payload}
+    flat: dict[str, Any] = {}
+    for key, value in payload.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, dict) and value:
+            flat.update(flatten_keys(value, path))
+        else:
+            flat[path] = value
+    return flat
+
+
+def changed_key_paths(before: dict[str, Any] | None, after: dict[str, Any]) -> list[str]:
+    old = flatten_keys(before or {})
+    new = flatten_keys(after)
+    return sorted(key for key in set(old) | set(new) if old.get(key, object()) != new.get(key, object()))
+
+
+def merge_config(existing: dict[str, Any] | None, fresh: dict[str, Any]) -> dict[str, Any]:
+    """Re-activation keeps operator edits and only rewrites activation-owned keys.
+
+    Owned keys: `activation`, `wiki.enabled`, `wiki.surfaces`, and the portable
+    `project.root`. Every other existing key survives; keys introduced by a
+    newer runtime are filled from the fresh defaults.
+    """
+    if not isinstance(existing, dict):
+        return fresh
+    merged = deep_merge(fresh, existing)
+    merged["activation"] = fresh["activation"]
+    wiki = dict(merged.get("wiki") or {})
+    wiki["enabled"] = fresh["wiki"]["enabled"]
+    wiki["surfaces"] = dict(fresh["wiki"]["surfaces"])
+    merged["wiki"] = wiki
+    project = dict(merged.get("project") or {})
+    project["root"] = fresh["project"]["root"]
+    merged["project"] = project
+    return merged
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
 
 def append_operation(root: Path, event: str, details: dict[str, Any]) -> None:
@@ -497,9 +680,23 @@ def append_operation(root: Path, event: str, details: dict[str, Any]) -> None:
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
+def classic_wiki_enabled(root: Path) -> bool | None:
+    path = classic_config_path(root)
+    if not path.is_file():
+        return None
+    try:
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    wiki = config.get("wiki") if isinstance(config, dict) else None
+    return bool(wiki.get("enabled", False)) if isinstance(wiki, dict) else False
+
+
 def write_now(root: Path, config: dict[str, Any]) -> None:
     mode = config["activation"]["sponsor_decision"]
     wiki_enabled = config["wiki"]["enabled"]
+    classic_wiki = classic_wiki_enabled(root)
+    classic_label = "absent" if classic_wiki is None else str(classic_wiki).lower()
     lines = [
         "# KB/Wiki vNext NOW",
         "",
@@ -507,18 +704,29 @@ def write_now(root: Path, config: dict[str, Any]) -> None:
         f"- Activation mode: `{mode}`",
         f"- Classic KB: `{config['classic_kb']['root']}` (`read_only`)",
         f"- Wiki active: `{str(wiki_enabled).lower()}`",
+        f"- Classic wiki enabled (`.kb/kb.config.json`): `{classic_label}`",
         "",
         "## Required Default Read",
         "- Read this `NOW.md` only.",
         "",
         "## On Demand",
         "- Use `semantic-lookup` when LLM judgment is available.",
-        "- Use `lookup` as deterministic fallback for decisions, learnings, definitions, open items, and status.",
+        "- Use `lookup` as deterministic fallback for decisions, learnings, definitions, open items, and status; add `--domain` to scope it.",
+        "- Read classic `.kb/memory/NOW.md` only when the project status snapshot is needed.",
         "- Read classic `.kb/memory/HOT.md` only when the active working set is needed.",
         "- Read classic `.kb/memory/INDEX.md` only when the broad KB map is needed.",
         "- Use the Wiki index only when KB + Wiki is active and page navigation is needed.",
         "- Open historical artifacts only for rationale, source, provenance, historical heuristic, or exact wording.",
     ]
+    if wiki_enabled:
+        lines.extend(
+            [
+                "",
+                "## Wiki Flow",
+                "- Classic pages in `.kb/wiki/live` refresh on record, ingest, and session-end lifecycle events.",
+                "- At session end, run `wiki-draft-status` and draft pending topics with `wiki-synthesis-plan` + `wiki-draft-review` (plugin command `vnext-wiki-drafts`).",
+            ]
+        )
     path = now_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
@@ -529,6 +737,115 @@ def load_config_or_fail(root: Path) -> dict[str, Any]:
     if not path.is_file():
         raise FileNotFoundError(f"{path} not found; run activation-wizard first")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def apply_classic_wiki_enabled(config: dict[str, Any], enabled: bool) -> list[dict[str, Any]]:
+    """Same semantics as classic `kb.py wiki-config` (core/runtime/wiki.py)."""
+    changes: list[dict[str, Any]] = []
+    wiki = config.get("wiki")
+    if not isinstance(wiki, dict):
+        wiki = {}
+        config["wiki"] = wiki
+    if wiki.get("enabled") is not enabled:
+        changes.append({"path": "wiki.enabled", "from": wiki.get("enabled"), "to": enabled})
+        wiki["enabled"] = enabled
+    if enabled:
+        lifecycle = config.get("lifecycle")
+        if not isinstance(lifecycle, dict):
+            lifecycle = {}
+            config["lifecycle"] = lifecycle
+        events = lifecycle.get("events")
+        if not isinstance(events, dict):
+            events = {}
+            lifecycle["events"] = events
+        for event in CLASSIC_WIKI_SYNC_EVENTS:
+            block = events.get(event)
+            if not isinstance(block, dict):
+                block = {}
+                events[event] = block
+            if block.get("run_wiki_sync") is not True:
+                changes.append(
+                    {
+                        "path": f"lifecycle.events.{event}.run_wiki_sync",
+                        "from": block.get("run_wiki_sync"),
+                        "to": True,
+                    }
+                )
+                block["run_wiki_sync"] = True
+    return changes
+
+
+def sync_classic_wiki_config(root: Path, mode: str, *, disable_classic_wiki: bool) -> dict[str, Any]:
+    """Align the classic config that publishes `.kb/wiki/live` with the decision.
+
+    `kb_wiki` enables the classic wiki and its lifecycle sync; `kb_alone` never
+    turns an enabled classic wiki off unless explicitly asked to.
+    """
+    path = classic_config_path(root)
+    display = str(path)
+    if not path.is_file():
+        return {"action": "skipped", "reason": "classic_config_missing", "path": display}
+    raw = path.read_bytes()
+    config = json.loads(raw.decode("utf-8-sig"))
+    if not isinstance(config, dict):
+        raise ValueError(f"classic config is not a JSON object: {path}")
+    before = hashlib.sha256(raw).hexdigest()
+    currently_enabled = bool((config.get("wiki") or {}).get("enabled", False)) if isinstance(config.get("wiki"), dict) else False
+    if mode == "kb_wiki":
+        changes = apply_classic_wiki_enabled(config, True)
+    elif currently_enabled and not disable_classic_wiki:
+        return {
+            "action": "kept_enabled",
+            "path": display,
+            "warning": (
+                "classic wiki stays enabled under kb_alone; rerun with "
+                "--disable-classic-wiki to turn it off"
+            ),
+        }
+    else:
+        changes = apply_classic_wiki_enabled(config, False)
+    if not changes:
+        return {"action": "unchanged", "path": display, "sha256": before}
+    write_json(path, config)
+    return {
+        "action": "updated",
+        "path": display,
+        "changes": changes,
+        "sha256_before": before,
+        "sha256_after": sha256_path(path),
+    }
+
+
+def run_classic_wiki_sync(root: Path) -> dict[str, Any]:
+    try:
+        script = classic_kb_script(root)
+    except FileNotFoundError as exc:
+        return {"action": "skipped", "reason": "classic_entrypoint_missing", "detail": str(exc)}
+    proc = subprocess.run(
+        [sys.executable, str(script), "wiki-sync", "--json"],
+        cwd=str(script.parent),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return {
+            "action": "failed",
+            "returncode": proc.returncode,
+            "detail": (proc.stderr or proc.stdout).strip()[:2000],
+        }
+    try:
+        payload = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        # Older classic runtimes print a plain message when the wiki is off.
+        return {"action": "skipped", "reason": "non_json_output", "detail": proc.stdout.strip()[:500]}
+    return {
+        "action": "skipped" if payload.get("skipped_reason") else "synced",
+        "skipped_reason": payload.get("skipped_reason"),
+        "written_count": payload.get("written_count", 0),
+        "held_back_count": len(payload.get("held_back") or []),
+        "total_candidates": payload.get("total_candidates", 0),
+    }
 
 
 def cmd_activation_wizard(args: argparse.Namespace) -> int:
@@ -561,10 +878,29 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
     if score is not None:
         decision["guided_score"] = score
 
-    config = build_config(root, decision)
+    existing: dict[str, Any] | None = None
+    if config_path(root).is_file():
+        loaded = json.loads(config_path(root).read_text(encoding="utf-8"))
+        existing = loaded if isinstance(loaded, dict) else None
+    config = merge_config(existing, build_config(root, decision))
+    changed_keys = changed_key_paths(existing, config)
+    # Classic first: a malformed classic config aborts before any vNext write.
+    classic_sync = sync_classic_wiki_config(
+        root,
+        decision_mode,
+        disable_classic_wiki=bool(getattr(args, "disable_classic_wiki", False)),
+    )
     kb_next_root(root).mkdir(parents=True, exist_ok=True)
     write_json(config_path(root), config)
     write_json(decision_path(root), decision)
+    append_operation(root, "classic-config-sync", {"sponsor_decision": decision_mode, **classic_sync})
+    wiki_sync: dict[str, Any] | None = None
+    if decision_mode == "kb_wiki":
+        if getattr(args, "no_wiki_sync", False):
+            wiki_sync = {"action": "skipped", "reason": "no_wiki_sync_flag"}
+        else:
+            wiki_sync = run_classic_wiki_sync(root)
+        append_operation(root, "classic-wiki-sync", wiki_sync)
     write_now(root, config)
     append_operation(
         root,
@@ -575,42 +911,92 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
             "recommended_mode": recommended_mode,
             "config_path": str(config_path(root)),
             "decision_path": str(decision_path(root)),
+            "config_merge": {
+                "preserved_existing": existing is not None,
+                "changed_keys": changed_keys,
+            },
+            "classic_config_sync": classic_sync.get("action"),
+            "classic_wiki_sync": (wiki_sync or {}).get("action"),
         },
     )
     result = {
         "event": "activation-wizard",
         "activation": decision,
+        "config_merge": {
+            "preserved_existing": existing is not None,
+            "changed_keys": changed_keys,
+        },
+        "classic_config_sync": classic_sync,
+        "classic_wiki_sync": wiki_sync,
         "paths": {
             "config": str(config_path(root)),
             "decision": str(decision_path(root)),
             "operations": str(operations_path(root)),
             "now": str(now_path(root)),
+            "classic_config": str(classic_config_path(root)),
         },
     }
     if args.json:
         emit(result, True)
     else:
         label = "KB + Wiki" if decision_mode == "kb_wiki" else "KB alone"
-        emit(f"Activation recorded: {label}\nConfig: {config_path(root)}", False)
+        lines = [
+            f"Activation recorded: {label}",
+            f"Config: {config_path(root)}",
+            f"Classic config sync: {classic_sync.get('action')}",
+        ]
+        if wiki_sync is not None:
+            lines.append(f"Classic wiki sync: {wiki_sync.get('action')}")
+        if classic_sync.get("warning"):
+            lines.append(f"Warning: {classic_sync['warning']}")
+        emit("\n".join(lines), False)
     return 0
+
+
+def wiki_alignment(root: Path, config: dict[str, Any]) -> dict[str, Any]:
+    vnext_enabled = bool(config["wiki"]["enabled"])
+    classic_enabled = classic_wiki_enabled(root)
+    status = "aligned"
+    hint = None
+    if vnext_enabled and classic_enabled is False:
+        status = "classic_wiki_off"
+        hint = (
+            "KB + Wiki is active but the classic wiki is off; rerun "
+            "`activation-wizard --mode short --choice kb-wiki` to sync .kb/kb.config.json"
+        )
+    elif not vnext_enabled and classic_enabled:
+        status = "classic_wiki_independent"
+        hint = "classic wiki is enabled independently of the vNext kb_alone decision"
+    elif classic_enabled is None:
+        status = "classic_config_missing"
+    return {
+        "vnext_wiki_enabled": vnext_enabled,
+        "classic_wiki_enabled": classic_enabled,
+        "status": status,
+        "hint": hint,
+    }
 
 
 def cmd_session_start(args: argparse.Namespace) -> int:
     root = project_root(args)
     config = load_config_or_fail(root)
     wiki_enabled = bool(config["wiki"]["enabled"])
+    classic_root = classic_kb_root(root)
     paths = {
         "now": str(now_path(root)),
-        "classic_hot": str(root / ".kb" / "memory" / "HOT.md"),
-        "classic_index": str(root / ".kb" / "memory" / "INDEX.md"),
+        "classic_now": str(classic_root / "memory" / "NOW.md"),
+        "classic_hot": str(classic_root / "memory" / "HOT.md"),
+        "classic_index": str(classic_root / "memory" / "INDEX.md"),
     }
     if wiki_enabled:
         paths["wiki_index"] = str(root / ".kb-next" / "wiki" / "index.md")
+        paths["classic_wiki_live"] = str(classic_root / "wiki" / "live")
     result = {
         "event": "session-start",
         "generated_at": now_iso(),
         "activation_mode": config["activation"]["sponsor_decision"],
         "classic_kb_mode": config["classic_kb"]["mode"],
+        "classic_kb": classic_kb_resolution(root),
         "default_reads": config["session_start"]["default_reads"],
         "required_read_paths": [paths["now"]],
         "on_demand_reads": config["session_start"]["on_demand_reads"],
@@ -618,8 +1004,13 @@ def cmd_session_start(args: argparse.Namespace) -> int:
             "historical_artifact_allowed_reasons"
         ],
         "paths": paths,
+        "wiki": wiki_alignment(root, config),
         "actions_run": ["read_kb_next_config", "emit_thin_contract"],
     }
+    if wiki_enabled:
+        status = build_wiki_draft_status(root, config)
+        result["wiki_drafts"] = status["counts"]
+        result["actions_run"].append("wiki_draft_status")
     append_operation(
         root,
         "session-start",
@@ -627,6 +1018,7 @@ def cmd_session_start(args: argparse.Namespace) -> int:
             "activation_mode": result["activation_mode"],
             "default_reads": result["default_reads"],
             "on_demand_reads": result["on_demand_reads"],
+            "wiki_status": result["wiki"]["status"],
         },
     )
     if args.json:
@@ -639,12 +1031,21 @@ def cmd_session_start(args: argparse.Namespace) -> int:
             f"Required default read: {paths['now']}",
             "On demand: " + ", ".join(result["on_demand_reads"]),
         ]
+        if result["wiki"]["hint"]:
+            lines.append(f"Wiki: {result['wiki']['hint']}")
+        if "wiki_drafts" in result:
+            counts = result["wiki_drafts"]
+            lines.append(
+                "Wiki drafts: "
+                f"{counts['needs_synthesis']} to synthesize, {counts['needs_review']} to review, "
+                f"{counts['stale']} stale"
+            )
         emit("\n".join(lines), False)
     return 0
 
 
 def open_classic_kb_readonly(root: Path) -> sqlite3.Connection:
-    db_path = root / ".kb" / "kb.db"
+    db_path = classic_kb_root(root) / "kb.db"
     if not db_path.is_file():
         raise FileNotFoundError(f"classic KB database not found: {db_path}")
     uri = db_path.resolve().as_uri() + "?mode=ro"
@@ -750,8 +1151,7 @@ def record_source_ids(row: sqlite3.Row) -> list[str]:
 def source_health(root: Path, source: dict[str, Any], blocked_source_ids: set[str]) -> dict[str, Any]:
     source_id = str(source["source_id"])
     tags = {str(item) for item in source.get("tags", [])}
-    stored_path_raw = source.get("stored_path")
-    stored_path = Path(str(stored_path_raw)) if stored_path_raw else None
+    stored_path = resolve_source_file(root, source)
     stored_path_exists = bool(stored_path and stored_path.is_file())
     actual_hash = sha256_path(stored_path) if stored_path_exists and stored_path is not None else None
     expected_hash = source.get("content_hash")
@@ -1676,7 +2076,7 @@ def sql_like(value: str) -> str:
     return f"%{value}%"
 
 
-def build_lookup_sql(facet: str, query: str | None) -> tuple[str, list[Any]]:
+def build_lookup_sql(facet: str, query: str | None, domain: str | None = None) -> tuple[str, list[Any]]:
     clauses = ["status = 'ATIVO'"]
     params: list[Any] = []
     if facet == "decisions":
@@ -1689,12 +2089,12 @@ def build_lookup_sql(facet: str, query: str | None) -> tuple[str, list[Any]]:
         if query:
             like = sql_like(query)
             clauses.append(
-                "(title LIKE ? OR content LIKE ? OR tags_json LIKE '%definition%' OR "
+                "(title LIKE ? OR content LIKE ? OR domain LIKE ? OR tags_json LIKE '%definition%' OR "
                 "tags_json LIKE '%definitions%' OR tags_json LIKE '%glossary%' OR "
                 "tags_json LIKE '%glossario%' OR tags_json LIKE '%definicao%' OR "
                 "tags_json LIKE '%definição%')"
             )
-            params.extend([like, like])
+            params.extend([like, like, like])
         else:
             clauses.append(
                 "(tags_json LIKE '%definition%' OR tags_json LIKE '%definitions%' OR "
@@ -1706,10 +2106,13 @@ def build_lookup_sql(facet: str, query: str | None) -> tuple[str, list[Any]]:
     else:
         raise ValueError(f"unsupported facet: {facet}")
 
+    if domain:
+        clauses.append("domain = ?")
+        params.append(domain)
     if query and facet != "definitions":
         like = sql_like(query)
-        clauses.append("(title LIKE ? OR content LIKE ? OR tags_json LIKE ?)")
-        params.extend([like, like, like])
+        clauses.append("(title LIKE ? OR content LIKE ? OR tags_json LIKE ? OR domain LIKE ?)")
+        params.extend([like, like, like, like])
 
     sql = (
         "SELECT * FROM records WHERE "
@@ -2049,14 +2452,19 @@ def validation_from_judgment(
 def cmd_lookup(args: argparse.Namespace) -> int:
     root = project_root(args)
     config = load_config_or_fail(root)
+    domain = getattr(args, "domain", None)
     conn = open_classic_kb_readonly(root)
-    sql, params = build_lookup_sql(args.facet, args.query)
-    rows = conn.execute(sql, params + [args.limit]).fetchall()
+    try:
+        sql, params = build_lookup_sql(args.facet, args.query, domain)
+        rows = conn.execute(sql, params + [args.limit]).fetchall()
+    finally:
+        conn.close()
     result = {
         "event": "lookup",
         "generated_at": now_iso(),
         "facet": args.facet,
         "query": args.query,
+        "domain": domain,
         "access_policy": config["memory_facets"]["access_policy"],
         "default_global_preload": False,
         "classic_kb_mode": config["classic_kb"]["mode"],
@@ -2068,6 +2476,7 @@ def cmd_lookup(args: argparse.Namespace) -> int:
         {
             "facet": args.facet,
             "query": args.query,
+            "domain": domain,
             "result_count": len(rows),
             "classic_kb_mode": config["classic_kb"]["mode"],
         },
@@ -2125,7 +2534,7 @@ def build_ranked_results(judgment: dict[str, Any], candidates: list[dict[str, An
 def cmd_semantic_lookup(args: argparse.Namespace) -> int:
     root = project_root(args)
     config = load_config_or_fail(root)
-    candidates = semantic_candidates(root, args.facet, args.query, args.limit)
+    candidates = semantic_candidates(root, args.facet, args.query, args.limit, domain=getattr(args, "domain", None))
     judgment = judgment_arg(args)
     warnings: list[str] = []
     ranked_results: list[dict[str, Any]] = []
@@ -2255,7 +2664,7 @@ def validate_curation_judgment(judgment: dict[str, Any], candidates: list[dict[s
 def cmd_curation_proposal(args: argparse.Namespace) -> int:
     root = project_root(args)
     load_config_or_fail(root)
-    candidates = semantic_candidates(root, args.facet, args.query, args.limit)
+    candidates = semantic_candidates(root, args.facet, args.query, args.limit, domain=getattr(args, "domain", None))
     judgment = judgment_arg(args)
     if judgment is None:
         validation_status = "needs_llm_judgment"
@@ -2783,14 +3192,16 @@ def cmd_filing_proposal(args: argparse.Namespace) -> int:
 
 
 def classic_kb_script(root: Path) -> Path:
-    path = root / ".kb" / "kb.py"
-    if not path.is_file():
-        raise FileNotFoundError(f"classic KB entrypoint not found: {path}")
-    return path
+    # The workspace entrypoint resolves a linked worktree to the shared KB by
+    # itself; fall back to the resolved KB only when no local entrypoint exists.
+    for path in (root / ".kb" / "kb.py", classic_kb_root(root) / "kb.py"):
+        if path.is_file():
+            return path
+    raise FileNotFoundError(f"classic KB entrypoint not found: {root / '.kb' / 'kb.py'}")
 
 
 def classic_config_path(root: Path) -> Path:
-    return root / ".kb" / "kb.config.json"
+    return classic_kb_root(root) / "kb.config.json"
 
 
 def load_classic_config(root: Path) -> dict[str, Any]:
@@ -3989,6 +4400,360 @@ def cmd_bootstrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def _iso_from_timestamp(value: float) -> str:
+    return datetime.fromtimestamp(value, tz=timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _load_json_dir(directory: Path) -> list[dict[str, Any]]:
+    if not directory.is_dir():
+        return []
+    payloads: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(data, dict):
+            payloads.append(data)
+    return payloads
+
+
+def wiki_topics(root: Path) -> list[dict[str, Any]]:
+    """Domains with enough active records to deserve a wiki topic."""
+    try:
+        conn = open_classic_kb_readonly(root)
+    except FileNotFoundError:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT domain, COUNT(*) AS n, MAX(updated_at) AS last_updated FROM records "
+            "WHERE status = 'ATIVO' GROUP BY domain HAVING COUNT(*) >= ? ORDER BY n DESC, domain",
+            (WIKI_TOPIC_MIN_RECORDS,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "topic": row["domain"],
+            "domain": row["domain"],
+            "active_records": row["n"],
+            "last_record_update": row["last_updated"],
+        }
+        for row in rows
+    ]
+
+
+def build_wiki_draft_status(root: Path, config: dict[str, Any]) -> dict[str, Any]:
+    """Deterministic backlog of vNext wiki drafts; never writes anything."""
+    counts = {"topics": 0, "needs_synthesis": 0, "needs_review": 0, "stale": 0, "current": 0}
+    if not config["wiki"]["enabled"]:
+        return {"wiki_enabled": False, "topics": [], "counts": counts}
+    reviews = _load_json_dir(wiki_review_manifests_root(root))
+    topics: list[dict[str, Any]] = []
+    for topic in wiki_topics(root):
+        name = topic["topic"]
+        slug = slugify(name)
+        drafts = {
+            surface: wiki_drafts_root(root) / surface / f"{slug}.md" for surface in ("machine", "human")
+        }
+        draft_mtimes = [path.stat().st_mtime for path in drafts.values() if path.is_file()]
+        drafts_at = _iso_from_timestamp(max(draft_mtimes)) if draft_mtimes else None
+        topic_reviews = [item for item in reviews if item.get("topic") == name]
+        latest = max(topic_reviews, key=lambda item: str(item.get("created_at") or ""), default=None)
+        materialized = [item for item in topic_reviews if item.get("materialized")]
+        last_materialized = max(materialized, key=lambda item: str(item.get("created_at") or ""), default=None)
+        if not draft_mtimes and last_materialized is None:
+            state = "needs_synthesis"
+        elif latest is None or not latest.get("materialized") or (
+            drafts_at is not None and drafts_at > str(latest.get("created_at") or "")
+        ):
+            state = "needs_review"
+        elif str(topic["last_record_update"] or "") > str(last_materialized.get("created_at") or ""):
+            state = "stale"
+        else:
+            state = "current"
+        counts[state] += 1
+        synth = ["wiki-synthesis-plan", "--topic", name, "--domain", topic["domain"], "--json"]
+        review = ["wiki-draft-review", "--topic", name, "--materialize", "--json"]
+        next_args = {
+            "needs_synthesis": [synth, synth[:-1] + ["--judgment", "@<judgment.json>", "--write-drafts", "--json"], review],
+            "stale": [synth, synth[:-1] + ["--judgment", "@<judgment.json>", "--write-drafts", "--json"], review],
+            "needs_review": [review],
+            "current": [],
+        }[state]
+        topics.append(
+            {
+                **topic,
+                "slug": slug,
+                "state": state,
+                "drafts_present": {surface: path.is_file() for surface, path in drafts.items()},
+                "last_review": (
+                    {
+                        "manifest_id": latest.get("manifest_id"),
+                        "created_at": latest.get("created_at"),
+                        "validation_status": latest.get("validation_status"),
+                        "materialized": bool(latest.get("materialized")),
+                    }
+                    if latest
+                    else None
+                ),
+                "next_args": next_args,
+            }
+        )
+    counts["topics"] = len(topics)
+    return {"wiki_enabled": True, "topics": topics, "counts": counts}
+
+
+def cmd_wiki_draft_status(args: argparse.Namespace) -> int:
+    root = project_root(args)
+    config = load_config_or_fail(root)
+    status = build_wiki_draft_status(root, config)
+    result = {
+        "event": "wiki-draft-status",
+        "generated_at": now_iso(),
+        "min_records_per_topic": WIKI_TOPIC_MIN_RECORDS,
+        **status,
+    }
+    if not status["wiki_enabled"]:
+        result["note"] = "KB + Wiki is not active; run activation-wizard --choice kb-wiki to enable wiki drafts."
+    if args.json:
+        emit(result, True)
+        return 0
+    lines = ["KB/Wiki vNext wiki draft status", ""]
+    if not status["wiki_enabled"]:
+        lines.append(result["note"])
+    for topic in status["topics"]:
+        lines.append(f"- {topic['topic']} ({topic['active_records']} records): {topic['state']}")
+    emit("\n".join(lines), False)
+    return 0
+
+
+def _version_key(name: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in re.findall(r"\d+", name))
+
+
+def _valid_classic_template(path: Path) -> bool:
+    return (
+        (path / "kb.py").is_file()
+        and (path / "runtime" / "__init__.py").is_file()
+        and (path / "kb.config.json").is_file()
+    )
+
+
+def classic_template_candidates(explicit: str | None) -> list[tuple[str, Path]]:
+    """Ordered places where a classic `.kb/` scaffold may live."""
+    here = Path(__file__).resolve().parent
+    candidates: list[tuple[str, Path]] = []
+    if explicit:
+        candidates.append(("explicit", Path(explicit).expanduser().resolve()))
+    # Stand-alone product bundle: <bundle>/runtime + <bundle>/classic-template/.kb
+    candidates.append(("standalone_bundle", here.parent / "classic-template" / ".kb"))
+    # Plugin source tree: plugins/kb-wiki-vnext/runtime -> plugins/kb-lifecycle/scaffold
+    candidates.append(("plugin_sibling", here.parent.parent / "kb-lifecycle" / "scaffold"))
+    # Client cache: <cache>/<marketplace>/kb-wiki-vnext/<ver>/runtime -> kb-lifecycle/<ver>/scaffold
+    cache_parent = here.parent.parent.parent / "kb-lifecycle"
+    if cache_parent.is_dir():
+        for version_dir in sorted(cache_parent.iterdir(), key=lambda item: _version_key(item.name), reverse=True):
+            candidates.append(("plugin_cache_sibling", version_dir / "scaffold"))
+    # Authoring monorepo: core/versions/kb-wiki-vnext/runtime -> core/templates/kb
+    if len(here.parents) > 3:
+        candidates.append(("authoring_repo", here.parents[3] / "core" / "templates" / "kb"))
+    home = Path.home()
+    for base in (home / ".claude" / "plugins" / "cache", home / ".codex" / "plugins" / "cache"):
+        if base.is_dir():
+            found = sorted(
+                base.glob("*/kb-lifecycle/*/scaffold"),
+                key=lambda item: _version_key(item.parent.name),
+                reverse=True,
+            )
+            candidates.extend(("client_cache", item) for item in found)
+    return candidates
+
+
+def select_classic_template(explicit: str | None) -> tuple[str | None, Path | None, list[str]]:
+    tried: list[str] = []
+    for kind, path in classic_template_candidates(explicit):
+        tried.append(str(path))
+        if _valid_classic_template(path):
+            return kind, path, tried
+        if kind == "explicit":
+            raise FileNotFoundError(f"--template is not a classic KB scaffold (needs kb.py, runtime/, kb.config.json): {path}")
+    return None, None, tried
+
+
+def _copy_classic_template(source: Path, target: Path) -> int:
+    copied = 0
+    for current, dirs, files in os.walk(source):
+        current_path = Path(current)
+        dirs[:] = sorted(item for item in dirs if item != "__pycache__")
+        for name in dirs:
+            if path_is_link_or_junction(current_path / name):
+                raise RuntimeError(f"classic template must not contain links: {current_path / name}")
+        for name in sorted(files):
+            if name.endswith((".pyc", ".pyo")) or name == "kb.db" or name.startswith("kb.db-"):
+                continue
+            source_file = current_path / name
+            if path_is_link_or_junction(source_file):
+                raise RuntimeError(f"classic template must not contain links: {source_file}")
+            destination = target / source_file.relative_to(source)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source_file, destination)
+            copied += 1
+    return copied
+
+
+def cmd_install_classic(args: argparse.Namespace) -> int:
+    """Install and initialize the classic `.kb/` for a new vNext workspace."""
+    root = project_root(args)
+    target = root / ".kb"
+    if (target / "kb.py").is_file():
+        emit({"event": "install-classic", "action": "exists", "kb_root": str(target)}, args.json)
+        return 0
+    if target.exists() and (not target.is_dir() or any(target.iterdir())):
+        raise RuntimeError(f"refusing to install into non-empty {target} that has no kb.py")
+    kind, template, tried = select_classic_template(args.template)
+    if template is None:
+        raise FileNotFoundError(
+            "classic KB template not found. Install the kb-lifecycle plugin "
+            "(kb-lifecycle@kb-factory-tools), use the stand-alone bundle, or pass "
+            "--template <scaffold dir>. Tried: " + "; ".join(tried)
+        )
+    created_target = not target.exists() or not any(target.iterdir())
+    copied = _copy_classic_template(template, target)
+    cmd = [sys.executable, str(target / "kb.py"), "init", "--slug", args.slug]
+    add_optional_cli_arg(cmd, "--name", args.name)
+    add_optional_cli_arg(cmd, "--domains", args.domains)
+    add_optional_cli_arg(cmd, "--id-prefix", args.id_prefix)
+    seed = target / "seed" / "initial_records.jsonl"
+    if not args.no_seed and seed.is_file():
+        cmd.extend(["--seed", str(seed)])
+    proc = subprocess.run(cmd, cwd=str(target), text=True, capture_output=True, check=False)
+    if proc.returncode != 0:
+        if created_target:
+            shutil.rmtree(target, ignore_errors=True)
+        raise RuntimeError(
+            "classic init failed; the copied .kb/ was removed: "
+            + ((proc.stderr or proc.stdout).strip() or f"exit {proc.returncode}")
+        )
+    classic_config = json.loads((target / "kb.config.json").read_text(encoding="utf-8-sig"))
+    result = {
+        "event": "install-classic",
+        "action": "created",
+        "kb_root": str(target),
+        "template": {"kind": kind, "path": str(template)},
+        "files_copied": copied,
+        "seed_imported": "--seed" in cmd,
+        "project": classic_config.get("project"),
+        "domains": classic_config.get("domains"),
+        "init_output": proc.stdout.strip().splitlines()[-3:],
+    }
+    append_operation(
+        root,
+        "install-classic",
+        {
+            "template_kind": kind,
+            "files_copied": copied,
+            "seed_imported": result["seed_imported"],
+            "project": classic_config.get("project"),
+        },
+    )
+    emit(result, args.json)
+    return 0
+
+
+def cmd_upgrade_classic(args: argparse.Namespace) -> int:
+    """Refresh only the classic engine (`kb.py` + `runtime/*.py`).
+
+    Data (`kb.db`, `memory/`, `sources/`, `wiki/`, `exports/`, `seed/`) and the
+    project config are never touched. A missing `.kb/.gitignore` is added.
+    """
+    root = project_root(args)
+    target = root / ".kb"
+    if not (target / "kb.py").is_file():
+        raise FileNotFoundError(f"no classic KB at {target}; use install-classic for a new project")
+    kind, template, tried = select_classic_template(args.template)
+    if template is None:
+        raise FileNotFoundError(
+            "classic KB template not found. Install or update the kb-lifecycle plugin, "
+            "or pass --template <scaffold dir>. Tried: " + "; ".join(tried)
+        )
+    if template.resolve() == target.resolve():
+        raise RuntimeError("the template resolves to the project's own .kb/; nothing to upgrade")
+    engine = [Path("kb.py")] + sorted(
+        path.relative_to(template) for path in (template / "runtime").glob("*.py")
+    )
+    changed: list[str] = []
+    for relative in engine:
+        source_file = template / relative
+        destination = target / relative
+        if path_is_link_or_junction(source_file) or path_is_link_or_junction(destination):
+            raise RuntimeError(f"classic engine files must not be links: {relative}")
+        new_bytes = source_file.read_bytes()
+        if destination.is_file() and destination.read_bytes() == new_bytes:
+            continue
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
+        try:
+            temporary.write_bytes(new_bytes)
+            os.replace(temporary, destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+        changed.append(relative.as_posix())
+    gitignore_added = False
+    if not (target / ".gitignore").exists() and (template / ".gitignore").is_file():
+        shutil.copy2(template / ".gitignore", target / ".gitignore")
+        gitignore_added = True
+    result = {
+        "event": "upgrade-classic",
+        "action": "updated" if changed or gitignore_added else "unchanged",
+        "kb_root": str(target),
+        "template": {"kind": kind, "path": str(template)},
+        "changed_files": changed,
+        "gitignore_added": gitignore_added,
+        "kb_py_sha256": sha256_path(target / "kb.py"),
+    }
+    append_operation(
+        root,
+        "upgrade-classic",
+        {
+            "template_kind": kind,
+            "changed_files": changed,
+            "gitignore_added": gitignore_added,
+            "kb_py_sha256": result["kb_py_sha256"],
+        },
+    )
+    emit(result, args.json)
+    return 0
+
+
+def cmd_session_hint(args: argparse.Namespace) -> int:
+    """SessionStart hook text for vNext workspaces; silent anywhere else.
+
+    Silence outside `.kb-next/` lets the classic kb-lifecycle hook govern, so a
+    workspace never receives two conflicting NOW.md instructions.
+    """
+    try:
+        root = project_root(args)
+        config = load_config_or_fail(root)
+        wiki_on = bool((config.get("wiki") or {}).get("enabled"))
+    except Exception:
+        return 0
+    lines = [
+        "KB/Wiki vNext workspace detected.",
+        "Run the vnext-session-start command (shell: `python .kb-next/runtime/kb_next.py session-start --json`) "
+        "and read only `.kb-next/memory/NOW.md` by default.",
+        "Classic `.kb/` stays canonical: use `lookup --facet ... [--domain ...]` or `python .kb/kb.py search` "
+        "for targeted reads; classic NOW/HOT/INDEX are on demand, not a default preload.",
+    ]
+    if wiki_on:
+        lines.append(
+            "KB + Wiki is active: at session end run the vnext-wiki-drafts plugin command "
+            "(runtime `wiki-draft-status`) for topics that need drafts."
+        )
+    print("\n".join(lines))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="KB/Wiki vNext side-by-side runtime")
     parser.add_argument("--project-root", default=".", help="Project root containing .kb/ and/or .kb-next/")
@@ -3999,8 +4764,42 @@ def build_parser() -> argparse.ArgumentParser:
     wizard.add_argument("--choice", choices=sorted(CHOICES.keys()))
     wizard.add_argument("--answers", help="JSON object or @path for guided mode answers")
     wizard.add_argument("--rationale")
+    wizard.add_argument(
+        "--disable-classic-wiki",
+        action="store_true",
+        help="With kb-alone, also turn off an enabled classic wiki in .kb/kb.config.json",
+    )
+    wizard.add_argument(
+        "--no-wiki-sync",
+        action="store_true",
+        help="With kb-wiki, skip the initial classic wiki-sync",
+    )
     wizard.add_argument("--json", action="store_true")
     wizard.set_defaults(func=cmd_activation_wizard)
+
+    install = sub.add_parser(
+        "install-classic",
+        help="Copy the classic .kb/ scaffold into the project and run classic init",
+    )
+    install.add_argument("--slug", required=True, help="Project slug; default record ID prefix")
+    install.add_argument("--name", help="Project display name")
+    install.add_argument("--domains", help="Comma-separated KB domains")
+    install.add_argument("--id-prefix", dest="id_prefix", help="Record ID prefix override")
+    install.add_argument("--template", help="Classic scaffold directory (default: auto-discovery)")
+    install.add_argument("--no-seed", action="store_true", help="Do not import the scaffold seed records")
+    install.add_argument("--json", action="store_true")
+    install.set_defaults(func=cmd_install_classic)
+
+    upgrade_classic = sub.add_parser(
+        "upgrade-classic",
+        help="Refresh the classic .kb/ engine (kb.py + runtime/) without touching data or config",
+    )
+    upgrade_classic.add_argument("--template", help="Classic scaffold directory (default: auto-discovery)")
+    upgrade_classic.add_argument("--json", action="store_true")
+    upgrade_classic.set_defaults(func=cmd_upgrade_classic)
+
+    hint = sub.add_parser("session-hint", help="SessionStart hook text; silent outside vNext workspaces")
+    hint.set_defaults(func=cmd_session_hint)
 
     boot = sub.add_parser("bootstrap", help="Install this runtime into <project>/.kb-next/runtime/kb_next.py")
     boot.add_argument("--force", action="store_true")
@@ -4030,6 +4829,7 @@ def build_parser() -> argparse.ArgumentParser:
     lookup = sub.add_parser("lookup")
     lookup.add_argument("--facet", choices=MEMORY_FACETS, required=True)
     lookup.add_argument("--query")
+    lookup.add_argument("--domain", help="Restrict results to one KB domain")
     lookup.add_argument("--limit", type=int, default=10)
     lookup.add_argument("--json", action="store_true")
     lookup.set_defaults(func=cmd_lookup)
@@ -4037,6 +4837,7 @@ def build_parser() -> argparse.ArgumentParser:
     semantic = sub.add_parser("semantic-lookup")
     semantic.add_argument("--query", required=True)
     semantic.add_argument("--facet", choices=MEMORY_FACETS, required=True)
+    semantic.add_argument("--domain", help="Restrict candidates to one KB domain")
     semantic.add_argument("--limit", type=int, default=10)
     semantic.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     semantic.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
@@ -4046,6 +4847,7 @@ def build_parser() -> argparse.ArgumentParser:
     curation = sub.add_parser("curation-proposal")
     curation.add_argument("--query", required=True)
     curation.add_argument("--facet", choices=MEMORY_FACETS, required=True)
+    curation.add_argument("--domain", help="Restrict candidates to one KB domain")
     curation.add_argument("--limit", type=int, default=10)
     curation.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     curation.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
@@ -4097,6 +4899,13 @@ def build_parser() -> argparse.ArgumentParser:
     wiki_review.add_argument("--materialize", action="store_true")
     wiki_review.add_argument("--json", action="store_true")
     wiki_review.set_defaults(func=cmd_wiki_draft_review)
+
+    wiki_status = sub.add_parser(
+        "wiki-draft-status",
+        help="List wiki topics that need vNext drafts, review, or refresh (read-only)",
+    )
+    wiki_status.add_argument("--json", action="store_true")
+    wiki_status.set_defaults(func=cmd_wiki_draft_status)
 
     return parser
 
