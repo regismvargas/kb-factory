@@ -1,11 +1,11 @@
 {
   "schema_version": 2,
   "record_type": "controlled-source-to-public-release",
-  "source_sha": "13f52d54613917342f113d55307aca09dcb0fdce",
+  "source_sha": "2be294621b2b1a6405be5a33752770d7909ce90f",
   "baseline_public_sha": "af865b6aff95852d6fc1dc090055cbbc0a85f977",
   "policy_version": "2026-07-19.3",
   "export_stage_file_count": 252,
-  "final_public_file_count": 256,
+  "final_public_file_count": 257,
   "omitted_source_files": [
     "core/templates/kb/runtime/conformance.json"
   ],

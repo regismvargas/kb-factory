@@ -36,7 +36,7 @@ Session Gate segue a mesma distinção com o basename lógico
 | `new-project-init-kb-alone` | projeto novo | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-alone` | cria `.kb/` quando ausente e configura `.kb-next/` |
 | `new-project-init-kb-wiki` | projeto novo | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-wiki` | cria `.kb/` quando ausente e `.kb-next/`; liga o wiki clássico e publica `.kb/wiki/live`; drafts vNext nunca são copiados para lá |
 | `new-project-verify-install` | projeto novo | Codex, Claude Code, Claude Cowork | `session-start` mais `lookup` determinístico | sem escrita canônica; append em `.kb-next/operations.jsonl` |
-| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detectar `.kb-next/`, `.kb/`, CASE; rotear vNext primeiro | sem escrita canônica; rota vNext faz append em `.kb-next/operations.jsonl` |
+| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detectar `.kb-next/` e `.kb/`; rotear vNext primeiro | sem escrita canônica; rota vNext faz append em `.kb-next/operations.jsonl` |
 | `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | detectar sistemas e resumir closeout | sem escrita canônica por padrão |
 
 Comandos apenas de runtime:

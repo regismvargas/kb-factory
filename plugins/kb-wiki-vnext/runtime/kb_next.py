@@ -692,13 +692,49 @@ def classic_wiki_enabled(root: Path) -> bool | None:
     return bool(wiki.get("enabled", False)) if isinstance(wiki, dict) else False
 
 
-def write_now(root: Path, config: dict[str, Any]) -> None:
+NOW_GENERATED_MARKER = "<!-- kb-next:generated-now -->"
+NOW_TEMPLATE_TITLE = "# KB/Wiki vNext NOW"
+NOW_TEMPLATE_HEADINGS = frozenset({"## Required Default Read", "## On Demand", "## Wiki Flow"})
+
+
+def is_generated_now(text: str) -> bool:
+    """True when NOW.md is a runtime-generated template that may be regenerated.
+
+    Generated files carry the marker; files written by older runtimes are
+    recognized by their exact shape (template title, template headings only,
+    bullets only). Anything else was curated and must be preserved.
+    """
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").split("\n")]
+    if NOW_GENERATED_MARKER in lines:
+        return True
+    body = [line for line in lines if line.strip()]
+    if not body or body[0] != NOW_TEMPLATE_TITLE:
+        return False
+    for line in body[1:]:
+        if line.startswith("## "):
+            if line not in NOW_TEMPLATE_HEADINGS:
+                return False
+        elif not line.startswith("- "):
+            return False
+    return True
+
+
+def write_now(root: Path, config: dict[str, Any]) -> dict[str, Any]:
+    path = now_path(root)
+    if path.is_file() and not is_generated_now(path.read_text(encoding="utf-8", errors="replace")):
+        return {
+            "action": "preserved",
+            "path": str(path),
+            "reason": "curated NOW.md (not a generated template); delete it to regenerate",
+        }
+    existed = path.is_file()
     mode = config["activation"]["sponsor_decision"]
     wiki_enabled = config["wiki"]["enabled"]
     classic_wiki = classic_wiki_enabled(root)
     classic_label = "absent" if classic_wiki is None else str(classic_wiki).lower()
     lines = [
-        "# KB/Wiki vNext NOW",
+        NOW_TEMPLATE_TITLE,
+        NOW_GENERATED_MARKER,
         "",
         f"- Generated: `{now_iso()}`",
         f"- Activation mode: `{mode}`",
@@ -727,9 +763,34 @@ def write_now(root: Path, config: dict[str, Any]) -> None:
                 "- At session end, run `wiki-draft-status` and draft pending topics with `wiki-synthesis-plan` + `wiki-draft-review` (plugin command `vnext-wiki-drafts`).",
             ]
         )
-    path = now_path(root)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return {"action": "regenerated" if existed else "created", "path": str(path)}
+
+
+DECISION_KEPT_KEYS = ("decided_at", "rationale", "source", "recommended_mode", "guided_score")
+
+
+def reconcile_decision(root: Path, decision: dict[str, Any], *, explicit_rationale: bool) -> tuple[dict[str, Any], str]:
+    """Keep the recorded decision when re-activation confirms the same mode."""
+    path = decision_path(root)
+    try:
+        previous = json.loads(path.read_text(encoding="utf-8-sig")) if path.is_file() else None
+    except (OSError, ValueError):
+        previous = None
+    if not isinstance(previous, dict):
+        return decision, "recorded"
+    same_mode = previous.get("sponsor_decision") == decision["sponsor_decision"]
+    if same_mode and not explicit_rationale:
+        kept = dict(previous)
+        kept["reconfirmed_at"] = decision["decided_at"]
+        for key in ("mode", "sponsor_decision"):
+            kept[key] = decision[key]
+        return kept, "reconfirmed"
+    updated = dict(decision)
+    updated["previous_decision"] = {key: previous.get(key) for key in ("sponsor_decision", *DECISION_KEPT_KEYS)
+                                    if key in previous}
+    return updated, "changed" if not same_mode else "rationale_updated"
 
 
 def load_config_or_fail(root: Path) -> dict[str, Any]:
@@ -882,6 +943,7 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
     if config_path(root).is_file():
         loaded = json.loads(config_path(root).read_text(encoding="utf-8"))
         existing = loaded if isinstance(loaded, dict) else None
+    decision, decision_action = reconcile_decision(root, decision, explicit_rationale=bool(args.rationale))
     config = merge_config(existing, build_config(root, decision))
     changed_keys = changed_key_paths(existing, config)
     # Classic first: a malformed classic config aborts before any vNext write.
@@ -901,7 +963,7 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
         else:
             wiki_sync = run_classic_wiki_sync(root)
         append_operation(root, "classic-wiki-sync", wiki_sync)
-    write_now(root, config)
+    now_result = write_now(root, config)
     append_operation(
         root,
         "activation-wizard",
@@ -911,6 +973,8 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
             "recommended_mode": recommended_mode,
             "config_path": str(config_path(root)),
             "decision_path": str(decision_path(root)),
+            "decision": decision_action,
+            "now": now_result.get("action"),
             "config_merge": {
                 "preserved_existing": existing is not None,
                 "changed_keys": changed_keys,
@@ -922,6 +986,8 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
     result = {
         "event": "activation-wizard",
         "activation": decision,
+        "decision": decision_action,
+        "now": now_result,
         "config_merge": {
             "preserved_existing": existing is not None,
             "changed_keys": changed_keys,

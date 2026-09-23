@@ -1,7 +1,7 @@
-"""Detect vNext, KB-lifecycle, and CASE Companion surfaces for Session Gate.
+"""Detect KB/Wiki vNext and KB-lifecycle surfaces for Session Gate.
 
 The wrapper must stay thin, so this detector resolves canonical references when
-possible instead of hardcoding CASE or KB rules into the wrapper itself.
+possible instead of hardcoding KB rules into the wrapper itself.
 """
 
 from __future__ import annotations
@@ -48,7 +48,6 @@ def _resolve_reference(root: Path, *relative_candidates: str) -> str | None:
     env_roots = [
         os.environ.get("SESSION_GATE_CANON_ROOT"),
         os.environ.get("KB_WIKI_VNEXT_ROOT"),
-        os.environ.get("CASE_COMPANION_ROOT"),
         os.environ.get("KB_LIFECYCLE_ROOT"),
     ]
 
@@ -78,7 +77,6 @@ def detect(root: Path) -> dict:
     result = {
         "vnext": {"found": False, "details": {}},
         "kb": {"found": False, "details": {}},
-        "case": {"found": False, "details": {}},
         "summary": [],
     }
 
@@ -119,60 +117,9 @@ def detect(root: Path) -> dict:
         )
         result["summary"].append("KB-lifecycle detected (.kb/ present)")
 
-    case_markers = ["kickoffs", "reviews", "workpackages"]
-    found_markers = [marker for marker in case_markers if (root / marker).is_dir()]
-    has_companion_state = (root / "companion_state.json").is_file()
-
-    if found_markers or has_companion_state:
-        result["case"]["found"] = True
-        details = result["case"]["details"]
-        details["directories"] = found_markers
-        details["companion_state"] = has_companion_state
-        kickoffs_dir = root / "kickoffs"
-        if kickoffs_dir.is_dir():
-            handoffs = sorted(
-                kickoffs_dir.glob("HANDOFF_SESSION_*"),
-                key=lambda item: item.stat().st_mtime,
-                reverse=True,
-            )
-            details["latest_handoff"] = (
-                str(handoffs[0].relative_to(root)) if handoffs else None
-            )
-            details["active_kickoffs"] = len(
-                [item for item in kickoffs_dir.iterdir() if item.is_file() and "HANDOFF" not in item.name]
-            )
-        else:
-            details["latest_handoff"] = None
-            details["active_kickoffs"] = 0
-
-        details["role_boundaries_ref"] = _resolve_reference(
-            root,
-            "plugins/case-companion/skills/case-orchestration/references/role-boundaries.md",
-        )
-        details["handoff_command_ref"] = _resolve_reference(
-            root, "plugins/case-companion/commands/handoff.md"
-        )
-        details["handoff_template_ref"] = _resolve_reference(
-            root,
-            "plugins/case-companion/skills/case-orchestration/references/handoff-template.md",
-        )
-        details["case_skill_ref"] = _resolve_reference(
-            root, "plugins/case-companion/skills/case-orchestration/SKILL.md"
-        )
-        details["partial"] = has_companion_state and len(found_markers) < 3
-        has_any_ref = details.get("role_boundaries_ref") or details.get("case_skill_ref")
-        details["orphan_state"] = has_companion_state and not has_any_ref
+    if not result["vnext"]["found"] and not result["kb"]["found"]:
         result["summary"].append(
-            f"CASE Companion detected ({', '.join(found_markers) or 'companion_state.json'})"
-        )
-
-    if (
-        not result["vnext"]["found"]
-        and not result["kb"]["found"]
-        and not result["case"]["found"]
-    ):
-        result["summary"].append(
-            "No KB/Wiki vNext, KB-lifecycle, or CASE artifacts found in this workspace"
+            "No KB/Wiki vNext or KB-lifecycle artifacts found in this workspace"
         )
 
     return result

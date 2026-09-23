@@ -827,3 +827,51 @@ def test_release_tools_bundle_from_a_desktop_worktree_path() -> None:
     assert check(root / ".claude" / "worktrees" / "x" / "a.md", root) is True
     assert check(root / "state" / "runs" / "r" / "a.md", root) is True
     assert check(root / ".kb" / "wiki" / "live" / "a.md", root) is True
+
+
+def test_reactivation_preserves_curated_now_and_the_recorded_decision(tmp_path: Path) -> None:
+    """Re-running the wizard (upgrades, portfolio rollouts) must not replace a
+    curated NOW.md with the template or reset the decision's date and rationale."""
+    project = _existing_project(tmp_path)
+    first = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki",
+                       "--rationale", "Owner chose KB + Wiki for the research program.")
+    assert first["now"]["action"] == "created"
+    assert first["decision"] == "recorded"
+    now = project / ".kb-next" / "memory" / "NOW.md"
+    decision_file = project / ".kb-next" / "decisions" / "activation-decision.json"
+    recorded = json.loads(decision_file.read_text(encoding="utf-8"))
+
+    again = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    assert again["now"]["action"] == "regenerated"  # a generated template is safe to refresh
+    kept = json.loads(decision_file.read_text(encoding="utf-8"))
+    assert again["decision"] == "reconfirmed"
+    assert kept["decided_at"] == recorded["decided_at"]
+    assert kept["rationale"] == "Owner chose KB + Wiki for the research program."
+    assert "reconfirmed_at" in kept
+
+    curated = "# NOW - research program\n\nStatus written by the team; not a template.\n"
+    now.write_text(curated, encoding="utf-8")
+    third = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    assert third["now"]["action"] == "preserved"
+    assert now.read_text(encoding="utf-8") == curated
+    last_op = read_operations(project)[-1]
+    assert last_op["details"]["now"] == "preserved"
+    assert last_op["details"]["decision"] == "reconfirmed"
+
+    switched = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-alone")
+    assert switched["decision"] == "changed"
+    changed = json.loads(decision_file.read_text(encoding="utf-8"))
+    assert changed["sponsor_decision"] == "kb_alone"
+    assert changed["previous_decision"]["sponsor_decision"] == "kb_wiki"
+    assert changed["previous_decision"]["decided_at"] == recorded["decided_at"]
+
+
+def test_generated_now_detection_recognizes_old_templates_only() -> None:
+    module = vnext_module()
+    old_template = (
+        "# KB/Wiki vNext NOW\n\n- Generated: `2026-07-19T22:45:46Z`\n- Activation mode: `kb_wiki`\n\n"
+        "## Required Default Read\n- Read this `NOW.md` only.\n\n## On Demand\n- Use `lookup` as fallback.\n"
+    )
+    assert module.is_generated_now(old_template) is True
+    assert module.is_generated_now(old_template + "\n## Status (2026-07-21)\n\nDesign notes.\n") is False
+    assert module.is_generated_now("# NOW - project\n\n- item\n") is False

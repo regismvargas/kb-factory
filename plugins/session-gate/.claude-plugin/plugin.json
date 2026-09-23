@@ -1,7 +1,7 @@
 {
   "name": "session-gate",
   "version": "0.2.8",
-  "description": "Thin session-boundary wrapper for KB-lifecycle and CASE Companion. Explicit fallback when session hooks are disabled, unavailable, or not observable.",
+  "description": "Thin session-boundary wrapper for KB-lifecycle and KB/Wiki vNext. Explicit fallback when session hooks are disabled, unavailable, or not observable.",
   "author": {
     "name": "KB Factory"
   },
@@ -12,7 +12,6 @@
     "cowork",
     "session",
     "kb",
-    "case",
     "wrapper"
   ],
   "skills": "./skills/"

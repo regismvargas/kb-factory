@@ -1,6 +1,6 @@
 ---
 name: kb-wiki-maintainer
-description: Maintain a CASE-compatible project Knowledge Base — ingest raw sources, file typed records, refresh the derived markdown wiki, and run lifecycle maintenance. Use when the project has a `.kb/` directory, when the user mentions "KB", "knowledge base", "ingest source", "session start", "update wiki", "answer from KB", or when bootstrapping memory for a new project.
+description: Maintain a project Knowledge Base, ingest raw sources, file typed records, refresh the derived markdown wiki, and run lifecycle maintenance. Use when the project has a `.kb/` directory, when the user mentions "KB", "knowledge base", "ingest source", "session start", "update wiki", "answer from KB", or when bootstrapping memory for a new project.
 ---
 
 # KB Wiki Maintainer
@@ -176,7 +176,7 @@ Use the `file` command when a conversation result has lasting value and should b
 python .kb/kb.py filing-policy --json
 ```
 
-Agents, reviewers, and CASE workflows should cite that command's output instead of hardcoding thresholds.
+Agents, reviewers, and workflows should cite that command's output instead of hardcoding thresholds.
 
 #### When to File
 
@@ -210,7 +210,7 @@ Bands come from `filing_policy.confidence_bands`. Read them with `python .kb/kb.
 - `review` ≤ confidence < `high` → present to user for review before filing.
 - confidence < `review` → do not file without explicit approval.
 
-Do not hardcode the numeric values in skill or CASE guidance. The policy is the single source of truth; changing a threshold means editing `kb.config.json#filing_policy` and the new value flows to `filing-status` banding and to every consumer of `filing-policy --json`.
+Do not hardcode the numeric values in skill or workflow guidance. The policy is the single source of truth; changing a threshold means editing `kb.config.json#filing_policy` and the new value flows to `filing-status` banding and to every consumer of `filing-policy --json`.
 
 #### Commands
 
@@ -346,7 +346,7 @@ If shell access is not available:
 4. Do not auto-demote HOT records from semantic judgment alone; use governed
    proposals or explicit classic KB commands.
 5. Do not treat the wiki as the canonical truth when the KB says otherwise.
-6. Do not let CASE dispatch artifacts become a shadow KB.
+6. Do not let workflow artifacts become a shadow KB.
 
 See `reference.md` for lifecycle and automation guidance.
 

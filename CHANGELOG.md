@@ -27,6 +27,9 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - Plugin commands cite only paths that exist; SessionStart hooks no longer
   give conflicting default reads; `lookup` accepts `--domain`.
 - `kb-factory vnext-init` defaults to `kb-alone`, like the plugin commands.
+- Re-running `activation-wizard` keeps a curated `.kb-next/memory/NOW.md` (only
+  a generated template is regenerated) and, for the same mode, keeps the
+  recorded decision date and rationale (adds `reconfirmed_at`).
 
 ### Added
 - `kb.py init --name --slug --domains --id-prefix`, project-prefixed record
@@ -34,6 +37,11 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - vNext runtime `install-classic`, `upgrade-classic`, `wiki-draft-status`,
   `session-hint`; plugin command `vnext-wiki-drafts`.
 - `kb-factory init --name/--slug/--domains/--id-prefix/--no-seed`.
+
+### Removed
+- Every reference to the retired CASE workflow framework: Session Gate no
+  longer detects or routes to CASE surfaces, and plugin descriptions, tags,
+  the scaffold seed and the KB skill no longer mention it.
 
 ### Changed
 - Release lines: Python package `0.1.5`, catalog `0.3.9`, kb-lifecycle

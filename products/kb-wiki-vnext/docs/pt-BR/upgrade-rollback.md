@@ -84,6 +84,10 @@ projeto:
    e registra `classic-config-sync` e `classic-wiki-sync` em
    `.kb-next/operations.jsonl`. Edições em `.kb-next/kb-next.config.json`
    sobrevivem ao merge.
+   Um `.kb-next/memory/NOW.md` curado é preservado (só o template gerado é
+   regenerado) e reaplicar o mesmo modo mantém `decided_at` e `rationale`
+   registrados, acrescentando `reconfirmed_at`; o JSON informa `now.action` e
+   `decision`.
 4. Projetos só-clássicos que já usam o wiki:
    `python .kb/kb.py wiki-config --enable --json`.
 5. Normalize caminhos de fonte absolutos legados:

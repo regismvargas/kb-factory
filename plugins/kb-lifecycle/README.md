@@ -6,7 +6,7 @@ Release-candidate version: `0.2.4`.
 
 ## Purpose
 
-This plugin packages a CASE-compatible workflow for:
+This plugin packages a KB lifecycle workflow for:
 
 - Codex
 - Claude Code
@@ -22,12 +22,12 @@ The plugin is intentionally thin. It does not own durable memory. It points the 
 - Claude session-start hook at `hooks/hooks.json`
 - Shared helper script at `scripts/session_start_context.py`
 
-## CASE Compatibility Rules
+## Design Rules
 
 1. `.kb/` remains the durable memory layer.
 2. `NOW`, `HOT`, `INDEX`, and `python .kb/kb.py` remain the operating surface.
 3. Plugin output must not become a second memory store.
-4. Dispatch and export artifacts stay thin and disposable.
+4. Export artifacts stay thin and disposable.
 
 ## Install Surfaces
 

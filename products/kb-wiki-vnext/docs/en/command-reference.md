@@ -36,7 +36,7 @@ clients. Session Gate follows the same distinction with the logical basename
 | `new-project-init-kb-alone` | new project | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-alone` | creates `.kb/` when absent and configures `.kb-next/` |
 | `new-project-init-kb-wiki` | new project | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-wiki` | creates `.kb/` when absent and `.kb-next/`; enables the classic wiki and publishes `.kb/wiki/live`; vNext drafts are never copied there |
 | `new-project-verify-install` | new project | Codex, Claude Code, Claude Cowork | `session-start` plus deterministic `lookup` | no canonical write; appends `.kb-next/operations.jsonl` |
-| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detect `.kb-next/`, `.kb/`, CASE; route vNext first | no canonical write; vNext route appends `.kb-next/operations.jsonl` |
+| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detect `.kb-next/` and `.kb/`; route vNext first | no canonical write; vNext route appends `.kb-next/operations.jsonl` |
 | `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | detect systems and summarize closeout | no canonical write by default |
 
 Runtime-only commands:

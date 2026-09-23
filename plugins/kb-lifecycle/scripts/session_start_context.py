@@ -42,10 +42,6 @@ def main() -> int:
             "If the wiki layer is enabled, inspect `.kb/wiki/live/index.md` or run `python .kb/kb.py wiki-check --json` before editing generated pages."
         )
 
-    lines.append(
-        "For CASE projects, keep dispatch and handoff artifacts thin. Durable project memory still belongs in `.kb/`."
-    )
-
     print("\n".join(lines))
     return 0
 

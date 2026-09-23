@@ -63,10 +63,10 @@ def test_runtime_copies_and_release_provenance_are_bound() -> None:
     assert match is not None and match.group(1) == b"0.1.8"
 
     provenance = _json(".kb-factory-public-export.json")
-    assert provenance["source_sha"] == "13f52d54613917342f113d55307aca09dcb0fdce"
+    assert provenance["source_sha"] == "2be294621b2b1a6405be5a33752770d7909ce90f"
     assert provenance["baseline_public_sha"] == "af865b6aff95852d6fc1dc090055cbbc0a85f977"
     assert provenance["policy_version"] == "2026-07-19.3"
-    assert provenance["final_public_file_count"] == 256
+    assert provenance["final_public_file_count"] == 257
     assert provenance["final_integrity_binding"] == {
         "git_ref": "refs/tags/v0.1.5",
         "scope": "all tracked files in the tagged public commit",

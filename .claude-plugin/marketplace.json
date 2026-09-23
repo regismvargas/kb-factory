@@ -13,15 +13,13 @@
         "name": "KB Factory"
       },
       "category": "Productivity",
-      "description": "CASE-compatible KB lifecycle and wiki maintenance plugin. Use when a project has a `.kb/` directory and needs session bootstrap, source ingestion, or wiki refresh.",
+      "description": "KB lifecycle and wiki maintenance plugin. Use when a project has a `.kb/` directory and needs session bootstrap, source ingestion, or wiki refresh.",
       "name": "kb-lifecycle",
       "source": "./plugins/kb-lifecycle",
       "tags": [
         "knowledge-base",
         "wiki",
-        "memory",
-        "case",
-        "cch-v0.7"
+        "memory"
       ],
       "version": "0.2.4"
     },
@@ -37,7 +35,6 @@
         "cowork",
         "session",
         "kb",
-        "case",
         "wrapper"
       ],
       "version": "0.2.8"

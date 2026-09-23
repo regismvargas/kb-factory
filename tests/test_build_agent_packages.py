@@ -99,7 +99,7 @@ def kb_source(tmp_path: Path) -> Path:
 @pytest.fixture()
 def skill_source(tmp_path: Path) -> Path:
     source = tmp_path / "skills"
-    _seed_skill(source, "case-adoption-audit")
+    _seed_skill(source, "example-skill")
     return source
 
 
@@ -131,11 +131,11 @@ def test_clean_claude_plugin_passes(tmp_path: Path, kb_source: Path) -> None:
 
 
 def test_clean_skill_passes(tmp_path: Path, skill_source: Path) -> None:
-    out = tmp_path / "case-adoption-audit-skill-0.0.0.zip"
+    out = tmp_path / "example-skill-skill-0.0.0.zip"
     artifact = Artifact(
-        source_root=skill_source / "case-adoption-audit",
+        source_root=skill_source / "example-skill",
         archive_path=out,
-        archive_root="case-adoption-audit",
+        archive_root="example-skill",
     )
     write_zip(artifact)
     assert validate_artifact(artifact, out) == []
@@ -249,31 +249,31 @@ def test_rule_3_rejects_openai_yaml_in_claude_plugin(
 def test_rule_4_rejects_missing_skill_md(
     tmp_path: Path, skill_source: Path
 ) -> None:
-    out = tmp_path / "case-adoption-audit-skill-0.0.0.zip"
+    out = tmp_path / "example-skill-skill-0.0.0.zip"
     artifact = Artifact(
-        source_root=skill_source / "case-adoption-audit",
+        source_root=skill_source / "example-skill",
         archive_path=out,
-        archive_root="case-adoption-audit",
+        archive_root="example-skill",
     )
     write_zip(artifact)
-    _rewrite_zip(out, drop={"case-adoption-audit/SKILL.md"})
+    _rewrite_zip(out, drop={"example-skill/SKILL.md"})
     errors = validate_artifact(artifact, out)
-    assert any("missing case-adoption-audit/SKILL.md" in e for e in errors)
+    assert any("missing example-skill/SKILL.md" in e for e in errors)
 
 
 def test_rule_4_rejects_multiple_skill_md(
     tmp_path: Path, skill_source: Path
 ) -> None:
-    out = tmp_path / "case-adoption-audit-skill-0.0.0.zip"
+    out = tmp_path / "example-skill-skill-0.0.0.zip"
     artifact = Artifact(
-        source_root=skill_source / "case-adoption-audit",
+        source_root=skill_source / "example-skill",
         archive_path=out,
-        archive_root="case-adoption-audit",
+        archive_root="example-skill",
     )
     write_zip(artifact)
     _add_to_zip(
         out,
-        "case-adoption-audit/nested/SKILL.md",
+        "example-skill/nested/SKILL.md",
         b"---\nname: nested\n---\n",
     )
     errors = validate_artifact(artifact, out)
@@ -283,11 +283,11 @@ def test_rule_4_rejects_multiple_skill_md(
 def test_rule_4_rejects_unexpected_top_level_dir(
     tmp_path: Path, skill_source: Path
 ) -> None:
-    out = tmp_path / "case-adoption-audit-skill-0.0.0.zip"
+    out = tmp_path / "example-skill-skill-0.0.0.zip"
     artifact = Artifact(
-        source_root=skill_source / "case-adoption-audit",
+        source_root=skill_source / "example-skill",
         archive_path=out,
-        archive_root="case-adoption-audit",
+        archive_root="example-skill",
     )
     write_zip(artifact)
     _add_to_zip(out, "other-skill/extra.txt", b"x")
@@ -298,11 +298,11 @@ def test_rule_4_rejects_unexpected_top_level_dir(
 def test_rule_4_rejects_root_level_file(
     tmp_path: Path, skill_source: Path
 ) -> None:
-    out = tmp_path / "case-adoption-audit-skill-0.0.0.zip"
+    out = tmp_path / "example-skill-skill-0.0.0.zip"
     artifact = Artifact(
-        source_root=skill_source / "case-adoption-audit",
+        source_root=skill_source / "example-skill",
         archive_path=out,
-        archive_root="case-adoption-audit",
+        archive_root="example-skill",
     )
     write_zip(artifact)
     _add_to_zip(out, "README.md", b"stray root file")
@@ -313,13 +313,13 @@ def test_rule_4_rejects_root_level_file(
 def test_rule_4_rejects_skill_md_without_frontmatter(
     tmp_path: Path, skill_source: Path
 ) -> None:
-    skill = skill_source / "case-adoption-audit"
+    skill = skill_source / "example-skill"
     (skill / "SKILL.md").write_text("no frontmatter here\n", encoding="utf-8")
-    out = tmp_path / "case-adoption-audit-skill-0.0.0.zip"
+    out = tmp_path / "example-skill-skill-0.0.0.zip"
     artifact = Artifact(
         source_root=skill,
         archive_path=out,
-        archive_root="case-adoption-audit",
+        archive_root="example-skill",
     )
     write_zip(artifact)
     errors = validate_artifact(artifact, out)
@@ -423,7 +423,7 @@ def test_vnext_packages_are_separate_and_do_not_collide(tmp_path: Path) -> None:
         "kb-wiki-vnext-claude-plugin-0.1.10.zip",
         "kb-wiki-vnext-cowork-plugin-0.1.10.zip",
     }
-    assert not any(name.startswith(("kb-lifecycle", "session-gate", "case-companion")) for name in names)
+    assert not any(name.startswith(("kb-lifecycle", "session-gate")) for name in names)
 
     for artifact in artifacts:
         write_zip(artifact)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -83,150 +82,59 @@ def pending(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
-def active_kickoffs(workspace: Path) -> list[str]:
-    root = workspace / "kickoffs"
-    if not root.is_dir():
-        return []
-    return sorted(
-        item.name
-        for item in root.iterdir()
-        if item.is_file() and "HANDOFF" not in item.name
-    )
-
-
 def forbidden_case_terms(text: str) -> bool:
     lowered = text.lower()
     return any(term in lowered for term in ["case", "handoff", "role bound", "allow", "block"])
-
-
-def build_handoff(workspace: Path, session_id: str, items: list[str], git: str) -> Path:
-    safe = re.sub(r"[^A-Za-z0-9_-]", "", session_id)
-    path = workspace / "kickoffs" / f"HANDOFF_SESSION_{safe}_EXIT.md"
-    files = [f"kickoffs/{path.name}"]
-    for candidate in [
-        "kickoffs/WP-042-rate-limiting.md",
-        ".kb/memory/NOW.md",
-        ".kb/memory/HOT.md",
-    ]:
-        if (workspace / candidate).exists():
-            files.append(candidate)
-    items_md = "\n".join(f"- [ ] {item}" for item in items) or "- [ ] No verified pending items found."
-    write(
-        path,
-        f"""
-# Handoff: Session {session_id} Exit
-
-**From:** Session Gate wrapper evaluation
-**Date:** 2026-04-13
-**Purpose:** Preserve verified state for the next Cowork session.
-**Status:** EXIT
-
-## Executive Summary
-
-Session closeout was executed as a thin wrapper over KB-lifecycle and CASE Companion.
-The workspace still has an undispatched kickoff for WP-042 and open KB pendencias.
-No new session decision could be verified from workspace artifacts alone, so none was fabricated here.
-
-## Git State
-
-### mock-full
-- {git}
-
-## Decisions Made
-
-| ID | Decision | Rationale |
-|----|----------|-----------|
-| None verified | No new session decision was confirmed from workspace evidence | Avoid inventing D-S14 records or handoff claims |
-
-## Pending Items
-
-{items_md}
-
-## Files to Read in Next Session
-
-{chr(10).join(f"{i}. {item}" for i, item in enumerate(files, start=1))}
-""",
-    )
-    return path
 
 
 def startup_executor(workspace: Path, with_skill: bool):
     detect = DETECTOR.detect(workspace)
     data = {
         "kb": detect["kb"]["found"],
-        "case": detect["case"]["found"],
         "kb_start": False,
         "kb_end": False,
         "now": False,
         "hot": False,
-        "role": False,
-        "handoff": False,
-        "consistency": False,
         "pending": [],
         "action": "",
         "git": "",
-        "handoff_path": None,
     }
     lines = ["# Session Gate Output", ""]
-    if not data["kb"] and not data["case"]:
+    if not data["kb"]:
         suggestion = (
-            "Considere configurar KB-lifecycle e CASE Companion se este projeto precisar de contexto durável."
+            "Considere configurar KB-lifecycle se este projeto precisar de contexto durável."
             if with_skill
             else "Documente objetivos, dependências e testes antes de começar."
         )
-        lines += ["## Workspace detected", "No KB-lifecycle or CASE artifacts were found in this workspace.", "", "## Suggested next action", suggestion]
+        lines += ["## Workspace detected", "No KB-lifecycle artifacts were found in this workspace.", "", "## Suggested next action", suggestion]
         data["action"] = suggestion
         return "\n".join(lines), data
-    lines += ["## Workspace detected"]
-    if data["kb"] and data["case"]:
-        lines.append("KB-lifecycle and CASE Companion detected.")
-    elif data["kb"]:
-        lines.append("KB-lifecycle detected.")
-    else:
-        lines.append("CASE Companion detected.")
-    lines.append("")
-    if data["kb"]:
-        ok, out = run([sys.executable, ".kb/kb.py", "lifecycle", "session-start", "--json"], workspace)
-        info = jload(out) if ok else {}
-        _, pend = run([sys.executable, ".kb/kb.py", "pending"], workspace)
-        now_line = first_line(read(workspace / ".kb" / "memory" / "NOW.md"))
-        if with_skill and data["kb"] and not data["case"]:
-            now_line = now_line.replace(" No CASE pipeline active.", "").replace("CASE pipeline", "pipeline")
-        data["kb_start"] = ok
-        data["now"] = True
-        data["hot"] = True
-        data["pending"] = pending(pend)
-        lines += [
-            "## KB state",
-            f"- Session lifecycle initialized: {'yes' if ok else 'deferred'}",
-            f"- Session: {info.get('session', 'unknown')}",
-            f"- NOW: {now_line}",
-            f"- HOT: {first_line(read(workspace / '.kb' / 'memory' / 'HOT.md'))}",
-            f"- Pending items: {len(data['pending'])}",
-            "",
-        ]
-    if data["case"]:
-        latest = detect["case"]["details"].get("latest_handoff")
-        data["role"] = with_skill and bool(detect["case"]["details"].get("role_boundaries_ref"))
-        if latest:
-            data["handoff"] = True
-        lines += ["## CASE state"]
-        if latest:
-            lines.append(f"- Latest handoff: {first_line(read(workspace / latest))}")
-        lines.append(f"- Active kickoffs: {', '.join(active_kickoffs(workspace)) or 'none'}")
-        if with_skill:
-            lines.append(
-                f"- Canonical role boundaries loaded from `{detect['case']['details'].get('role_boundaries_ref')}`."
-            )
-        lines.append("")
-    if data["case"] and "WP-042-rate-limiting.md" in active_kickoffs(workspace):
-        data["action"] = "Continue from WP-042 and prepare dispatch."
-    elif data["pending"]:
+    lines += ["## Workspace detected", "KB-lifecycle detected.", ""]
+    ok, out = run([sys.executable, ".kb/kb.py", "lifecycle", "session-start", "--json"], workspace)
+    info = jload(out) if ok else {}
+    _, pend = run([sys.executable, ".kb/kb.py", "pending"], workspace)
+    now_line = first_line(read(workspace / ".kb" / "memory" / "NOW.md"))
+    if with_skill:
+        now_line = now_line.replace(" No CASE pipeline active.", "").replace("CASE pipeline", "pipeline")
+    data["kb_start"] = ok
+    data["now"] = True
+    data["hot"] = True
+    data["pending"] = pending(pend)
+    lines += [
+        "## KB state",
+        f"- Session lifecycle initialized: {'yes' if ok else 'deferred'}",
+        f"- Session: {info.get('session', 'unknown')}",
+        f"- NOW: {now_line}",
+        f"- HOT: {first_line(read(workspace / '.kb' / 'memory' / 'HOT.md'))}",
+        f"- Pending items: {len(data['pending'])}",
+        "",
+    ]
+    if data["pending"]:
         data["action"] = f"Start with {data['pending'][0].split(':')[0]}."
     else:
-        data["action"] = suggestion if not data["kb"] and not data["case"] else "Review the detected subsystem state."
+        data["action"] = "Review the detected subsystem state."
     lines += ["## Suggested next action", data["action"]]
-    if data["kb"] and not data["case"] and with_skill:
+    if with_skill:
         lines = [line for line in lines if "CASE" not in line and "role bound" not in line.lower() and "ALLOW" not in line and "BLOCK" not in line]
     return "\n".join(lines), data
 
@@ -235,48 +143,28 @@ def closeout_executor(workspace: Path, session_id: str, with_skill: bool):
     detect = DETECTOR.detect(workspace)
     data = {
         "kb": detect["kb"]["found"],
-        "case": detect["case"]["found"],
         "kb_start": False,
         "kb_end": False,
         "now": False,
         "hot": False,
-        "role": False,
-        "handoff": False,
-        "consistency": False,
         "pending": [],
         "action": "",
         "git": git_summary(workspace),
-        "handoff_path": None,
     }
     lines = ["# Session Gate Closeout", ""]
-    if not data["kb"] and not data["case"]:
-        lines += ["## Workspace detected", "No KB-lifecycle or CASE artifacts were found in this workspace.", "", "## Safe to close", "Yes. No lifecycle closeout surfaces were available, and no handoff was fabricated."]
+    if not data["kb"]:
+        lines += ["## Workspace detected", "No KB-lifecycle artifacts were found in this workspace.", "", "## Safe to close", "Yes. No lifecycle closeout surfaces were available, and nothing was fabricated."]
         return "\n".join(lines), data
-    lines += ["## Workspace detected"]
-    if data["kb"] and data["case"]:
-        lines.append("KB-lifecycle and CASE Companion detected.")
-    elif data["kb"]:
-        lines.append("KB-lifecycle detected.")
-    else:
-        lines.append("CASE Companion detected.")
-    lines += ["", "## Pre-close audit", "- KB audit: only verified workspace state was used.", "- CASE audit: only files present in the workspace were considered.", f"- Git audit: {data['git']}", ""]
-    if data["kb"]:
-        ok, out = run([sys.executable, ".kb/kb.py", "lifecycle", "session-end", "--json"], workspace)
-        info = jload(out) if ok else {}
-        _, pend = run([sys.executable, ".kb/kb.py", "pending"], workspace)
-        data["kb_end"] = ok
-        data["pending"] = pending(pend)
-        lines += ["## KB closeout", f"- session-end executed: {'yes' if ok else 'deferred'}", f"- Session closed: {info.get('session_closed', 'unknown')}", ""]
-    if data["case"] and with_skill:
-        handoff = build_handoff(workspace, session_id, data["pending"], data["git"])
-        data["handoff"] = handoff.exists()
-        data["handoff_path"] = str(handoff)
-        ids = [item.split(":")[0] for item in data["pending"] if ":" in item]
-        handoff_text = read(handoff)
-        data["consistency"] = all(item in handoff_text for item in ids)
-        lines += ["## CASE closeout", f"- Handoff written: {handoff.relative_to(workspace)}", "", "## Consistency", "- Verified pending items from KB are reflected in the CASE handoff." if data["consistency"] else "- Consistency gap found between KB pending items and the CASE handoff.", "- No new session decision was fabricated for the handoff.", ""]
+    lines += ["## Workspace detected", "KB-lifecycle detected."]
+    lines += ["", "## Pre-close audit", "- KB audit: only verified workspace state was used.", f"- Git audit: {data['git']}", ""]
+    ok, out = run([sys.executable, ".kb/kb.py", "lifecycle", "session-end", "--json"], workspace)
+    info = jload(out) if ok else {}
+    _, pend = run([sys.executable, ".kb/kb.py", "pending"], workspace)
+    data["kb_end"] = ok
+    data["pending"] = pending(pend)
+    lines += ["## KB closeout", f"- session-end executed: {'yes' if ok else 'deferred'}", f"- Session closed: {info.get('session_closed', 'unknown')}", ""]
     lines += ["## Safe to close", "Yes. Closeout persisted only the verified subsystem state that was actually present."]
-    if data["kb"] and not data["case"] and with_skill:
+    if with_skill:
         lines = [line for line in lines if "CASE" not in line and "handoff" not in line.lower() and "role bound" not in line.lower() and "ALLOW" not in line and "BLOCK" not in line]
     return "\n".join(lines), data
 
@@ -284,50 +172,41 @@ def closeout_executor(workspace: Path, session_id: str, with_skill: bool):
 def grade(mode: str, eval_id: int, with_skill: bool, output: str, data: dict):
     if mode == "startup" and eval_id == 0:
         return [
-            ("Detected KB and CASE", data["kb"] and data["case"]),
+            ("Detected KB", data["kb"]),
             ("Ran kb.py lifecycle session-start", data["kb_start"]),
             ("Read NOW.md and HOT.md", data["now"] and data["hot"]),
             ("Listed pending KB items", bool(data["pending"])),
-            ("Loaded canonical CASE role boundaries", data["role"]),
-            ("Read latest handoff", data["handoff"]),
-            ("Suggested continuing WP-042", "WP-042" in data["action"]),
         ]
     if mode == "startup" and eval_id == 1:
         return [
-            ("Detected KB only", data["kb"] and not data["case"]),
+            ("Detected KB only", data["kb"]),
             ("Did not mention CASE, handoff, role boundaries, or ALLOW/BLOCK", not forbidden_case_terms(output)),
             ("Ran kb.py lifecycle session-start", data["kb_start"]),
             ("Read NOW.md and HOT.md", data["now"] and data["hot"]),
-            ("Did not fabricate CASE content", not data["case"] and not data["handoff"] and not data["role"]),
         ]
     if mode == "startup":
         return [
-            ("Detected empty workspace correctly", not data["kb"] and not data["case"]),
-            ("Did not fabricate lifecycle artifacts", not data["kb_start"] and not data["handoff"]),
-            ("Handled empty workspace gracefully", "Suggested next action" in output or "No KB-lifecycle or CASE artifacts" in output),
-            ("Suggested KB-lifecycle or CASE setup", ("KB-lifecycle" in output and "CASE" in output) if with_skill else ("KB-lifecycle" not in output and "CASE" not in output)),
+            ("Detected empty workspace correctly", not data["kb"]),
+            ("Did not fabricate lifecycle artifacts", not data["kb_start"]),
+            ("Handled empty workspace gracefully", "Suggested next action" in output or "No KB-lifecycle artifacts" in output),
+            ("Suggested KB-lifecycle setup", ("KB-lifecycle" in output) if with_skill else ("KB-lifecycle" not in output)),
         ]
     if eval_id == 10:
-        handoff_text = read(Path(data["handoff_path"])) if data["handoff_path"] else ""
         return [
-            ("Detected KB and CASE", data["kb"] and data["case"]),
+            ("Detected KB", data["kb"]),
             ("Ran kb.py lifecycle session-end", data["kb_end"]),
             ("Handled git audit without inventing repository state", "not a git repository" in data["git"].lower()),
-            ("Wrote CASE handoff for S14", data["handoff"]),
-            ("Cross-checked pending items against KB", data["consistency"]),
-            ("Did not fabricate new session decisions", "No new session decision could be verified" in handoff_text),
         ]
     if eval_id == 11:
         return [
-            ("Detected KB only", data["kb"] and not data["case"]),
+            ("Detected KB only", data["kb"]),
             ("Ran kb.py lifecycle session-end", data["kb_end"]),
             ("Did not mention CASE, handoff, role boundaries, or ALLOW/BLOCK", not forbidden_case_terms(output)),
-            ("Did not fabricate CASE artifacts", not data["handoff"]),
         ]
     return [
-        ("Detected empty workspace correctly", not data["kb"] and not data["case"]),
-        ("Did not fabricate lifecycle persistence or handoff", not data["kb_end"] and not data["handoff"]),
-        ("Handled empty closeout gracefully", "Safe to close" in output or "No KB-lifecycle or CASE artifacts" in output),
+        ("Detected empty workspace correctly", not data["kb"]),
+        ("Did not fabricate lifecycle persistence", not data["kb_end"]),
+        ("Handled empty closeout gracefully", "Safe to close" in output or "No KB-lifecycle artifacts" in output),
     ]
 
 

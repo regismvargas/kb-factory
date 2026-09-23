@@ -1,7 +1,7 @@
 {
   "name": "kb-lifecycle",
   "version": "0.2.4",
-  "description": "Distribute KB Factory memory lifecycle and wiki maintenance across Codex workspaces. (CCH v0.7-aware)",
+  "description": "Distribute KB Factory memory lifecycle and wiki maintenance across Codex workspaces.",
   "author": {
     "name": "KB Factory"
   },
@@ -11,13 +11,12 @@
   "keywords": [
     "knowledge-base",
     "wiki",
-    "memory",
-    "case"
+    "memory"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "KB Lifecycle",
-    "shortDescription": "CASE-compatible KB workflow for Codex",
+    "shortDescription": "KB lifecycle workflow for Codex",
     "longDescription": "Install a reusable skill that keeps Codex sessions grounded in the workspace .kb runtime, derived wiki, and lifecycle rules.",
     "developerName": "KB Factory",
     "category": "Productivity",

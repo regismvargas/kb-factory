@@ -120,7 +120,7 @@ un-reviewed. See [commands.md](commands.md) for the underlying CLI verbs.
 so the "load `NOW.md` at the start" behavior that's automatic in Claude Code
 won't happen on its own. `session-gate` gives Cowork a single, explicit
 session-boundary entry point. It **owns nothing** — it detects which subsystems
-are present (`.kb/`, `.kb-next/`, a companion workflow) and routes startup and
+are present (`.kb/`, `.kb-next/`) and routes startup and
 closeout to them.
 
 - **Slash commands (2):**

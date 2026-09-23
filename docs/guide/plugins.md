@@ -85,8 +85,8 @@ memory.
 
 <details><summary>Under the hood / for the CLI</summary>
 
-`session-gate` owns no storage. On start it detects `.kb/`, `.kb-next/`, and any
-companion workflow, then routes: if `.kb-next/` is present it runs the
+`session-gate` owns no storage. On start it detects `.kb/` and `.kb-next/`,
+then routes: if `.kb-next/` is present it runs the
 kb-wiki-vnext startup first, otherwise the kb-lifecycle session-start. On end it
 runs a pre-close audit and the matching closeout (kb-wiki-vnext evidence summary
 and/or `lifecycle session-end` + `hygiene-audit`). The skill is `session-gate`,

@@ -24,7 +24,7 @@ Platform map:
 | Codex | `kb-wiki-vnext-plugin-0.1.10.zip` | `.codex-plugin`, skills, commands, and runtime `0.1.8` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
 | Claude Code | `kb-wiki-vnext-claude-plugin-0.1.10.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.1.8` | guided memory workflows and explicit commands |
 | Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.1.10.zip` | Cowork plugin package, runtime `0.1.8`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
-| Session Gate | `session-gate-*-0.2.8.zip` | plugin detector plus `gate-session-*` commands | route `.kb-next/` first, then classic `.kb/` and CASE when present |
+| Session Gate | `session-gate-*-0.2.8.zip` | plugin detector plus `gate-session-*` commands | route `.kb-next/` first, then classic `.kb/` when present |
 | Stand-alone | `kb-wiki-vnext-0.2.0-rc.3-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
 
 Plugin packaging installs client capabilities. Skills describe agent behavior. Commands expose callable workflows. Hooks are platform-specific convenience surfaces and are not assumed for Cowork.

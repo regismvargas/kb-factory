@@ -65,5 +65,4 @@ release gates.
   `needs_sponsor`; only approved `demote_hot` and `resolve` may apply.
 - Confirm packaging names include `vnext` and do not collide with classic
   package names or generic command basenames.
-- Record evidence in CASE-compatible run artifacts before claiming release
-  compliance.
+- Record evidence in run artifacts before claiming release compliance.

@@ -79,7 +79,10 @@ turns it on and keeps it current. Run the steps from each project root:
    `.kb/kb.config.json`, keeps every other key, runs the first `wiki-sync`, and
    records `classic-config-sync` and `classic-wiki-sync` in
    `.kb-next/operations.jsonl`. Edits in `.kb-next/kb-next.config.json` survive
-   the merge.
+   the merge. A curated `.kb-next/memory/NOW.md` is kept (only a generated
+   template is regenerated) and re-applying the same mode keeps the recorded
+   `decided_at` and `rationale`, adding `reconfirmed_at`; the JSON result
+   reports `now.action` and `decision`.
 4. Classic-only projects that already use the wiki:
    `python .kb/kb.py wiki-config --enable --json`.
 5. Normalize legacy absolute source paths:

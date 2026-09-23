@@ -1,7 +1,7 @@
 {
   "name": "session-gate",
   "version": "0.2.8",
-  "description": "Thin cross-client session-boundary wrapper for KB-lifecycle and CASE Companion. Detects which canonical surfaces apply and routes startup and closeout without duplicating durable memory or CASE canon.",
+  "description": "Thin cross-client session-boundary wrapper for KB-lifecycle and KB/Wiki vNext. Detects which canonical surfaces apply and routes startup and closeout without duplicating durable memory.",
   "author": {
     "name": "KB Factory"
   },
@@ -12,14 +12,13 @@
     "cowork",
     "session",
     "kb",
-    "case",
     "wrapper"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Session Gate",
-    "shortDescription": "Thin session wrapper for KB + CASE",
-    "longDescription": "Install a thin session-boundary wrapper that detects whether KB-lifecycle, KB/Wiki vNext, CASE Companion, or a combination is present, then routes startup and closeout to the canonical surfaces.",
+    "shortDescription": "Thin session wrapper for KB and vNext",
+    "longDescription": "Install a thin session-boundary wrapper that detects whether KB-lifecycle, KB/Wiki vNext, or both are present, then routes startup and closeout to the canonical surfaces.",
     "developerName": "KB Factory",
     "category": "Productivity",
     "capabilities": [

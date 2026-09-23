@@ -1,7 +1,7 @@
 # KB/Wiki vNext Plugin
 
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
-classic `kb-lifecycle`, `session-gate`, and `case-companion`.
+classic `kb-lifecycle` and `session-gate`.
 
 Release-candidate identities: plugin `0.1.10`, bundled runtime `0.1.8`, product
 `0.2.0-rc.3`, Session Gate companion `0.2.8`, and marketplace `0.3.9`.
@@ -22,7 +22,7 @@ Prerequisites:
 - Uses `lookup` or `semantic-lookup` before opening broad memory surfaces.
 - Reviews `.kb-next` evidence, manifests, proposals, and wiki drafts.
 - Runs semantic hygiene proposal flows without direct `.kb/` mutation.
-- Records packaging/release evidence in CASE-compatible run artifacts.
+- Records packaging/release evidence in run artifacts.
 - Installs the classic `.kb/` for new projects with `install-classic` (scaffold
   from the kb-lifecycle plugin or the stand-alone bundle, rendered with the
   project name, slug and domains) and refreshes its engine with
