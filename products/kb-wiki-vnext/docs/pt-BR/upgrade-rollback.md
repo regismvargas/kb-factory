@@ -63,6 +63,106 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrade Para 0.2.0 (Runtime 0.2.0)
+
+Esta versão quebra a linha de comando do `proposal-apply`: todo apply precisa
+nomear quem o aprova. Ela também troca o lookup por `LIKE` por recuperação
+ranqueada, corrige a consulta do `kb.py search` clássico (KB Lifecycle 0.2.5)
+e acrescenta uma lista densa opcional, que ranqueia por significado. Rode os
+passos na raiz de cada projeto:
+
+1. Atualize o motor vNext a partir do plugin novo:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (espere `runtime_version` `0.2.0`).
+2. Atualize o motor clássico sem tocar dados nem config:
+   `python .kb-next/runtime/kb_next.py upgrade-classic --json`.
+3. Acrescente `--actor <id>` e `--actor-runtime <claude-code|codex|cowork|human>`
+   a todo script, alias ou prompt salvo que chame `proposal-apply`.
+   `--actor` é a pessoa que aprovou a proposta; `--actor-runtime` é o runtime
+   que executa o apply (`human` quando uma pessoa o roda à mão):
+
+```powershell
+$proposalId = 'replace-with-reviewed-proposal-id'
+$approver = 'replace-with-approver-id'
+python .\.kb-next\runtime\kb_next.py --project-root . proposal-apply --proposal $proposalId --approve --approval-note "Approved after review" --actor $approver --actor-runtime human --json
+```
+
+   Um projeto com um aprovador habitual pode, em vez disso, nomear essa pessoa
+   uma vez, para que o agente não pergunte a cada aprovação. Mescle esta chave
+   em `.kb-next/kb-next.config.json`; o `--actor` passa a ter esse valor como
+   padrão, e o `--actor-runtime` segue obrigatório:
+
+```json
+{"proposal_apply": {"default_actor": "replace-with-approver-id"}}
+```
+
+4. Opcional, para projetos que querem a lista densa: instale o extra no Python
+   que roda o runtime, escolha o modelo e construa o índice.
+
+```powershell
+python -m pip install model2vec==0.10.0
+python .\.kb-next\runtime\kb_next.py --project-root . dense-index --fetch-model --json
+python .\.kb-next\runtime\kb_next.py --project-root . lookup --facet status --query "release" --limit 5 --lists words,dense --json
+```
+
+   Antes do `dense-index`, ponha `retrieval.dense.enabled` em `true` em
+   `.kb-next/kb-next.config.json` e `retrieval.dense.model` em
+   `potion-multilingual-128M` para conteúdo em português ou `potion-base-32M`
+   para inglês (o padrão), para que o índice seja construído com esse modelo.
+   O modelo é baixado uma vez para `~/.cache/kb-factory/models` (ou
+   `KBF_MODEL_CACHE`), fora do projeto, e `.kb-next/index/` se ignora no Git.
+   A verificação com `lookup` precisa listar `dense` em `retrieval.lists`, sem
+   aviso. Rode `python .kb-next/runtime/kb_next.py dense-index --json` de novo
+   depois de registrar records; até lá o lookup avisa quantos records a lista
+   densa não vê. O comando de plugin `vnext-session-end` faz essa atualização
+   quando a lista densa está ligada e a sessão mudou records.
+
+Mudanças de comportamento esperadas:
+
+- `proposal-apply` sem `--actor` (e sem `proposal_apply.default_actor` na
+  config) ou sem `--actor-runtime` sai com código 2 antes de ler a proposta e
+  não grava nada; o stderr nomeia as flags que faltam. Um `--actor` em branco
+  ou um runtime fora dos quatro valores falha do mesmo jeito; um
+  `default_actor` em branco ou que não seja texto falha com código 1, também
+  antes de qualquer escrita.
+- Cada manifest de apply em `.kb-next/manifests/proposal-apply`, cada entrada
+  `proposal-apply` em `.kb-next/operations.jsonl` e o resultado JSON trazem
+  `actor: {id, runtime}` e `actor_source` (`flag` ou `config`), inclusive
+  tentativas bloqueadas. A identidade é registrada, não autenticada. Nenhum
+  comando do runtime grava `proposal_apply.default_actor`; a ativação o
+  preserva.
+- Os manifests de LLM deixam de trazer o ator fixo de placeholder.
+  `semantic-lookup`, `curation-proposal`, `semantic-hygiene`, `filing-proposal`
+  e `wiki-synthesis-plan` aceitam o mesmo par como opção e registram quem gerou
+  a proposta, ou `actor: null` sem ele; uma flag sozinha falha. O padrão da
+  config vale só para o `proposal-apply`.
+- Manifests e entradas do oplog gravados antes da 0.2.0 mantêm o formato
+  antigo. Quem lê `actor` precisa aceitar a string legada, `null` e o objeto
+  `{id, runtime}`.
+- `lookup` e os comandos de proposta ranqueiam por uma lista FTS5 de palavras
+  com BM25, por Reciprocal Rank Fusion; a ordem dos resultados muda, os termos
+  são unidos por OR e a saída traz um bloco `retrieval`. A lista trigram de
+  substrings é opcional (`--lists words,trigram`) e não entra na fusão padrão.
+- Com `retrieval.dense.enabled`, o lookup também funde a lista densa. Um lookup
+  a frio pela linha de comando leva cerca de 3 s a mais com `potion-base-32M` e
+  cerca de 11 s a mais com `potion-multilingual-128M`, quase todo para carregar
+  e conferir o modelo (medido numa KB de 446 records). Sem o extra, o modelo ou um índice atual, o lookup
+  ranqueia por palavras e diz por quê em `retrieval.warnings`. A instalação
+  padrão nunca importa o extra.
+- O `kb.py search` clássico compila a consulta como a lista de palavras do
+  vNext: um `?` no fim ou um `-` não derrubam mais a busca para um `LIKE` da
+  frase inteira, e os resultados FTS5 saem ordenados por BM25. A saída JSON
+  do `kb.py` agora escapa caracteres fora do ASCII (`\uXXXX`): um parser
+  JSON lê os mesmos valores, e um console Windows com saída redirecionada não
+  falha mais neles.
+
+Rollback deste upgrade: restaure o plugin 0.1.10 e rode o `bootstrap` dele
+como abaixo; depois remova `--actor` e `--actor-runtime` dos seus scripts,
+porque o runtime 0.1.8 os rejeita como argumentos não reconhecidos. O runtime
+0.1.8 ignora as chaves `retrieval.dense` e `proposal_apply`, e
+`.kb-next/index/` pode ser apagado. O motor clássico não muda de schema: mantenha
+o 0.2.5 ou volte ao 0.2.4 com o `upgrade-classic` do plugin antigo.
+
 ## Upgrade Para 0.1.10 (Runtime 0.1.8)
 
 Esta versão corrige o fluxo KB + Wiki. Projetos ativados com

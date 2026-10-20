@@ -83,7 +83,13 @@ These surfaces are always available during the conversation but are not preloade
 
 - `.kb/memory/HOT.md` — load when you need the current working set
 - `.kb/memory/INDEX.md` — load when you need the broader KB map
-- `python .kb/kb.py search "<term>"` — search before assuming
+- `python .kb/kb.py search "<term>"` — search before assuming. Search ORs the
+  words of a query and ranks records that match more words first, so widen it
+  with the words a record might use instead: the original words first, at
+  most six words in total, synonyms in the language of the records before
+  translations, and no broad words when you want one item or the most recent
+  one. On a host SQLite without FTS5, search falls back to matching the whole
+  query as one substring; search one word at a time there.
 - `python .kb/kb.py pending` — check open pendencias
 - Wiki index and pages — load when wiki context is needed
 

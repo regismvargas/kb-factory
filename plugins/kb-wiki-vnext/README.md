@@ -3,8 +3,8 @@
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
 classic `kb-lifecycle` and `session-gate`.
 
-Release-candidate identities: plugin `0.1.10`, bundled runtime `0.1.8`, product
-`0.2.0-rc.3`, Session Gate companion `0.2.8`, and marketplace `0.3.9`.
+Release-candidate identities: plugin `0.2.0`, bundled runtime `0.2.0`, product
+`0.2.0-rc.4`, Session Gate companion `0.2.8`, and marketplace `0.3.11`.
 
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
@@ -56,9 +56,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.1.10.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/` |
-| `kb-wiki-vnext-claude-plugin-0.1.10.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
-| `kb-wiki-vnext-cowork-plugin-0.1.10.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-plugin-0.2.0.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-claude-plugin-0.2.0.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-cowork-plugin-0.2.0.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.
@@ -80,7 +80,7 @@ natural language. Existing and new project setup commands ship under explicit
 
 The Codex CLI has no plugin-management command. Use the Codex app Plugins
 settings with the public marketplace, or upload
-`kb-wiki-vnext-plugin-0.1.10.zip` when the app exposes file-based installation.
+`kb-wiki-vnext-plugin-0.2.0.zip` when the app exposes file-based installation.
 For a skill-only fallback, copy `skills/kb-wiki-vnext/` into
 `~/.codex/skills/kb-wiki-vnext/`.
 

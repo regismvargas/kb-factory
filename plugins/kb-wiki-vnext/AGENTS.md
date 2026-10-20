@@ -19,6 +19,10 @@ Session start is thin:
   artifacts only on demand.
 - Use targeted `lookup` or `semantic-lookup` before opening broad memory;
   `--domain` scopes both.
+- `lookup` ORs the words of a query, so widen it with the words a record might
+  use instead: the original words first, at most six words in total, synonyms
+  in the language of the records before translations, and no broad words when
+  you want one item or the most recent one.
 - When KB + Wiki is active, `session-start` reports `wiki.status` and the
   `wiki_drafts` backlog. `classic_wiki_off` means the classic wiki must be
   re-synced with `activation-wizard --choice kb-wiki`; pending drafts go
@@ -37,7 +41,9 @@ Governance boundaries:
 - Do not publish vNext drafts to `.kb/wiki/live`; the classic runtime owns that
   directory and refreshes it on lifecycle events.
 - Canonical record changes must go through `.kb/kb.py` or vNext
-  `proposal-apply`, which itself calls the classic runtime.
+  `proposal-apply`, which itself calls the classic runtime and requires
+  `--actor` (who approved; defaults to `proposal_apply.default_actor` when the
+  vNext config sets it) and `--actor-runtime`.
 - HOT overflow governance must start read-only. Use
   `python .kb/kb.py hygiene-audit --json` for mechanical health and
   `semantic-hygiene --write-proposals` only for

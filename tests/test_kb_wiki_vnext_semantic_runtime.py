@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 KB_NEXT = ROOT / "core" / "versions" / "kb-wiki-vnext" / "runtime" / "kb_next.py"
 CLASSIC_KB_PY = ROOT / "core" / "templates" / "kb" / "kb.py"
 CLASSIC_RUNTIME = ROOT / "core" / "templates" / "kb" / "runtime"
+APPLY_ACTOR = ("--actor", "test-approver", "--actor-runtime", "human")
 
 
 def run_next(project_root: Path, *args: str) -> subprocess.CompletedProcess:
@@ -584,6 +585,7 @@ def test_proposal_apply_new_creates_canonical_record_with_approval(apply_project
     result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         proposal["proposal_id"],
         "--approve",
@@ -641,6 +643,7 @@ def test_proposal_apply_supersede_marks_original_replaced(apply_project: Path, t
     result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         proposal["paths"]["proposal"],
         "--approve",
@@ -697,6 +700,7 @@ def test_proposal_apply_demote_hot_and_resolve_hygiene_proposals(
     demote_result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         demote["proposal_id"],
         "--approve",
@@ -706,6 +710,7 @@ def test_proposal_apply_demote_hot_and_resolve_hygiene_proposals(
     resolve_result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         resolve["proposal_id"],
         "--approve",
@@ -750,6 +755,7 @@ def test_proposal_apply_blocks_needs_sponsor_hygiene_action(
     result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         proposal_run["proposal_ids"][0],
         "--approve",
@@ -766,7 +772,7 @@ def test_proposal_apply_requires_approval_and_note(apply_project: Path, tmp_path
     proposal = valid_new_filing_proposal(apply_project, tmp_path, record_id="NEW-NO-APPROVAL")
     before = file_hash(apply_project / ".kb" / "kb.db")
 
-    result = run_next_json(apply_project, "proposal-apply", "--proposal", proposal["proposal_id"])
+    result = run_next_json(apply_project, "proposal-apply", *APPLY_ACTOR, "--proposal", proposal["proposal_id"])
 
     assert result["status"] == "blocked"
     assert "missing_approval" in result["warnings"]
@@ -789,6 +795,7 @@ def test_proposal_apply_blocks_tampered_proposal_and_unbound_manifest(
     result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         proposal["proposal_id"],
         "--approve",
@@ -810,6 +817,7 @@ def test_proposal_apply_blocks_tampered_proposal_and_unbound_manifest(
     missing_link = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         fresh["proposal_id"],
         "--approve",
@@ -835,6 +843,7 @@ def test_proposal_apply_blocks_proposal_path_outside_kb_next(
     result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         str(outside),
         "--approve",
@@ -931,6 +940,7 @@ def test_proposal_apply_blocks_update_low_confidence_conflict_and_ambiguous_targ
         result = run_next_json(
             apply_project,
             "proposal-apply",
+            *APPLY_ACTOR,
             "--proposal",
             proposal["proposal_id"],
             "--approve",
@@ -980,6 +990,7 @@ def test_proposal_apply_blocks_defer_and_answer_only(
     defer_result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         defer_proposal["proposal_id"],
         "--approve",
@@ -1020,6 +1031,7 @@ def test_proposal_apply_blocks_defer_and_answer_only(
     answer_only_result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         answer_only_proposal["proposal_id"],
         "--approve",
@@ -1056,6 +1068,7 @@ def test_proposal_apply_semantic_lookup_is_not_applicable(apply_project: Path) -
     result = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         proposal["proposal_id"],
         "--approve",
@@ -1092,6 +1105,7 @@ def test_proposal_apply_curation_requires_record_draft_then_applies(apply_projec
     blocked = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         blocked_proposal["proposal_id"],
         "--approve",
@@ -1130,6 +1144,7 @@ def test_proposal_apply_curation_requires_record_draft_then_applies(apply_projec
     applied = run_next_json(
         apply_project,
         "proposal-apply",
+        *APPLY_ACTOR,
         "--proposal",
         applied_proposal["proposal_id"],
         "--approve",
@@ -1438,3 +1453,167 @@ def test_semantic_commands_leave_classic_kb_database_unchanged(project: Path, tm
     run_next_json(project, "wiki-synthesis-plan", "--topic", "Runtime", "--domain", "architecture", "--write-drafts", "--judgment-json", json.dumps(wiki_judgment))
 
     assert file_hash(db_path) == before
+
+
+def last_apply_operation(project: Path) -> dict:
+    lines = (project / ".kb-next" / "operations.jsonl").read_text(encoding="utf-8").splitlines()
+    applies = [json.loads(line) for line in lines if '"event": "proposal-apply"' in line]
+    assert applies
+    return applies[-1]
+
+
+def set_default_actor(project: Path, value: object) -> None:
+    path = project / ".kb-next" / "kb-next.config.json"
+    config = json.loads(path.read_text(encoding="utf-8"))
+    config.setdefault("proposal_apply", {})["default_actor"] = value
+    path.write_text(json.dumps(config), encoding="utf-8")
+
+
+def apply_manifest_names(project: Path) -> list[str]:
+    directory = project / ".kb-next" / "manifests" / "proposal-apply"
+    return sorted(path.name for path in directory.glob("*.json")) if directory.is_dir() else []
+
+
+def test_proposal_apply_takes_the_approver_from_the_config(apply_project: Path, tmp_path: Path) -> None:
+    set_default_actor(apply_project, "  config-approver  ")
+    proposal = valid_new_filing_proposal(apply_project, tmp_path)
+
+    result = run_next_json(
+        apply_project,
+        "proposal-apply",
+        "--actor-runtime",
+        "claude-code",
+        "--proposal",
+        proposal["proposal_id"],
+        "--approve",
+        "--approval-note",
+        "Approved by the configured approver.",
+    )
+
+    assert result["status"] == "applied"
+    approver = {"id": "config-approver", "runtime": "claude-code"}
+    assert result["actor"] == approver
+    assert result["actor_source"] == "config"
+    apply_manifest = json.loads(Path(result["paths"]["apply_manifest"]).read_text(encoding="utf-8"))
+    assert apply_manifest["actor"] == approver
+    assert apply_manifest["actor_source"] == "config"
+    details = last_apply_operation(apply_project)["details"]
+    assert details["actor"] == approver
+    assert details["actor_source"] == "config"
+
+
+def test_proposal_apply_actor_flag_wins_over_the_config(apply_project: Path, tmp_path: Path) -> None:
+    set_default_actor(apply_project, "config-approver")
+    proposal = valid_new_filing_proposal(apply_project, tmp_path)
+
+    result = run_next_json(
+        apply_project,
+        "proposal-apply",
+        *APPLY_ACTOR,
+        "--proposal",
+        proposal["proposal_id"],
+        "--approve",
+        "--approval-note",
+        "Approved by someone other than the usual approver.",
+    )
+
+    assert result["actor"] == {"id": "test-approver", "runtime": "human"}
+    assert result["actor_source"] == "flag"
+
+
+@pytest.mark.parametrize(
+    ("default_actor", "code", "expected"),
+    [
+        (None, 2, "the following arguments are required: --actor"),
+        ("   ", 1, "proposal_apply.default_actor"),
+        (42, 1, "proposal_apply.default_actor"),
+    ],
+)
+def test_proposal_apply_without_a_usable_approver_writes_nothing(
+    apply_project: Path, tmp_path: Path, default_actor: object, code: int, expected: str
+) -> None:
+    proposal = valid_new_filing_proposal(apply_project, tmp_path, record_id="NEW-NO-APPROVER")
+    if default_actor is not None:
+        set_default_actor(apply_project, default_actor)
+    before = file_hash(apply_project / ".kb" / "kb.db")
+    operations = (apply_project / ".kb-next" / "operations.jsonl").read_text(encoding="utf-8")
+    manifests = apply_manifest_names(apply_project)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(KB_NEXT),
+            "--project-root",
+            str(apply_project),
+            "proposal-apply",
+            "--actor-runtime",
+            "codex",
+            "--proposal",
+            proposal["proposal_id"],
+            "--approve",
+            "--approval-note",
+            "Approval without a named approver.",
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == code
+    assert result.stdout == ""
+    assert expected in result.stderr
+    assert file_hash(apply_project / ".kb" / "kb.db") == before
+    assert (apply_project / ".kb-next" / "operations.jsonl").read_text(encoding="utf-8") == operations
+    assert apply_manifest_names(apply_project) == manifests
+    assert db_record(apply_project, "NEW-NO-APPROVER") is None
+
+
+def test_activation_never_writes_and_always_keeps_the_default_approver(apply_project: Path) -> None:
+    config_file = apply_project / ".kb-next" / "kb-next.config.json"
+    assert "proposal_apply" not in json.loads(config_file.read_text(encoding="utf-8"))
+    set_default_actor(apply_project, "config-approver")
+
+    activate(apply_project, "kb-wiki")
+    activate(apply_project, "kb-alone")
+
+    assert json.loads(config_file.read_text(encoding="utf-8"))["proposal_apply"] == {"default_actor": "config-approver"}
+
+
+@pytest.mark.parametrize(
+    ("actor_args", "expected"),
+    [
+        ((), "the following arguments are required: --actor, --actor-runtime"),
+        (("--actor", "test-approver"), "the following arguments are required: --actor-runtime"),
+        (("--actor", "   ", "--actor-runtime", "human"), "argument --actor: must name who acts"),
+        (("--actor", "test-approver", "--actor-runtime", "robot"), "argument --actor-runtime: invalid choice"),
+    ],
+)
+def test_proposal_apply_rejects_anonymous_apply_before_any_write(
+    tmp_path: Path, actor_args: tuple[str, ...], expected: str
+) -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(KB_NEXT),
+            "--project-root",
+            str(tmp_path),
+            "proposal-apply",
+            "--proposal",
+            "any-proposal",
+            "--approve",
+            "--approval-note",
+            "Approval without a named approver.",
+            *actor_args,
+            "--json",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert expected in result.stderr
+    assert "--actor-runtime <claude-code|codex|cowork|human>" in result.stderr
+    assert list(tmp_path.iterdir()) == []

@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import sys
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -224,24 +225,31 @@ def insert_record(conn: sqlite3.Connection, data: dict, action: str = "create") 
     return data
 
 
-def fetch_filtered(conn: sqlite3.Connection, base_sql: str, params: list, args: argparse.Namespace) -> list[dict]:
+def fetch_filtered(
+    conn: sqlite3.Connection,
+    base_sql: str,
+    params: list,
+    args: argparse.Namespace,
+    column_prefix: str = "",
+    order_by: str = "updated_at DESC",
+) -> list[dict]:
     clauses = []
     if getattr(args, "category", None):
-        clauses.append("category = ?")
+        clauses.append(f"{column_prefix}category = ?")
         params.append(args.category)
     if getattr(args, "domain", None):
-        clauses.append("domain = ?")
+        clauses.append(f"{column_prefix}domain = ?")
         params.append(args.domain)
     if getattr(args, "status", None):
-        clauses.append("status = ?")
+        clauses.append(f"{column_prefix}status = ?")
         params.append(args.status)
     if getattr(args, "tier", None):
-        clauses.append("tier = ?")
+        clauses.append(f"{column_prefix}tier = ?")
         params.append(args.tier)
     sql = base_sql
     if clauses:
         sql += " AND " + " AND ".join(clauses) if " WHERE " in base_sql else " WHERE " + " AND ".join(clauses)
-    sql += " ORDER BY updated_at DESC"
+    sql += f" ORDER BY {order_by}"
     if getattr(args, "limit", None):
         sql += " LIMIT ?"
         params.append(args.limit)
@@ -350,16 +358,106 @@ def cmd_get(args: argparse.Namespace, *, emit) -> None:
     emit(row_to_dict(row), args.json)
 
 
+# Search query contract, the same as the word list of vNext `lookup` (E1.1):
+# every term is a quoted FTS5 phrase, so `?`, `-` and `.` are text and never
+# syntax; terms of three or more characters also match as a prefix; written
+# plural rules add singular stems; terms are OR-joined and BM25 ranks records
+# that match more of them first.
+# Implicit prefix matching starts at this many characters; shorter stems match too much.
+PREFIX_MIN_CHARS = 3
+# Written plural rules over accent-folded text (PT and EN), not a stemmer.
+PLURAL_ENDINGS = (("oes", "ao"), ("ais", "al"), ("eis", "el"), ("ies", "y"), ("ns", "m"))
+ES_PLURAL_STEMS = ("r", "z", "s", "x", "sh", "ch")
+
+
+def fold_text(value: str) -> str:
+    """Casefold and strip accents, as the FTS5 `unicode61` tokenizer does."""
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def singular_stems(folded: str) -> list[str]:
+    """Return singular stems of a folded word that looks plural."""
+    stems = [folded[: -len(end)] + singular for end, singular in PLURAL_ENDINGS if folded.endswith(end)]
+    if folded.endswith("es") and folded[:-2].endswith(ES_PLURAL_STEMS):
+        stems.append(folded[:-2])
+    if folded.endswith("s") and not folded.endswith("ss"):
+        stems.append(folded[:-1])
+    return [stem for stem in dict.fromkeys(stems) if stem != folded and len(stem) >= PREFIX_MIN_CHARS]
+
+
+def parse_query_terms(query: str) -> list[dict]:
+    """Split a search query into literal terms; FTS5 operators are never parsed.
+
+    A trailing `*` asks for a prefix; terms of PREFIX_MIN_CHARS or more get one
+    anyway, so "worktree" also finds "worktrees". Plural terms add their
+    singular stems, so "snapshots" also finds "snapshot".
+    """
+    terms = []
+    for raw in query.split():
+        text = raw.rstrip("*")
+        if not any(char.isalnum() for char in text):
+            continue
+        folded = fold_text(text)
+        core = re.sub(r"^\W+|\W+$", "", folded)
+        terms.append(
+            {
+                "text": text,
+                "prefix": text != raw or len(folded) >= PREFIX_MIN_CHARS,
+                "stems": singular_stems(core),
+            }
+        )
+    return terms
+
+
+def fts5_phrase(text: str) -> str:
+    """Quote text as one FTS5 phrase, so `-`, `.` and keywords stay literal."""
+    return '"' + text.replace('"', '""') + '"'
+
+
+def words_match_expression(terms: list[dict]) -> str:
+    """OR every term group: BM25 ranks records matching more terms first.
+
+    The exact phrase is kept beside its prefix, so an exact hit outscores
+    "gate"* -> "gateway".
+    """
+    groups = []
+    for term in terms:
+        options = [fts5_phrase(term["text"])]
+        if term["prefix"]:
+            options.append(fts5_phrase(term["text"]) + "*")
+        options.extend(fts5_phrase(stem) + "*" for stem in term["stems"])
+        groups.append("(" + " OR ".join(options) + ")")
+    return " OR ".join(groups)
+
+
 def cmd_search(args: argparse.Namespace, *, emit) -> None:
     conn = connect_readonly()
+    terms = parse_query_terms(args.query)
+    if not terms:
+        # Only punctuation: nothing to match, as in vNext `lookup`.
+        emit([], args.json)
+        return
     try:
         base_sql = (
             "SELECT r.* FROM records_fts f "
             "JOIN records r ON r.id = f.id "
             "WHERE records_fts MATCH ?"
         )
-        records = fetch_filtered(conn, base_sql, [args.query], args)
+        # records_fts also has a domain column; unqualified filters raised
+        # "ambiguous column name" and silently dropped to the LIKE fallback.
+        # Relevance first; recency only breaks BM25 ties. The LIKE fallback stays by date.
+        records = fetch_filtered(
+            conn,
+            base_sql,
+            [words_match_expression(terms)],
+            args,
+            column_prefix="r.",
+            order_by="bm25(records_fts), r.updated_at DESC",
+        )
     except sqlite3.OperationalError:
+        # Quoted terms are never FTS5 syntax, so this now covers a host SQLite
+        # without FTS5 or a KB without records_fts.
         like = f"%{args.query}%"
         base_sql = "SELECT * FROM records WHERE (title LIKE ? OR content LIKE ? OR tags_json LIKE ?)"
         records = fetch_filtered(conn, base_sql, [like, like, like], args)

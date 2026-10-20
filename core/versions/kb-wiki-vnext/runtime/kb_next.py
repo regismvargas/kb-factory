@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
+import itertools
 import json
+import math
 import os
 import re
 import shutil
@@ -10,9 +13,12 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import unicodedata
+import urllib.request
+from array import array
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import quote
 from uuid import uuid4
 
@@ -32,11 +38,21 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.1.8"
+RUNTIME_VERSION = "0.2.0"
 # Classic lifecycle events that keep an enabled classic wiki current. Mirrors
 # WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
 CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
 WORKTREE_SCOPE_ENV = "KB_FACTORY_WORKTREE_SCOPE"
+# E1.4: every proposal-apply names who approves it. Identity is recorded, not
+# authenticated; origin-bound capabilities are E3.4.
+ACTOR_RUNTIMES = ("claude-code", "codex", "cowork", "human")
+ACTOR_HINT = (
+    "proposal-apply records who approves each apply: pass --actor <id> (the person "
+    "or agent that approves) and --actor-runtime <claude-code|codex|cowork|human>. "
+    "A project may name its usual approver in proposal_apply.default_actor of "
+    ".kb-next/kb-next.config.json; --actor then defaults to it. "
+    "Runtime 0.2.0 removed anonymous apply; see the KB/Wiki vNext changelog."
+)
 # Domains with at least this many active records get a wiki topic, matching the
 # classic domain_overview candidate threshold.
 WIKI_TOPIC_MIN_RECORDS = 3
@@ -179,12 +195,12 @@ def now_iso() -> str:
 
 def emit(payload: Any, json_mode: bool) -> None:
     if json_mode:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(payload, indent=2, ensure_ascii=True))
         return
     if isinstance(payload, str):
         print(payload)
         return
-    print(json.dumps(payload, indent=2, ensure_ascii=False))
+    print(json.dumps(payload, indent=2, ensure_ascii=True))
 
 
 def project_root(args: argparse.Namespace) -> Path:
@@ -595,6 +611,9 @@ def build_config(root: Path, decision: dict[str, Any]) -> dict[str, Any]:
                 "wiki-draft-review",
                 "proposal-apply",
             ],
+        },
+        "retrieval": {
+            "dense": dict(DENSE_DEFAULTS),
         },
         "track_b": {
             "source_linkage_policy": "strict",
@@ -2138,54 +2157,824 @@ def cmd_track_b_export(args: argparse.Namespace) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# Retrieval (E1.1): ranked lists fused by RRF; LIKE only as explicit fallback.
+#
+# A ranked lookup builds throwaway FTS5 tables in the connection's temp schema
+# from the candidate rows, so the classic kb.db stays read-only and vNext owns
+# no index that could go stale. Measured with SQLite 3.50 on 2026-10-17: the
+# 185 live workbench records index in about 6 ms (words) plus 22 ms (trigram);
+# 20,000 synthetic records of 130 words take 1.3 s and 19 s. A KB past a few
+# thousand records needs a persistent index under .kb-next/ instead.
+#
+# The trigram list is opt-in, not a default list: fused at any weight from 0.1
+# to 1 it changed no answer on the E1.0 ruler and lowered LongMemEval recall
+# (docs/benchmarks/longmemeval/README.md).
+# ---------------------------------------------------------------------------
+
+RRF_K = 60
+# Best first; each fallback drops one capability an older SQLite lacks.
+WORD_TOKENIZERS = ("unicode61 remove_diacritics 2", "unicode61")
+TRIGRAM_TOKENIZERS = ("trigram remove_diacritics 1", "trigram")  # SQLite 3.45+, 3.34+
+INDEXED_COLUMNS = ("title", "content", "tags_json", "source", "domain")
+# Implicit prefix matching starts at this many characters; shorter stems match too much.
+PREFIX_MIN_CHARS = 3
+# Each list returns this many times the requested limit before fusion.
+RANK_DEPTH_FACTOR = 3
+# Written plural rules over accent-folded text (PT and EN), not a stemmer.
+PLURAL_ENDINGS = (("oes", "ao"), ("ais", "al"), ("eis", "el"), ("ies", "y"), ("ns", "m"))
+ES_PLURAL_STEMS = ("r", "z", "s", "x", "sh", "ch")
+DEFINITION_TAGS_CLAUSE = (
+    "(tags_json LIKE '%definition%' OR tags_json LIKE '%definitions%' OR "
+    "tags_json LIKE '%glossary%' OR tags_json LIKE '%glossario%' OR "
+    "tags_json LIKE '%definicao%' OR tags_json LIKE '%definição%')"
+)
+
+_FTS5_TOKENIZERS: dict[str, str | None] | None = None
+
+
+def fts5_tokenizers() -> dict[str, str | None]:
+    """Return the best word and trigram tokenizers the host SQLite accepts.
+
+    Probes by creating a table, not by parsing the version: FTS5 is a compile
+    option, and tokenizer arguments arrived in different releases.
+    """
+    global _FTS5_TOKENIZERS
+    if _FTS5_TOKENIZERS is None:
+        found: dict[str, str | None] = {"words": None, "trigram": None}
+        conn = sqlite3.connect(":memory:")
+        try:
+            for name, candidates in (("words", WORD_TOKENIZERS), ("trigram", TRIGRAM_TOKENIZERS)):
+                for tokenizer in candidates:
+                    try:
+                        conn.execute(f"CREATE VIRTUAL TABLE temp.probe USING fts5(x, tokenize='{tokenizer}')")
+                    except sqlite3.OperationalError:
+                        continue
+                    conn.execute("DROP TABLE temp.probe")
+                    found[name] = tokenizer
+                    break
+        finally:
+            conn.close()
+        _FTS5_TOKENIZERS = found
+    return dict(_FTS5_TOKENIZERS)
+
+
+def fold_text(value: str) -> str:
+    """Casefold and strip accents, as `unicode61 remove_diacritics 2` does."""
+    decomposed = unicodedata.normalize("NFKD", value.casefold())
+    return "".join(char for char in decomposed if not unicodedata.combining(char))
+
+
+def singular_stems(folded: str) -> list[str]:
+    """Return singular stems of a folded word that looks plural."""
+    stems = [folded[: -len(end)] + singular for end, singular in PLURAL_ENDINGS if folded.endswith(end)]
+    if folded.endswith("es") and folded[:-2].endswith(ES_PLURAL_STEMS):
+        stems.append(folded[:-2])
+    if folded.endswith("s") and not folded.endswith("ss"):
+        stems.append(folded[:-1])
+    return [stem for stem in dict.fromkeys(stems) if stem != folded and len(stem) >= PREFIX_MIN_CHARS]
+
+
+def parse_query_terms(query: str) -> list[dict[str, Any]]:
+    """Split a lookup query into literal terms; FTS5 operators are never parsed.
+
+    A trailing `*` asks for a prefix; terms of PREFIX_MIN_CHARS or more get one
+    anyway, so "worktree" also finds "worktrees". Plural terms add their
+    singular stems, so "snapshots" also finds "snapshot".
+    """
+    terms = []
+    for raw in query.split():
+        text = raw.rstrip("*")
+        if not any(char.isalnum() for char in text):
+            continue
+        folded = fold_text(text)
+        core = re.sub(r"^\W+|\W+$", "", folded)
+        terms.append(
+            {
+                "text": text,
+                "prefix": text != raw or len(folded) >= PREFIX_MIN_CHARS,
+                "stems": singular_stems(core),
+            }
+        )
+    return terms
+
+
+def fts5_phrase(text: str) -> str:
+    """Quote text as one FTS5 phrase, so `-`, `.` and keywords stay literal."""
+    return '"' + text.replace('"', '""') + '"'
+
+
+def words_match_expression(terms: list[dict[str, Any]]) -> str:
+    """OR every term group: BM25 ranks records matching more terms first.
+
+    OR, not AND, so an agent can widen a query with its own synonyms. The exact
+    phrase is kept beside its prefix, so an exact hit outscores "gate"* -> "gateway".
+    """
+    groups = []
+    for term in terms:
+        options = [fts5_phrase(term["text"])]
+        if term["prefix"]:
+            options.append(fts5_phrase(term["text"]) + "*")
+        options.extend(fts5_phrase(stem) + "*" for stem in term["stems"])
+        groups.append("(" + " OR ".join(options) + ")")
+    return " OR ".join(groups)
+
+
+def trigram_match_expression(terms: list[dict[str, Any]]) -> str | None:
+    """OR substring phrases of three or more characters; None when none qualifies."""
+    options: list[str] = []
+    for term in terms:
+        for text in (term["text"], fold_text(term["text"]), *term["stems"]):
+            if len(text) >= 3:
+                options.append(fts5_phrase(text))
+    return " OR ".join(dict.fromkeys(options)) or None
+
+
+def fts5_ranked_ids(
+    conn: sqlite3.Connection,
+    table: str,
+    tokenizer: str,
+    expression: str,
+    where: str,
+    params: list[Any],
+    depth: int,
+) -> list[str]:
+    """Index the candidate rows in a temp FTS5 table and return ids by BM25."""
+    columns = ", ".join(INDEXED_COLUMNS)
+    values = ", ".join("COALESCE(" + column + ", '')" for column in INDEXED_COLUMNS)
+    conn.execute(f"DROP TABLE IF EXISTS temp.{table}")
+    conn.execute(
+        f"CREATE VIRTUAL TABLE temp.{table} USING fts5("
+        f"id UNINDEXED, updated_at UNINDEXED, {columns}, tokenize='{tokenizer}')"
+    )
+    try:
+        conn.execute(
+            f"INSERT INTO temp.{table}(id, updated_at, {columns}) "
+            f"SELECT id, updated_at, {values} FROM main.records WHERE {where}",
+            params,
+        )
+        rows = conn.execute(
+            f"SELECT id FROM temp.{table} WHERE {table} MATCH ? "
+            f"ORDER BY bm25({table}), updated_at DESC, id LIMIT ?",
+            (expression, depth),
+        ).fetchall()
+    finally:
+        conn.execute(f"DROP TABLE IF EXISTS temp.{table}")
+    return [row[0] for row in rows]
+
+
+def words_list_provider(request: dict[str, Any]) -> list[str] | None:
+    expression = words_match_expression(request["terms"])
+    return fts5_ranked_ids(
+        request["conn"], "lookup_words", request["tokenizers"]["words"], expression,
+        request["where"], request["params"], request["depth"],
+    )
+
+
+def trigram_list_provider(request: dict[str, Any]) -> list[str] | None:
+    """Substring list, opt-in through `rank_record_ids(..., providers=...)`.
+
+    It finds a fragment inside a word ("atewa" in "gateway"), which no word
+    list reaches; None when the host SQLite has no trigram tokenizer (3.34+).
+    """
+    tokenizer = request["tokenizers"].get("trigram")
+    expression = trigram_match_expression(request["terms"])
+    if tokenizer is None or expression is None:
+        return None
+    return fts5_ranked_ids(
+        request["conn"], "lookup_trigram", tokenizer, expression,
+        request["where"], request["params"], request["depth"],
+    )
+
+
+def default_ranked_list_providers(tokenizers: dict[str, str | None]) -> list[tuple[str, Any]]:
+    """Name and provider of every ranked list a lookup fuses.
+
+    A provider takes the request dict (`conn`, `query`, `terms`, `where`,
+    `params`, `depth`, `tokenizers`) and returns record ids best first, or
+    None when it does not apply to the query. `where` is an SQL predicate over
+    `records` that every list must honor. The dense list of E4.6 joins here.
+
+    Only the word list is a default. Fusing the trigram list at weight 1 cost
+    LongMemEval M session recall@5 and recall@10 6.0 and 3.1 points, and every
+    lower weight tried on S still trailed the word list alone.
+    """
+    return [("words", words_list_provider)]
+
+
+def rrf_fuse(ranked_lists: list[list[str]], k: int = RRF_K) -> list[tuple[str, float]]:
+    """Reciprocal Rank Fusion: score(id) = sum over lists of 1 / (k + rank).
+
+    Ranks start at 1 and a list counts an id once, at its best rank. Ties break
+    by the best rank in any list, then by first appearance across the lists in
+    order, so equal inputs always give the same order.
+    """
+    if k < 1:
+        raise ValueError("RRF k must be a positive integer")
+    contributions: dict[str, list[float]] = {}
+    best_rank: dict[str, int] = {}
+    first_seen: dict[str, int] = {}
+    for ranked in ranked_lists:
+        seen: set[str] = set()
+        for rank, item in enumerate(ranked, start=1):
+            if item in seen:
+                continue
+            seen.add(item)
+            contributions.setdefault(item, []).append(1.0 / (k + rank))
+            best_rank[item] = min(best_rank.get(item, rank), rank)
+            first_seen.setdefault(item, len(first_seen))
+    scores = {item: math.fsum(values) for item, values in contributions.items()}
+    return sorted(scores.items(), key=lambda pair: (-pair[1], best_rank[pair[0]], first_seen[pair[0]]))
+
+
 def sql_like(value: str) -> str:
     return f"%{value}%"
 
 
-def build_lookup_sql(facet: str, query: str | None, domain: str | None = None) -> tuple[str, list[Any]]:
+def like_fallback_ids(conn: sqlite3.Connection, query: str, where: str, params: list[Any], limit: int) -> list[str]:
+    """Unranked substring match, used only when the host SQLite has no FTS5."""
+    like = sql_like(query)
+    match = " OR ".join(f"{column} LIKE ?" for column in INDEXED_COLUMNS)
+    sql = f"SELECT id FROM records WHERE {where} AND ({match}) {order_clause()} LIMIT ?"
+    return [row[0] for row in conn.execute(sql, [*params, *([like] * len(INDEXED_COLUMNS)), limit])]
+
+
+def rank_record_ids(
+    conn: sqlite3.Connection,
+    query: str,
+    where: str,
+    params: list[Any],
+    limit: int,
+    providers: list[tuple[str, Any]] | None = None,
+) -> tuple[list[str], dict[str, Any]]:
+    """Return up to `limit` record ids best first, plus the retrieval report."""
+    tokenizers = fts5_tokenizers()
+    version = sqlite3.sqlite_version
+    info: dict[str, Any] = {
+        "method": "fts5_rrf",
+        "lists": [],
+        "fusion": {"method": "rrf", "k": RRF_K},
+        "tokenizers": tokenizers,
+        "fallback": None,
+        "warnings": [],
+    }
+    if tokenizers["words"] is None:
+        info.update(method="like_fallback", fusion=None, fallback="fts5_unavailable")
+        info["warnings"].append(f"SQLite {version} has no FTS5: unranked LIKE substring fallback")
+        return like_fallback_ids(conn, query, where, params, limit), info
+    if tokenizers["words"] != WORD_TOKENIZERS[0]:
+        info["warnings"].append(f"SQLite {version} lacks remove_diacritics 2: some accents may not fold")
+    terms = parse_query_terms(query)
+    if not terms:
+        info["warnings"].append("query has no searchable terms")
+        return [], info
+    request = {
+        "conn": conn,
+        "query": query,
+        "terms": terms,
+        "where": where,
+        "params": list(params),
+        "depth": max(limit, 1) * RANK_DEPTH_FACTOR,
+        "tokenizers": tokenizers,
+        # Providers append here what the caller should know (e.g. a stale dense index).
+        "warnings": info["warnings"],
+    }
+    if providers is None:
+        providers = default_ranked_list_providers(tokenizers)
+    ranked_lists = []
+    for name, provider in providers:
+        ranked = provider(request)
+        if ranked is None:
+            continue
+        info["lists"].append(name)
+        ranked_lists.append(ranked)
+    if not ranked_lists and providers:
+        info["warnings"].append("no requested ranked list applied; ranked by the word list")
+        info["lists"].append("words")
+        ranked_lists.append(words_list_provider(request))
+    return [item for item, _score in rrf_fuse(ranked_lists)][:limit], info
+
+
+# ---------------------------------------------------------------------------
+# Dense list (E4.6): an optional meaning-based list fused by RRF with the words.
+#
+# Off by default and outside the stdlib core. The extra is `pip install
+# model2vec==0.10.0`, which brings numpy, tokenizers, safetensors,
+# huggingface-hub, jinja2, joblib and tqdm (no torch). The runtime imports it
+# only when a lookup or `dense-index` asks for the dense list; without it a
+# lookup ranks by words and says why. Vectors live in a derived index under
+# .kb-next/index/dense/ that `dense-index` rebuilds from the classic records at
+# any time; .kb/kb.db is only read. Model files are pinned by revision and
+# SHA-256 and cached outside the project.
+#
+# A record is split into passages of `chunk_words` words over its title,
+# content and tags, and scores the best cosine among its passages. On
+# LongMemEval M, one vector per long record lost to the word list, while
+# 32-word passages fused with it reached the decision 6 target
+# (docs/benchmarks/longmemeval/README.md).
+# ---------------------------------------------------------------------------
+
+DENSE_INDEX_REL = Path(".kb-next") / "index" / "dense"
+# .kb-next/ is versioned in projects; the derived index must never be.
+DENSE_INDEX_GITIGNORE = "# Derived by kb_next.py dense-index: regenerate it, never commit it.\n*\n"
+DENSE_MANIFEST_NAME = "manifest.json"
+DENSE_VECTORS_NAME = "vectors.sqlite3"
+DENSE_INDEX_SCHEMA = "kb-wiki-vnext/dense-index/v1"
+DENSE_EXTRA_REQUIREMENT = "model2vec==0.10.0"
+DENSE_MODEL_CACHE_ENV = "KBF_MODEL_CACHE"
+DENSE_MODEL_URL = "https://huggingface.co/{repo}/resolve/{revision}/{file}"
+# File sizes and SHA-256 of the file contents at the pinned revision, read on
+# 2026-10-19 and re-checked before a model is used.
+DENSE_MODELS: dict[str, dict[str, Any]] = {
+    "potion-base-32M": {
+        "repo": "minishlab/potion-base-32M",
+        "revision": "1e5a03f8eeb2c98b928fbbd846f22f816360919f",
+        "license": "MIT",
+        "languages": "English",
+        "files": {
+            "config.json": (202, "63c00d90824c832c04ec1d02b6a983fb90489bf049f29fbff15ba481b8a432ee"),
+            "model.safetensors": (129210456, "99f6c33204c9231a7391871b7a3c91409b532c8f587a9ea44fc282303d8dec28"),
+            "tokenizer.json": (1493150, "7d75cbc54318138807c401b0f0c9721117c628b39de8e8e0edb6cb17e0ee7d18"),
+        },
+    },
+    "potion-multilingual-128M": {
+        "repo": "minishlab/potion-multilingual-128M",
+        "revision": "73908c3438cf03b6a01bcb9611d62b23d0726f08",
+        "license": "MIT",
+        "languages": "multilingual, Portuguese included",
+        "files": {
+            "config.json": (271, "595e4cab2093732efd5dbe084fd5c1826b5eea693b73b4c1fd971672867d2e54"),
+            "model.safetensors": (512361560, "14b5eb39cb4ce5666da8ad1f3dc6be4346e9b2d601c073302fa0a31bf7943397"),
+            "tokenizer.json": (18616131, "19f1909063da3cfe3bd83a782381f040dccea475f4816de11116444a73e1b6a1"),
+        },
+    },
+}
+DENSE_DEFAULTS: dict[str, Any] = {"enabled": False, "model": "potion-base-32M", "chunk_words": 32, "chunk_stride": 32}
+RANKED_LIST_NAMES = ("words", "trigram", "dense")
+# Candidate ids per `IN (...)` read of the vector index, under SQLite's variable limit.
+DENSE_READ_BATCH = 500
+# Records embedded per model call while building, to bound memory on a large KB.
+DENSE_BUILD_BATCH = 1000
+
+_DENSE_EMBEDDERS: dict[str, Any] = {}
+_VERIFIED_MODEL_DIRS: set[str] = set()
+
+
+class DenseUnavailable(RuntimeError):
+    """The dense list cannot run here; the message says what to do."""
+
+
+def dense_settings(config: dict[str, Any] | None) -> dict[str, Any]:
+    """`retrieval.dense` from the config over DENSE_DEFAULTS, validated."""
+    settings = dict(DENSE_DEFAULTS)
+    retrieval = config.get("retrieval") if isinstance(config, dict) else None
+    raw = retrieval.get("dense") if isinstance(retrieval, dict) else None
+    if isinstance(raw, dict):
+        settings.update({key: raw[key] for key in DENSE_DEFAULTS if key in raw})
+    if settings["model"] not in DENSE_MODELS:
+        raise ValueError(f"retrieval.dense.model must be one of {sorted(DENSE_MODELS)}, got {settings['model']!r}")
+    width, stride = settings["chunk_words"], settings["chunk_stride"]
+    if not (isinstance(width, int) and isinstance(stride, int) and 1 <= stride <= width):
+        raise ValueError("retrieval.dense needs integers 1 <= chunk_stride <= chunk_words")
+    settings["enabled"] = settings["enabled"] is True
+    return settings
+
+
+def dense_model_cache(root: Path) -> Path:
+    """Model cache outside the project: $KBF_MODEL_CACHE or ~/.cache/kb-factory/models."""
+    raw = os.environ.get(DENSE_MODEL_CACHE_ENV)
+    base = (Path(raw).expanduser() if raw else Path.home() / ".cache" / "kb-factory" / "models").resolve()
+    project = root.resolve()
+    if base == project or project in base.parents:
+        raise DenseUnavailable(f"the model cache must live outside the project, so models stay out of Git: {base}")
+    return base
+
+
+def dense_model_dir(root: Path, name: str) -> Path:
+    spec = DENSE_MODELS[name]
+    return dense_model_cache(root) / spec["repo"].replace("/", "--") / spec["revision"]
+
+
+def sha256_file_streaming(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def dense_model_problems(directory: Path, name: str) -> list[str]:
+    """What keeps the cached files from matching the pinned model; [] when they match."""
+    if str(directory) in _VERIFIED_MODEL_DIRS:
+        return []
+    problems = []
+    for file, (size, digest) in DENSE_MODELS[name]["files"].items():
+        path = directory / file
+        if not path.is_file():
+            problems.append(f"{file} is missing")
+        elif path.stat().st_size != size:
+            problems.append(f"{file} has {path.stat().st_size} bytes, pinned {size}")
+        elif sha256_file_streaming(path) != digest:
+            problems.append(f"{file} differs from the pinned SHA-256")
+    if not problems:
+        _VERIFIED_MODEL_DIRS.add(str(directory))
+    return problems
+
+
+def fetch_dense_model(directory: Path, name: str) -> list[str]:
+    """Download the pinned files that are missing or wrong; return their names."""
+    spec = DENSE_MODELS[name]
+    directory.mkdir(parents=True, exist_ok=True)
+    fetched = []
+    for file, (size, digest) in spec["files"].items():
+        target = directory / file
+        if target.is_file() and target.stat().st_size == size and sha256_file_streaming(target) == digest:
+            continue
+        url = DENSE_MODEL_URL.format(repo=spec["repo"], revision=spec["revision"], file=file)
+        partial = target.with_name(file + ".part")
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response, partial.open("wb") as handle:
+                shutil.copyfileobj(response, handle, 1 << 20)
+        except OSError as exc:
+            partial.unlink(missing_ok=True)
+            raise DenseUnavailable(f"download of {url} failed: {exc}") from exc
+        if sha256_file_streaming(partial) != digest:
+            partial.unlink(missing_ok=True)
+            raise DenseUnavailable(f"{url} does not match the pinned SHA-256; nothing was installed")
+        os.replace(partial, target)
+        fetched.append(file)
+    _VERIFIED_MODEL_DIRS.discard(str(directory))
+    return fetched
+
+
+def import_dense_extra() -> tuple[Any, Any]:
+    """Import the optional dense extra (numpy, model2vec) on demand.
+
+    The one place the runtime reaches past the standard library, and only when
+    the dense list is asked for. tests/test_dev_requirements.py keeps every
+    other import in this file inside the stdlib and pins these two names.
+    """
+    try:
+        numpy = importlib.import_module("numpy")
+        model2vec = importlib.import_module("model2vec")
+    except ImportError as exc:
+        missing = getattr(exc, "name", None) or str(exc)
+        raise DenseUnavailable(
+            f"the dense extra is not installed ({missing}); install it with: pip install {DENSE_EXTRA_REQUIREMENT}"
+        ) from None
+    return numpy, model2vec
+
+
+class Model2VecEmbedder:
+    """Unit-length little-endian float32 vectors from a pinned model2vec model."""
+
+    def __init__(self, name: str, directory: Path) -> None:
+        numpy, model2vec = import_dense_extra()
+        self.numpy = numpy
+        self.name = name
+        self.model = model2vec.StaticModel.from_pretrained(str(directory), normalize=True, max_length=None)
+        self.dim = int(self.model.dim)
+        self.library = f"model2vec {getattr(model2vec, '__version__', 'unknown')}, numpy {numpy.__version__}"
+
+    def embed(self, texts: list[str]) -> list[bytes]:
+        if not texts:
+            return []
+        numpy = self.numpy
+        vectors = numpy.asarray(self.model.encode(texts, batch_size=1024, show_progress_bar=False), dtype="<f4")
+        norms = numpy.linalg.norm(vectors, axis=1, keepdims=True)
+        vectors = (vectors / numpy.maximum(norms, 1e-12)).astype("<f4")
+        return [row.tobytes() for row in vectors]
+
+
+def load_dense_embedder(root: Path, settings: dict[str, Any]) -> Any:
+    """The embedder for `settings["model"]`, loaded once per process.
+
+    An embedder has `name`, `dim`, `library` and `embed(texts) -> list[bytes]`
+    of unit-length little-endian float32 vectors; tests inject a stub here.
+    """
+    name = settings["model"]
+    directory = dense_model_dir(root, name)
+    if str(directory) not in _DENSE_EMBEDDERS:
+        import_dense_extra()
+        problems = dense_model_problems(directory, name)
+        if problems:
+            raise DenseUnavailable(
+                f"model {name} is not ready in {directory} ({problems[0]}); "
+                "download it with: kb_next.py dense-index --fetch-model"
+            )
+        _DENSE_EMBEDDERS[str(directory)] = Model2VecEmbedder(name, directory)
+    return _DENSE_EMBEDDERS[str(directory)]
+
+
+def dense_key_text(title: str | None, content: str | None, tags_json: Any) -> str:
+    """The text a record is embedded from: title, content and tags."""
+    tags = " ".join(str(tag) for tag in json_list(tags_json))
+    return "\n".join(part for part in (title or "", content or "", tags) if part)
+
+
+def dense_passages(text: str, width: int, stride: int) -> list[str]:
+    """Windows of `width` words every `stride` words, the last one ending at the last word."""
+    words = text.split()
+    if len(words) <= width:
+        return [" ".join(words)]
+    starts = [*range(0, len(words) - width, stride), len(words) - width]
+    return [" ".join(words[start : start + width]) for start in starts]
+
+
+def dense_index_paths(root: Path) -> tuple[Path, Path]:
+    directory = root / DENSE_INDEX_REL
+    return directory / DENSE_MANIFEST_NAME, directory / DENSE_VECTORS_NAME
+
+
+def dense_index_identity(settings: dict[str, Any], dim: int) -> dict[str, Any]:
+    """What a stored index must match to serve a lookup under `settings`."""
+    spec = DENSE_MODELS[settings["model"]]
+    return {
+        "model": settings["model"],
+        "repo": spec["repo"],
+        "revision": spec["revision"],
+        "files_sha256": {file: digest for file, (_size, digest) in sorted(spec["files"].items())},
+        "dim": dim,
+        "key_fields": ["title", "content", "tags"],
+        "chunk_words": settings["chunk_words"],
+        "chunk_stride": settings["chunk_stride"],
+        "score": "max cosine over passages",
+        "vector_format": "float32 little-endian, unit length",
+    }
+
+
+def read_dense_manifest(root: Path) -> dict[str, Any] | None:
+    manifest_path, vectors_path = dense_index_paths(root)
+    if not (manifest_path.is_file() and vectors_path.is_file()):
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(manifest, dict) or manifest.get("schema") != DENSE_INDEX_SCHEMA:
+        return None
+    return manifest
+
+
+def open_dense_vectors(path: Path) -> sqlite3.Connection:
+    conn = sqlite3.connect(path)
+    # A derived, regenerable file: skip the fsyncs, keep the rollback journal.
+    conn.execute("PRAGMA synchronous = OFF")
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS dense_vectors ("
+        "record_id TEXT PRIMARY KEY, key_sha256 TEXT NOT NULL, "
+        "passages INTEGER NOT NULL, vectors BLOB NOT NULL)"
+    )
+    return conn
+
+
+def build_dense_index(root: Path, settings: dict[str, Any], rebuild: bool = False) -> dict[str, Any]:
+    """Embed every active record into .kb-next/index/dense/; reuse unchanged ones."""
+    embedder = load_dense_embedder(root, settings)
+    identity = dense_index_identity(settings, embedder.dim)
+    manifest_path, vectors_path = dense_index_paths(root)
+    previous = read_dense_manifest(root)
+    if rebuild or previous is None or previous.get("identity") != identity:
+        for path in (manifest_path, vectors_path):
+            path.unlink(missing_ok=True)
+    vectors_path.parent.mkdir(parents=True, exist_ok=True)
+    ignore = vectors_path.parent.parent / ".gitignore"
+    if not ignore.is_file():
+        ignore.write_bytes(DENSE_INDEX_GITIGNORE.encode("utf-8"))
+    source = open_classic_kb_readonly(root)
+    try:
+        rows = source.execute("SELECT id, title, content, tags_json FROM records WHERE status = 'ATIVO' ORDER BY id").fetchall()
+    finally:
+        source.close()
+    index = open_dense_vectors(vectors_path)
+    try:
+        stored = dict(index.execute("SELECT record_id, key_sha256 FROM dense_vectors"))
+        texts = {row[0]: dense_key_text(row[1], row[2], row[3]) for row in rows}
+        wanted = {record_id: sha256_text(text) for record_id, text in texts.items()}
+        stale = [record_id for record_id in stored if wanted.get(record_id) != stored[record_id]]
+        todo = [record_id for record_id in wanted if stored.get(record_id) != wanted[record_id]]
+        embedded_passages = 0
+        with index:
+            index.executemany("DELETE FROM dense_vectors WHERE record_id = ?", [(record_id,) for record_id in stale])
+            for start in range(0, len(todo), DENSE_BUILD_BATCH):
+                owners = []
+                passages: list[str] = []
+                for record_id in todo[start : start + DENSE_BUILD_BATCH]:
+                    chunks = dense_passages(texts[record_id], settings["chunk_words"], settings["chunk_stride"])
+                    owners.append((record_id, len(chunks)))
+                    passages.extend(chunks)
+                vectors = embedder.embed(passages)
+                embedded_passages += len(passages)
+                ends = [*itertools.accumulate(count for _record_id, count in owners)]
+                index.executemany(
+                    "INSERT OR REPLACE INTO dense_vectors VALUES (?, ?, ?, ?)",
+                    [
+                        (record_id, wanted[record_id], count, b"".join(vectors[end - count : end]))
+                        for (record_id, count), end in zip(owners, ends)
+                    ],
+                )
+        totals = index.execute("SELECT count(*), COALESCE(sum(passages), 0) FROM dense_vectors").fetchone()
+    finally:
+        index.close()
+    manifest = {
+        "schema": DENSE_INDEX_SCHEMA,
+        "runtime_version": RUNTIME_VERSION,
+        "identity": identity,
+        "library": embedder.library,
+        "source": {"classic_kb": ".kb/kb.db", "filter": "status = 'ATIVO'", "access": "read_only"},
+        "records": totals[0],
+        "passages": totals[1],
+        "built_at": now_iso(),
+        "derived": "regenerable with kb_next.py dense-index --rebuild; safe to delete",
+    }
+    write_json(manifest_path, manifest)
+    return {
+        "records": totals[0],
+        "passages": totals[1],
+        "embedded_records": len(todo),
+        "embedded_passages": embedded_passages,
+        "reused_records": len(rows) - len(todo),
+        "removed_records": len([record_id for record_id in stale if record_id not in wanted]),
+        "manifest": manifest,
+    }
+
+
+def dense_record_scores(blobs: list[tuple[str, int, bytes]], query: bytes, dim: int) -> dict[str, float]:
+    """Best passage cosine per record; numpy when present, else plain Python.
+
+    Vectors are unit length, so the cosine is the dot product.
+    """
+    if not blobs:
+        return {}
+    try:
+        numpy = importlib.import_module("numpy")
+    except ImportError:
+        numpy = None
+    if numpy is not None:
+        matrix = numpy.frombuffer(b"".join(blob for _id, _count, blob in blobs), dtype="<f4").reshape(-1, dim)
+        sims = matrix @ numpy.frombuffer(query, dtype="<f4")
+        offsets = numpy.cumsum([0] + [count for _id, count, _blob in blobs[:-1]])
+        best = numpy.maximum.reduceat(sims, offsets)
+        return {record_id: float(score) for (record_id, _count, _blob), score in zip(blobs, best)}
+    q = array("f")
+    q.frombytes(query)
+    if sys.byteorder == "big":
+        q.byteswap()
+    scores = {}
+    for record_id, count, blob in blobs:
+        values = array("f")
+        values.frombytes(blob)
+        if sys.byteorder == "big":
+            values.byteswap()
+        scores[record_id] = max(
+            math.fsum(a * b for a, b in zip(values[i * dim : (i + 1) * dim], q)) for i in range(count)
+        )
+    return scores
+
+
+def make_dense_list_provider(root: Path, settings: dict[str, Any]) -> Any:
+    """The dense ranked list over the derived index, for `rank_record_ids`.
+
+    Returns None, with a warning, when the extra, the model or the index is not
+    ready; records filed or edited after the last `dense-index` are left out
+    of this list (the word list still sees them) and counted in a warning.
+    """
+
+    def dense_list_provider(request: dict[str, Any]) -> list[str] | None:
+        warnings = request["warnings"]
+        manifest = read_dense_manifest(root)
+        if manifest is None:
+            warnings.append("dense list skipped: no dense index; build it with: kb_next.py dense-index")
+            return None
+        try:
+            embedder = load_dense_embedder(root, settings)
+        except DenseUnavailable as exc:
+            warnings.append(f"dense list skipped: {exc}")
+            return None
+        if manifest.get("identity") != dense_index_identity(settings, embedder.dim):
+            warnings.append("dense list skipped: the dense index was built with other settings; rebuild it with: kb_next.py dense-index")
+            return None
+        conn = request["conn"]
+        candidates = conn.execute(
+            f"SELECT id, title, content, tags_json FROM main.records WHERE {request['where']}", request["params"]
+        ).fetchall()
+        key_of = {row[0]: sha256_text(dense_key_text(row[1], row[2], row[3])) for row in candidates}
+        ids = sorted(key_of)
+        blobs: list[tuple[str, int, bytes]] = []
+        _manifest_path, vectors_path = dense_index_paths(root)
+        index = sqlite3.connect(vectors_path.resolve().as_uri() + "?mode=ro", uri=True)
+        try:
+            for start in range(0, len(ids), DENSE_READ_BATCH):
+                batch = ids[start : start + DENSE_READ_BATCH]
+                marks = ", ".join("?" for _ in batch)
+                for record_id, key, count, blob in index.execute(
+                    f"SELECT record_id, key_sha256, passages, vectors FROM dense_vectors WHERE record_id IN ({marks})", batch
+                ):
+                    if key == key_of[record_id]:
+                        blobs.append((record_id, count, blob))
+        finally:
+            index.close()
+        blobs.sort()
+        missing = len(ids) - len(blobs)
+        if missing:
+            warnings.append(f"dense list misses {missing} new or edited records; refresh it with: kb_next.py dense-index")
+        query_vector = embedder.embed([request["query"]])[0]
+        scores = dense_record_scores(blobs, query_vector, embedder.dim)
+        return sorted(scores, key=lambda record_id: (-scores[record_id], record_id))[: request["depth"]]
+
+    return dense_list_provider
+
+
+def ranked_list_names(config: dict[str, Any] | None, requested: list[str] | None = None) -> list[str]:
+    """Lists a lookup fuses: the request, else words plus dense when the config enables it."""
+    if requested:
+        return list(dict.fromkeys(requested))
+    retrieval = config.get("retrieval") if isinstance(config, dict) else None
+    dense = retrieval.get("dense") if isinstance(retrieval, dict) else None
+    # Only an enabled dense list validates its settings, so a typo there cannot break word lookups.
+    return ["words", "dense"] if isinstance(dense, dict) and dense.get("enabled") is True else ["words"]
+
+
+def configured_ranked_list_providers(
+    root: Path, config: dict[str, Any] | None, requested: list[str] | None = None
+) -> list[tuple[str, Any]] | None:
+    """Providers for `rank_record_ids`; None keeps the stdlib default (words only)."""
+    names = ranked_list_names(config, requested)
+    if names == ["words"]:
+        return None
+    by_name = {"words": words_list_provider, "trigram": trigram_list_provider}
+    providers = []
+    for name in names:
+        if name == "dense":
+            providers.append((name, make_dense_list_provider(root, dense_settings(config))))
+        else:
+            providers.append((name, by_name[name]))
+    return providers
+
+
+def parse_list_names(value: str) -> list[str]:
+    names = [part.strip() for part in value.split(",") if part.strip()]
+    unknown = [name for name in names if name not in RANKED_LIST_NAMES]
+    if unknown or not names:
+        raise argparse.ArgumentTypeError(f"choose ranked lists from {','.join(RANKED_LIST_NAMES)}")
+    return names
+
+
+def rows_in_order(conn: sqlite3.Connection, ids: list[str]) -> list[sqlite3.Row]:
+    if not ids:
+        return []
+    placeholders = ", ".join("?" for _ in ids)
+    by_id = {row["id"]: row for row in conn.execute(f"SELECT * FROM records WHERE id IN ({placeholders})", ids)}
+    return [by_id[item] for item in ids if item in by_id]
+
+
+def fill_rows(conn: sqlite3.Connection, rows: list[sqlite3.Row], where: str, params: list[Any], limit: int) -> list[sqlite3.Row]:
+    """Pad ranked rows with unranked candidates in tier and recency order."""
+    seen = {row["id"] for row in rows}
+    if len(rows) >= limit:
+        return rows
+    sql = f"SELECT * FROM records WHERE {where} {order_clause()} LIMIT ?"
+    for row in fetch_rows(conn, sql, params + [limit + len(seen)]):
+        if row["id"] in seen:
+            continue
+        rows.append(row)
+        seen.add(row["id"])
+        if len(rows) >= limit:
+            break
+    return rows
+
+
+def lookup_facet_clause(facet: str) -> str:
+    if facet == "definitions":
+        return DEFINITION_TAGS_CLAUSE
+    return facet_base_clause(facet)
+
+
+def lookup_rows(
+    conn: sqlite3.Connection,
+    facet: str,
+    query: str | None,
+    domain: str | None,
+    limit: int,
+    providers: list[tuple[str, Any]] | None = None,
+) -> tuple[list[sqlite3.Row], dict[str, Any]]:
+    """Rows for `lookup` and the retrieval report; without a query, a facet listing."""
     clauses = ["status = 'ATIVO'"]
     params: list[Any] = []
-    if facet == "decisions":
-        clauses.append("category = 'DECISAO'")
-    elif facet == "learnings":
-        clauses.append("category = 'APRENDIZADO'")
-    elif facet == "open-items":
-        clauses.append("category = 'PENDENCIA'")
-    elif facet == "definitions":
-        if query:
-            like = sql_like(query)
-            clauses.append(
-                "(title LIKE ? OR content LIKE ? OR domain LIKE ? OR tags_json LIKE '%definition%' OR "
-                "tags_json LIKE '%definitions%' OR tags_json LIKE '%glossary%' OR "
-                "tags_json LIKE '%glossario%' OR tags_json LIKE '%definicao%' OR "
-                "tags_json LIKE '%definição%')"
-            )
-            params.extend([like, like, like])
-        else:
-            clauses.append(
-                "(tags_json LIKE '%definition%' OR tags_json LIKE '%definitions%' OR "
-                "tags_json LIKE '%glossary%' OR tags_json LIKE '%glossario%' OR "
-                "tags_json LIKE '%definicao%' OR tags_json LIKE '%definição%')"
-            )
-    elif facet == "status":
-        clauses.append("category IN ('DECISAO', 'FATO', 'APRENDIZADO', 'PENDENCIA')")
-    else:
-        raise ValueError(f"unsupported facet: {facet}")
-
     if domain:
         clauses.append("domain = ?")
         params.append(domain)
-    if query and facet != "definitions":
-        like = sql_like(query)
-        clauses.append("(title LIKE ? OR content LIKE ? OR tags_json LIKE ? OR domain LIKE ?)")
-        params.extend([like, like, like, like])
-
-    sql = (
-        "SELECT * FROM records WHERE "
-        + " AND ".join(clauses)
-        + " ORDER BY CASE tier WHEN 'HOT' THEN 0 WHEN 'WARM' THEN 1 ELSE 2 END, updated_at DESC LIMIT ?"
-    )
-    return sql, params
+    facet_where = " AND ".join([*clauses, lookup_facet_clause(facet)])
+    if not query:
+        sql = f"SELECT * FROM records WHERE {facet_where} {order_clause()} LIMIT ?"
+        listing = {"method": "facet_listing", "lists": [], "fusion": None, "tokenizers": None, "fallback": None, "warnings": []}
+        return fetch_rows(conn, sql, params + [limit]), listing
+    if facet == "definitions":
+        # Any record matching the text counts; tagged definitions fill the rest.
+        ids, info = rank_record_ids(conn, query, " AND ".join(clauses), params, limit, providers=providers)
+        return fill_rows(conn, rows_in_order(conn, ids), facet_where, params, limit), info
+    ids, info = rank_record_ids(conn, query, facet_where, params, limit, providers=providers)
+    return rows_in_order(conn, ids), info
 
 
 def excerpt(text: str, limit: int = 220) -> str:
@@ -2317,35 +3106,19 @@ def fetch_candidate_rows(
     query: str | None,
     limit: int,
     domain: str | None = None,
+    providers: list[tuple[str, Any]] | None = None,
 ) -> list[sqlite3.Row]:
     base = ["status = 'ATIVO'", facet_base_clause(facet)]
     params: list[Any] = []
     if domain:
         base.append("domain = ?")
         params.append(domain)
+    where = " AND ".join(base)
     rows: list[sqlite3.Row] = []
-    seen: set[str] = set()
-
     if query:
-        like = sql_like(query)
-        lexical = base + ["(title LIKE ? OR content LIKE ? OR tags_json LIKE ? OR source LIKE ? OR domain LIKE ?)"]
-        lexical_params = params + [like, like, like, like, like]
-        sql = f"SELECT * FROM records WHERE {' AND '.join(lexical)} {order_clause()} LIMIT ?"
-        rows = fetch_rows(conn, sql, lexical_params + [limit])
-        seen = {row["id"] for row in rows}
-
-    if len(rows) < limit:
-        remaining = limit - len(rows)
-        sql = f"SELECT * FROM records WHERE {' AND '.join(base)} {order_clause()} LIMIT ?"
-        for row in fetch_rows(conn, sql, params + [limit + len(seen)]):
-            if row["id"] in seen:
-                continue
-            rows.append(row)
-            seen.add(row["id"])
-            remaining -= 1
-            if remaining <= 0:
-                break
-    return rows
+        ids, _retrieval = rank_record_ids(conn, query, where, params, limit, providers=providers)
+        rows = rows_in_order(conn, ids)
+    return fill_rows(conn, rows, where, params, limit)
 
 
 def judgment_arg(args: argparse.Namespace) -> dict[str, Any] | None:
@@ -2406,6 +3179,74 @@ def build_llm_task(task_type: str, instruction: str, expected_fields: list[str])
     }
 
 
+def actor_id_arg(value: str) -> str:
+    actor = value.strip()
+    if not actor:
+        raise argparse.ArgumentTypeError("must name who acts, not be blank")
+    return actor
+
+
+def add_actor_arguments(parser: argparse.ArgumentParser, *, required: bool) -> None:
+    parser.add_argument(
+        "--actor",
+        type=actor_id_arg,
+        required=required,
+        metavar="ID",
+        help="Who approves (proposal-apply) or generates (proposal commands) this operation",
+    )
+    parser.add_argument("--actor-runtime", choices=ACTOR_RUNTIMES, required=required)
+
+
+def actor_from_args(args: argparse.Namespace) -> dict[str, str] | None:
+    """Return the recorded actor, or None when a proposal command names none."""
+    actor_id = getattr(args, "actor", None)
+    actor_runtime = getattr(args, "actor_runtime", None)
+    if actor_id is None and actor_runtime is None:
+        return None
+    if actor_id is None or actor_runtime is None:
+        raise ValueError("--actor and --actor-runtime go together; pass both or neither")
+    return {"id": actor_id, "runtime": actor_runtime}
+
+
+def configured_default_actor(root: Path) -> str | None:
+    """`proposal_apply.default_actor` from the vNext config, or None.
+
+    A person writes this key; no runtime command fills it, so a recorded
+    approver is always a name someone typed. A missing config yields None, so
+    the apply still fails as a usage error before anything is read or written.
+    """
+    path = config_path(root)
+    if not path.is_file():
+        return None
+    config = json.loads(path.read_text(encoding="utf-8"))
+    section = config.get("proposal_apply") if isinstance(config, dict) else None
+    value = section.get("default_actor") if isinstance(section, dict) else None
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("proposal_apply.default_actor in .kb-next/kb-next.config.json must name who approves, not be blank")
+    return value.strip()
+
+
+def resolve_apply_actor(root: Path, args: argparse.Namespace) -> tuple[dict[str, str], str]:
+    """The approver of one apply and where its id came from: `flag` or `config`.
+
+    `--actor` wins over the configured default. When neither names the
+    approver, or `--actor-runtime` is missing, argparse exits 2 before the
+    proposal is read and nothing is written.
+    """
+    actor_id, source = args.actor, "flag"
+    if actor_id is None:
+        actor_id, source = configured_default_actor(root), "config"
+    missing = [flag for flag, value in (("--actor", actor_id), ("--actor-runtime", args.actor_runtime)) if value is None]
+    if missing:
+        parser = getattr(args, "apply_parser", None)
+        if parser is None:
+            raise ValueError(ACTOR_HINT)
+        parser.error(f"the following arguments are required: {', '.join(missing)}")
+    return {"id": actor_id, "runtime": args.actor_runtime}, source
+
+
 def write_llm_manifest(
     root: Path,
     task_type: str,
@@ -2416,13 +3257,17 @@ def write_llm_manifest(
     proposed_action: str,
     warnings: list[str],
     judgment_source: str | None = None,
+    *,
+    actor: dict[str, str] | None,
 ) -> tuple[str, Path, dict[str, Any]]:
     manifest_id = make_id("llm")
     manifest = {
         "manifest_id": manifest_id,
         "task_type": task_type,
         "created_at": now_iso(),
-        "actor": "external_agent_or_operator",
+        # None: the proposal command ran without --actor. proposal-apply
+        # always records the approver in its own manifest.
+        "actor": actor,
         "runtime_version": "kb-wiki-vnext",
         "context": context,
         "input_records": candidates,
@@ -2519,10 +3364,10 @@ def cmd_lookup(args: argparse.Namespace) -> int:
     root = project_root(args)
     config = load_config_or_fail(root)
     domain = getattr(args, "domain", None)
+    providers = configured_ranked_list_providers(root, config, getattr(args, "lists", None))
     conn = open_classic_kb_readonly(root)
     try:
-        sql, params = build_lookup_sql(args.facet, args.query, domain)
-        rows = conn.execute(sql, params + [args.limit]).fetchall()
+        rows, retrieval = lookup_rows(conn, args.facet, args.query, domain, args.limit, providers=providers)
     finally:
         conn.close()
     result = {
@@ -2534,6 +3379,7 @@ def cmd_lookup(args: argparse.Namespace) -> int:
         "access_policy": config["memory_facets"]["access_policy"],
         "default_global_preload": False,
         "classic_kb_mode": config["classic_kb"]["mode"],
+        "retrieval": retrieval,
         "results": [row_to_lookup_result(row) for row in rows],
     }
     append_operation(
@@ -2545,6 +3391,7 @@ def cmd_lookup(args: argparse.Namespace) -> int:
             "domain": domain,
             "result_count": len(rows),
             "classic_kb_mode": config["classic_kb"]["mode"],
+            "retrieval": {key: retrieval[key] for key in ("method", "lists", "fallback")},
         },
     )
     if args.json:
@@ -2553,14 +3400,60 @@ def cmd_lookup(args: argparse.Namespace) -> int:
         lines = [f"Lookup: {args.facet}", ""]
         for item in result["results"]:
             lines.append(f"- [{item['id']}] {item['title']}")
+        for warning in retrieval["warnings"]:
+            lines.append(f"Warning: {warning}")
+        emit("\n".join(lines), False)
+    return 0
+
+
+def cmd_dense_index(args: argparse.Namespace) -> int:
+    """Build or refresh the derived dense index; optionally fetch the pinned model."""
+    root = project_root(args)
+    config = load_config_or_fail(root)
+    settings = dense_settings(config)
+    fetched: list[str] = []
+    if args.fetch_model:
+        # Without the extra the index cannot be built, so stop before
+        # downloading hundreds of megabytes of model files.
+        import_dense_extra()
+        fetched = fetch_dense_model(dense_model_dir(root, settings["model"]), settings["model"])
+    stats = build_dense_index(root, settings, rebuild=args.rebuild)
+    manifest = stats.pop("manifest")
+    result = {
+        "event": "dense_index",
+        "generated_at": now_iso(),
+        "index": DENSE_INDEX_REL.as_posix(),
+        "enabled_in_config": settings["enabled"],
+        "model": manifest["identity"]["model"],
+        "identity": manifest["identity"],
+        "fetched_model_files": fetched,
+        "library": manifest["library"],
+        **stats,
+    }
+    append_operation(
+        root,
+        "dense_index",
+        {key: result[key] for key in ("index", "model", "records", "passages", "embedded_records", "reused_records", "removed_records")},
+    )
+    if args.json:
+        emit(result, True)
+    else:
+        lines = [
+            f"Dense index: {result['records']} records, {result['passages']} passages ({result['model']})",
+            f"Embedded {result['embedded_records']}, reused {result['reused_records']}, removed {result['removed_records']}.",
+        ]
+        if not settings["enabled"]:
+            lines.append("Lookup fuses it after retrieval.dense.enabled is set to true in .kb-next/kb-next.config.json.")
         emit("\n".join(lines), False)
     return 0
 
 
 def semantic_candidates(root: Path, facet: str, query: str | None, limit: int, domain: str | None = None) -> list[dict[str, Any]]:
+    config = json.loads(config_path(root).read_text(encoding="utf-8")) if config_path(root).is_file() else None
+    providers = configured_ranked_list_providers(root, config)
     conn = open_classic_kb_readonly(root)
     try:
-        rows = fetch_candidate_rows(conn, facet, query, limit, domain=domain)
+        rows = fetch_candidate_rows(conn, facet, query, limit, domain=domain, providers=providers)
         return [row_to_candidate(row) for row in rows]
     finally:
         conn.close()
@@ -2599,6 +3492,7 @@ def build_ranked_results(judgment: dict[str, Any], candidates: list[dict[str, An
 
 def cmd_semantic_lookup(args: argparse.Namespace) -> int:
     root = project_root(args)
+    actor = actor_from_args(args)
     config = load_config_or_fail(root)
     candidates = semantic_candidates(root, args.facet, args.query, args.limit, domain=getattr(args, "domain", None))
     judgment = judgment_arg(args)
@@ -2646,6 +3540,7 @@ def cmd_semantic_lookup(args: argparse.Namespace) -> int:
         proposed_action,
         warnings,
         judgment_source_arg(args),
+        actor=actor,
     )
     proposal_payload = {
         "kind": "semantic-lookup",
@@ -2729,6 +3624,7 @@ def validate_curation_judgment(judgment: dict[str, Any], candidates: list[dict[s
 
 def cmd_curation_proposal(args: argparse.Namespace) -> int:
     root = project_root(args)
+    actor = actor_from_args(args)
     load_config_or_fail(root)
     candidates = semantic_candidates(root, args.facet, args.query, args.limit, domain=getattr(args, "domain", None))
     judgment = judgment_arg(args)
@@ -2753,6 +3649,7 @@ def cmd_curation_proposal(args: argparse.Namespace) -> int:
         action,
         warnings,
         judgment_source_arg(args),
+        actor=actor,
     )
     proposal_payload = {
         "kind": "curation-proposal",
@@ -3026,6 +3923,7 @@ def hygiene_proposal_payload(
 
 def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
     root = project_root(args)
+    actor = actor_from_args(args)
     config = load_config_or_fail(root)
     records = active_hygiene_records(root, args.limit)
     candidates_by_id = {record["id"]: record for record in records}
@@ -3063,6 +3961,7 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
             "hygiene_review",
             warnings,
             judgment_source_arg(args),
+            actor=actor,
         )
         if judgment is not None:
             for group_name in ("demote_candidate", "supersede_or_merge_candidate", "resolve_candidate", "needs_sponsor"):
@@ -3172,6 +4071,7 @@ def validate_filing_judgment(
 
 def cmd_filing_proposal(args: argparse.Namespace) -> int:
     root = project_root(args)
+    actor = actor_from_args(args)
     load_config_or_fail(root)
     candidate_memory = parse_json_payload(args.input, "input")
     if candidate_memory is None:
@@ -3207,6 +4107,7 @@ def cmd_filing_proposal(args: argparse.Namespace) -> int:
         action,
         warnings,
         judgment_source_arg(args),
+        actor=actor,
     )
     proposal_payload = {
         "kind": "filing-proposal",
@@ -3607,6 +4508,8 @@ def finalize_proposal_apply(
             "proposal_id": apply_manifest.get("proposal_id"),
             "status": apply_manifest["status"],
             "action": apply_manifest.get("action"),
+            "actor": apply_manifest["actor"],
+            "actor_source": apply_manifest.get("actor_source"),
             "canonical_record_id": apply_manifest.get("canonical_record_id"),
             "warnings": apply_manifest.get("warnings", []),
         },
@@ -3616,6 +4519,8 @@ def finalize_proposal_apply(
         "generated_at": now_iso(),
         "status": apply_manifest["status"],
         "apply_id": apply_manifest["apply_id"],
+        "actor": apply_manifest["actor"],
+        "actor_source": apply_manifest.get("actor_source"),
         "proposal_id": apply_manifest.get("proposal_id"),
         "proposal_path": apply_manifest.get("proposal_path"),
         "action": apply_manifest.get("action"),
@@ -3630,6 +4535,7 @@ def finalize_proposal_apply(
 
 def cmd_proposal_apply(args: argparse.Namespace) -> int:
     root = project_root(args)
+    actor, actor_source = resolve_apply_actor(root, args)
     load_config_or_fail(root)
     apply_id = make_id("proposal-apply")
     min_confidence = proposal_apply_min_confidence(root)
@@ -3637,6 +4543,8 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         "apply_id": apply_id,
         "manifest_type": "proposal_apply",
         "created_at": now_iso(),
+        "actor": actor,
+        "actor_source": actor_source,
         "approval": {
             "approved": bool(args.approve),
             "approval_note": args.approval_note,
@@ -4252,6 +5160,7 @@ def draft_with_header(kind: str, topic: str, manifest_id: str, supporting_record
 
 def cmd_wiki_synthesis_plan(args: argparse.Namespace) -> int:
     root = project_root(args)
+    actor = actor_from_args(args)
     config = load_config_or_fail(root)
     if not config["wiki"]["enabled"]:
         raise RuntimeError("wiki-synthesis-plan requires KB + Wiki activation")
@@ -4288,6 +5197,7 @@ def cmd_wiki_synthesis_plan(args: argparse.Namespace) -> int:
         action,
         warnings,
         judgment_source_arg(args),
+        actor=actor,
     )
     draft_paths: dict[str, str] = {}
     supporting_record_ids = (judgment or {}).get("supporting_record_ids", []) or []
@@ -4820,8 +5730,17 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
     return 0
 
 
+class RuntimeArgumentParser(argparse.ArgumentParser):
+    """Subparsers inherit this class, so a bad proposal-apply --actor names the fix."""
+
+    def error(self, message: str) -> NoReturn:
+        if self.prog.endswith(" proposal-apply") and "--actor" in message:
+            message = f"{message}\n{ACTOR_HINT}"
+        super().error(message)
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="KB/Wiki vNext side-by-side runtime")
+    parser = RuntimeArgumentParser(description="KB/Wiki vNext side-by-side runtime")
     parser.add_argument("--project-root", default=".", help="Project root containing .kb/ and/or .kb-next/")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -4897,8 +5816,22 @@ def build_parser() -> argparse.ArgumentParser:
     lookup.add_argument("--query")
     lookup.add_argument("--domain", help="Restrict results to one KB domain")
     lookup.add_argument("--limit", type=int, default=10)
+    lookup.add_argument(
+        "--lists",
+        type=parse_list_names,
+        help="Comma-separated ranked lists to fuse (words, trigram, dense); default: words, plus dense when enabled in the config",
+    )
     lookup.add_argument("--json", action="store_true")
     lookup.set_defaults(func=cmd_lookup)
+
+    dense_index = sub.add_parser(
+        "dense-index",
+        help="Build or refresh the optional dense index under .kb-next/index/dense (needs the model2vec extra)",
+    )
+    dense_index.add_argument("--fetch-model", action="store_true", help="Download the pinned model files into the model cache first")
+    dense_index.add_argument("--rebuild", action="store_true", help="Drop the index and embed every active record again")
+    dense_index.add_argument("--json", action="store_true")
+    dense_index.set_defaults(func=cmd_dense_index)
 
     semantic = sub.add_parser("semantic-lookup")
     semantic.add_argument("--query", required=True)
@@ -4907,6 +5840,7 @@ def build_parser() -> argparse.ArgumentParser:
     semantic.add_argument("--limit", type=int, default=10)
     semantic.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     semantic.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
+    add_actor_arguments(semantic, required=False)
     semantic.add_argument("--json", action="store_true")
     semantic.set_defaults(func=cmd_semantic_lookup)
 
@@ -4917,6 +5851,7 @@ def build_parser() -> argparse.ArgumentParser:
     curation.add_argument("--limit", type=int, default=10)
     curation.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     curation.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
+    add_actor_arguments(curation, required=False)
     curation.add_argument("--json", action="store_true")
     curation.set_defaults(func=cmd_curation_proposal)
 
@@ -4926,6 +5861,7 @@ def build_parser() -> argparse.ArgumentParser:
     hygiene.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     hygiene.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
     hygiene.add_argument("--write-proposals", action="store_true")
+    add_actor_arguments(hygiene, required=False)
     hygiene.add_argument("--json", action="store_true")
     hygiene.set_defaults(func=cmd_semantic_hygiene)
 
@@ -4936,6 +5872,7 @@ def build_parser() -> argparse.ArgumentParser:
     filing.add_argument("--limit", type=int, default=10)
     filing.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     filing.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
+    add_actor_arguments(filing, required=False)
     filing.add_argument("--json", action="store_true")
     filing.set_defaults(func=cmd_filing_proposal)
 
@@ -4944,8 +5881,11 @@ def build_parser() -> argparse.ArgumentParser:
     proposal_apply.add_argument("--approve", action="store_true")
     proposal_apply.add_argument("--approval-note")
     proposal_apply.add_argument("--target-record-id")
+    # Both are required; cmd_proposal_apply checks them so that --actor can
+    # default to proposal_apply.default_actor from the config.
+    add_actor_arguments(proposal_apply, required=False)
     proposal_apply.add_argument("--json", action="store_true")
-    proposal_apply.set_defaults(func=cmd_proposal_apply)
+    proposal_apply.set_defaults(func=cmd_proposal_apply, apply_parser=proposal_apply)
 
     wiki_plan = sub.add_parser("wiki-synthesis-plan")
     wiki_plan.add_argument("--topic", required=True)
@@ -4954,6 +5894,7 @@ def build_parser() -> argparse.ArgumentParser:
     wiki_plan.add_argument("--judgment", help="JSON object or @path with external LLM judgment")
     wiki_plan.add_argument("--judgment-json", help="Inline JSON external LLM judgment")
     wiki_plan.add_argument("--write-drafts", action="store_true")
+    add_actor_arguments(wiki_plan, required=False)
     wiki_plan.add_argument("--json", action="store_true")
     wiki_plan.set_defaults(func=cmd_wiki_synthesis_plan)
 
@@ -4977,6 +5918,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A piped Windows stdout defaults to cp1252; escape what it cannot encode
+    # (e.g. U+2192 in record text) instead of crashing with UnicodeEncodeError.
+    # stderr already defaults to backslashreplace.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(errors="backslashreplace")
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

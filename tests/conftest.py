@@ -11,3 +11,9 @@ from __future__ import annotations
 import os
 
 os.environ.setdefault("KB_FACTORY_WORKTREE_SCOPE", "local")
+
+
+def pytest_configure(config) -> None:
+    # Tests shared with the private workbench carry its tier markers.
+    config.addinivalue_line("markers", "fast: quick tier in the private workbench")
+    config.addinivalue_line("markers", "full: slow tier in the private workbench")

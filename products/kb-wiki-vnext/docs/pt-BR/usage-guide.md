@@ -10,10 +10,10 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.3` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.3`,
-  KB Lifecycle `0.2.4`, container de plugin `0.1.10`, runtime incluído `0.1.8`,
-  Session Gate `0.2.8` e marketplace `0.3.9`.
+- KB/Wiki vNext `0.2.0-rc.4` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.4`,
+  KB Lifecycle `0.2.5`, container de plugin `0.2.0`, runtime incluído `0.2.0`,
+  Session Gate `0.2.8` e marketplace `0.3.11`.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
@@ -125,7 +125,7 @@ Curadoria de memória:
 1. Use `lookup` ou `semantic-lookup` para recuperar evidência.
 2. Use `curation-proposal`, `filing-proposal` ou `semantic-hygiene` para preparar propostas.
 3. Revise a proposta e o manifest.
-4. Aplique somente com `proposal-apply --approve --approval-note`.
+4. Aplique somente com `proposal-apply --approve --approval-note --actor --actor-runtime`.
 
 Trabalho de draft de wiki:
 
@@ -448,9 +448,45 @@ Prompt conversacional:
 Use lookup para open-items sobre packaging vNext e resuma apenas registros ativos.
 ```
 
-Saída esperada: registros encontrados com `classic_kb_mode` read-only.
+Saída esperada: registros ordenados por relevância, com `classic_kb_mode` read-only e um bloco `retrieval` que informa o método, as listas ranqueadas e os avisos. Os registros são ordenados por BM25 sobre um índice FTS5 de palavras, com acentos dobrados, via Reciprocal Rank Fusion, para que outras listas ranqueadas possam entrar depois. Os termos da consulta são literais, então identificadores como `MC-G1` ou `v0.3.1` dispensam escape; um `*` no fim pede prefixo, e singular e plural se encontram. Sem `--query`, o facet é listado por tier e recência.
 
-Riscos: termos fracos podem perder registros relevantes; tente outro lookup antes de escanear arquivos.
+Riscos: a lista de palavras não resolve sinônimos. Os termos são unidos por OR e os registros que casam mais termos sobem, então acrescente termos equivalentes na mesma consulta antes de escanear arquivos, ou ligue a lista densa opcional (veja `dense-index`). Num SQLite sem FTS5, `retrieval.method` vale `like_fallback` e os resultados são casamentos por substring, sem ordenação por relevância.
+
+`--lists` escolhe as listas ranqueadas de uma chamada (`words`, `trigram`, `dense`, separadas por vírgula); sem ele, o lookup funde a lista de palavras e, quando `retrieval.dense.enabled` vale `true` em `.kb-next/kb-next.config.json`, a lista densa. Uma lista que não pode rodar fica de fora, com aviso em `retrieval.warnings`.
+
+```powershell
+python runtime\kb_next.py lookup --facet status --query "gasto mensal com nuvem" --limit 5 --lists words,dense --json
+```
+
+### `dense-index`
+
+Propósito: montar ou atualizar o índice denso opcional, com o qual o lookup ordena por significado além de por palavra (E4.6).
+
+Use quando: a lista de palavras perde paráfrases e sinônimos e a máquina pode instalar o extra: `pip install model2vec==0.10.0` (traz numpy, tokenizers, safetensors, huggingface-hub, jinja2, joblib e tqdm; sem torch). A instalação padrão continua só com a biblioteca padrão e nunca importa o extra.
+
+Não use quando: o projeto precisa ficar offline e o modelo fixado ainda não está no cache de modelos.
+
+Exemplo stand-alone, primeira execução (baixa o modelo fixado uma vez para `~/.cache/kb-factory/models`, ou `KBF_MODEL_CACHE`, nunca dentro do projeto):
+
+```powershell
+python runtime\kb_next.py dense-index --fetch-model --json
+```
+
+Atualizar depois de registrar records, ou recomeçar do zero:
+
+```powershell
+python runtime\kb_next.py dense-index --json
+```
+
+```powershell
+python runtime\kb_next.py dense-index --rebuild --json
+```
+
+Depois, ponha `retrieval.dense.enabled` em `true` em `.kb-next/kb-next.config.json`. `retrieval.dense.model` vale `potion-base-32M` (inglês, o modelo que atingiu a meta do LongMemEval) ou `potion-multilingual-128M` (inclui português e acerta mais sinônimos em português); `chunk_words` e `chunk_stride` definem a janela dos trechos (32 e 32).
+
+Saída esperada: contagens de records, trechos, embutidos, reaproveitados e removidos, a identidade do modelo e as versões das bibliotecas. O índice fica em `.kb-next/index/dense/` (`manifest.json` e `vectors.sqlite3`), é derivado e pode ser apagado a qualquer momento; o `.kb/kb.db` só é lido.
+
+Riscos: records registrados ou editados depois da última montagem ficam fora da lista densa, e o lookup diz quantos em `retrieval.warnings`; atualize depois de registrar. Com a lista densa ligada, o lookup preenche o limite pedido mesmo quando nenhum record é próximo em significado; leia os resultados, não a contagem. Um índice montado com outro modelo ou outra janela é ignorado, com aviso, até ser remontado.
 
 ### `semantic-lookup`
 
@@ -613,18 +649,37 @@ Exemplo no repositório:
 
 ```powershell
 $proposalId = 'replace-with-reviewed-proposal-id'
-python core\versions\kb-wiki-vnext\runtime\kb_next.py proposal-apply --proposal $proposalId --approve --approval-note "Approved by project owner after proposal review" --json
+$approver = 'replace-with-approver-id'
+python core\versions\kb-wiki-vnext\runtime\kb_next.py proposal-apply --proposal $proposalId --approve --approval-note "Approved by project owner after proposal review" --actor $approver --actor-runtime human --json
 ```
 
 Exemplo stand-alone:
 
 ```powershell
 $proposalPath = '.kb-next\proposals\replace-with-reviewed-proposal.json'
-python runtime\kb_next.py proposal-apply --proposal $proposalPath --approve --approval-note "Maintainer approved after review" --json
+$approver = 'replace-with-approver-id'
+python runtime\kb_next.py proposal-apply --proposal $proposalPath --approve --approval-note "Maintainer approved after review" --actor $approver --actor-runtime human --json
 ```
 
 Substitua o valor da variável de exemplo pela proposta revisada retornada pelo comando
 anterior. Nunca infira um ID nem reutilize uma nota de aprovação da documentação.
+`--actor` nomeia quem aprova o apply e `--actor-runtime` é um de
+`claude-code`, `codex`, `cowork` ou `human`. Os dois são obrigatórios desde o
+runtime 0.2.0; o manifest de apply e `.kb-next/operations.jsonl` os registram.
+A identidade é registrada, não autenticada.
+
+Um projeto com um aprovador habitual pode nomear essa pessoa uma vez em
+`.kb-next/kb-next.config.json`, para que o agente não pergunte a cada aprovação:
+
+```json
+{"proposal_apply": {"default_actor": "replace-with-approver-id"}}
+```
+
+Mescle essa chave à config existente. Com ela, `--actor` pode ser omitido e o
+runtime registra o id configurado com `actor_source: config`; `--actor` continua
+valendo quando outra pessoa aprova (`actor_source: flag`), e `--actor-runtime`
+segue obrigatório. Só uma pessoa define a chave: nenhum comando do runtime a
+grava, a ativação a preserva e um valor em branco faz o apply falhar.
 
 Prompt conversacional:
 

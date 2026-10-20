@@ -13,9 +13,9 @@ Admins de workspace, leads técnicos e maintainers que instalam o pacote para ou
 - Artefato de release limpo, gerado a partir deste repositório.
 - Acesso ao cliente de destino: Codex, Claude Code, Claude Cowork ou workspace com Python.
 - Alinhamento com o dono do workspace de que `.kb/` segue canônico e `.kb-next/` é a camada vNext.
-- A identidade de release registra separadamente produto `0.2.0-rc.3`, KB
-  Lifecycle `0.2.4`, plugin `0.1.10`, runtime incluído `0.1.8`, Session Gate
-  `0.2.8` e marketplace `0.3.9`.
+- A identidade de release registra separadamente produto `0.2.0-rc.4`, KB
+  Lifecycle `0.2.5`, plugin `0.2.0`, runtime incluído `0.2.0`, Session Gate
+  `0.2.8` e marketplace `0.3.11`.
 
 ## Passos
 
@@ -23,13 +23,13 @@ Gere todos os distribuíveis KB afetados e o bundle stand-alone:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.3
+python tools\build_vnext_standalone.py --version 0.2.0-rc.4
 ```
 
 Valide antes de compartilhar:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.4-standalone.zip
 ```
 
 Distribua apenas o artefato correspondente:
@@ -45,7 +45,7 @@ Distribua apenas o artefato correspondente:
 O Codex CLI não possui comando de gerenciamento de plugins. No app Codex, use
 as configurações de Plugins com o marketplace público
 `regismvargas/kb-factory` ou carregue
-`kb-wiki-vnext-plugin-0.1.10.zip` quando a instalação por arquivo estiver
+`kb-wiki-vnext-plugin-0.2.0.zip` quando a instalação por arquivo estiver
 disponível. Reiniciar sozinho não busca uma versão mais nova do marketplace.
 
 Todo ZIP de plugin vNext deve conter `runtime/kb_next.py` na raiz do arquivo.

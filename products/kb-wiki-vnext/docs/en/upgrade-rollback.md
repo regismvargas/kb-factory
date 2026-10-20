@@ -60,6 +60,105 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrading To 0.2.0 (Runtime 0.2.0)
+
+This release breaks the `proposal-apply` command line: every apply must name
+who approves it. It also replaces the `LIKE` lookup with ranked retrieval,
+fixes the classic `kb.py search` query (KB Lifecycle 0.2.5) and adds an
+optional dense list that ranks by meaning. Run the steps from each project
+root:
+
+1. Refresh the vNext engine from the new plugin:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (expect `runtime_version` `0.2.0`).
+2. Refresh the classic engine without touching data or config:
+   `python .kb-next/runtime/kb_next.py upgrade-classic --json`.
+3. Add `--actor <id>` and `--actor-runtime <claude-code|codex|cowork|human>`
+   to every script, alias or saved prompt that calls `proposal-apply`.
+   `--actor` is the person who approved the proposal; `--actor-runtime` is
+   the runtime that runs the apply (`human` when a person runs it by hand):
+
+```powershell
+$proposalId = 'replace-with-reviewed-proposal-id'
+$approver = 'replace-with-approver-id'
+python .\.kb-next\runtime\kb_next.py --project-root . proposal-apply --proposal $proposalId --approve --approval-note "Approved after review" --actor $approver --actor-runtime human --json
+```
+
+   A project with one usual approver can instead name that person once, so
+   an agent does not ask on every approval. Merge this key into
+   `.kb-next/kb-next.config.json`; `--actor` then defaults to it, and
+   `--actor-runtime` stays required:
+
+```json
+{"proposal_apply": {"default_actor": "replace-with-approver-id"}}
+```
+
+4. Optional, for projects that want the dense list: install the extra in
+   the Python that runs the runtime, choose the model, then build the index.
+
+```powershell
+python -m pip install model2vec==0.10.0
+python .\.kb-next\runtime\kb_next.py --project-root . dense-index --fetch-model --json
+python .\.kb-next\runtime\kb_next.py --project-root . lookup --facet status --query "release" --limit 5 --lists words,dense --json
+```
+
+   Set `retrieval.dense.enabled` to `true` in `.kb-next/kb-next.config.json`
+   and `retrieval.dense.model` to `potion-multilingual-128M` for Portuguese
+   content or `potion-base-32M` for English (the default) before the
+   `dense-index` run, so the index is built with that model. The model
+   downloads once into `~/.cache/kb-factory/models` (or `KBF_MODEL_CACHE`),
+   outside the project, and `.kb-next/index/` ignores itself in Git. The
+   lookup check must list `dense` in `retrieval.lists` with no warning.
+   Run `python .kb-next/runtime/kb_next.py dense-index --json` again after
+   filing records; until then lookup warns how many records the dense list
+   misses. The `vnext-session-end` plugin command runs that refresh when the
+   dense list is on and the session changed records.
+
+Behavior changes to expect:
+
+- `proposal-apply` without `--actor` (and without
+  `proposal_apply.default_actor` in the config) or without `--actor-runtime`
+  exits 2 before it reads the proposal and writes nothing; stderr names the
+  missing flags. A blank `--actor` or a runtime outside the four values fails
+  the same way; a blank or non-string `default_actor` fails with exit 1,
+  also before any write.
+- Each apply manifest under `.kb-next/manifests/proposal-apply`, each
+  `proposal-apply` entry in `.kb-next/operations.jsonl` and the JSON result
+  carry `actor: {id, runtime}` and `actor_source` (`flag` or `config`),
+  blocked attempts included. The identity is recorded, not authenticated.
+  No runtime command writes `proposal_apply.default_actor`; activation keeps
+  it.
+- LLM manifests no longer carry the fixed placeholder actor. `semantic-lookup`,
+  `curation-proposal`, `semantic-hygiene`, `filing-proposal` and
+  `wiki-synthesis-plan` accept the same pair as an option and record who
+  generated the proposal, or `actor: null` without it; one flag alone fails.
+  The configured default applies to `proposal-apply` only.
+- Manifests and oplog entries written before 0.2.0 keep their old shape. A
+  reader of `actor` must accept the legacy string, `null` and the
+  `{id, runtime}` object.
+- `lookup` and the proposal commands rank by an FTS5 word list with BM25
+  through Reciprocal Rank Fusion; result order changes, terms are OR-joined,
+  and the output carries a `retrieval` block. The trigram substring list is
+  opt-in (`--lists words,trigram`), not part of the default fusion.
+- With `retrieval.dense.enabled`, lookup also fuses the dense list. A cold
+  command-line lookup takes about 3 s more with `potion-base-32M` and about
+  11 s more with `potion-multilingual-128M`, almost all of it loading and
+  verifying the model (measured on a 446-record KB). Without
+  the extra, the model or a current index, lookup ranks by words and says why
+  in `retrieval.warnings`. The default install never imports the extra.
+- Classic `kb.py search` compiles the query like the vNext word list: a
+  trailing `?` or a `-` no longer drops the search to a `LIKE` of the whole
+  string, and FTS5 matches are ordered by BM25. The JSON output of `kb.py`
+  now escapes non-ASCII characters (`\uXXXX`), so a JSON parser reads the same
+  values and a piped Windows console no longer fails on them.
+
+Rollback of this upgrade: restore the 0.1.10 plugin and run its `bootstrap`
+as below, then remove `--actor` and `--actor-runtime` from your scripts; the
+0.1.8 runtime rejects them as unrecognized arguments. The 0.1.8 runtime
+ignores the `retrieval.dense` and `proposal_apply` keys, and
+`.kb-next/index/` can be deleted. The classic engine has no schema change:
+keep 0.2.5, or restore 0.2.4 with `upgrade-classic` from the old plugin.
+
 ## Upgrading To 0.1.10 (Runtime 0.1.8)
 
 This release repairs the KB + Wiki flow. Projects activated with
