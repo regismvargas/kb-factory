@@ -7,6 +7,60 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-20
+
+This release breaks the `proposal-apply` command line. See "Upgrading To
+0.2.0" in `products/kb-wiki-vnext/docs/en/upgrade-rollback.md` (Portuguese:
+`docs/pt-BR/upgrade-rollback.md`) before upgrading a project.
+
+### Changed
+- **Breaking:** vNext `proposal-apply` records who approves each apply. It
+  requires `--actor <id>` and `--actor-runtime <claude-code|codex|cowork|human>`;
+  without them it exits 2 before it reads the proposal and writes nothing. A
+  project with one usual approver can name that person once in
+  `proposal_apply.default_actor` of `.kb-next/kb-next.config.json`; `--actor`
+  then defaults to it. The apply manifest, the `proposal-apply` oplog entry and
+  the JSON result carry `actor: {id, runtime}` and `actor_source` (`flag` or
+  `config`). The identity is recorded, not authenticated.
+- vNext `lookup` ranks by relevance instead of an unranked `LIKE`: one
+  throwaway FTS5 word index per query (accents folded, BM25), fused through
+  Reciprocal Rank Fusion. Identifiers such as `MC-G1` need no escaping, a
+  trailing `*` asks for a prefix, plural and singular forms find each other,
+  and terms are OR-joined so an agent can add synonyms. The output carries a
+  `retrieval` block. A trigram substring list is available with
+  `--lists words,trigram` but is not part of the default fusion.
+- Classic `kb.py search` compiles the query the same way and orders FTS5
+  matches by BM25; a trailing `?` or a `-` no longer drops the search to a
+  `LIKE` of the whole string. `kb.py` JSON output escapes non-ASCII characters,
+  so a piped Windows console no longer fails on them.
+- The `kb-wiki-vnext` and `kb-wiki-maintainer` skills tell the agent to widen
+  `lookup` and `kb.py search` queries with the words a record might use: the
+  original words first, at most six in total, synonyms in the language of the
+  records before translations, and no broad words when the question asks for
+  one item or the most recent one.
+- Release lines: Python package `0.2.0`, catalog `0.3.11`, kb-lifecycle
+  `0.2.5`, kb-wiki-vnext `0.2.0`, session-gate `0.2.8`, vNext runtime `0.2.0`,
+  stand-alone product `0.2.0-rc.4`.
+
+### Added
+- Optional dense list that ranks by meaning (`kb_next.py dense-index`), fused
+  by RRF with the word list when `retrieval.dense.enabled` is `true`. It needs
+  the extra `pip install model2vec==0.10.0`; the default install stays
+  stdlib-only and never imports it. Models are pinned by revision and SHA-256
+  (`potion-base-32M` for English, `potion-multilingual-128M` with Portuguese)
+  and cached outside the project; the derived index under `.kb-next/index/`
+  ignores itself in Git. On LongMemEval M (2024 file), session recall@5 and
+  recall@10 with `potion-base-32M` reach the dense retriever of the paper's
+  Table 9 (0.764 and 0.864 against 0.762 and 0.862, paper-era mean) with no
+  margin, inside the measurement's own calibration error (about 2 points).
+  A cold command-line lookup with the dense list takes about 3 s more with
+  `potion-base-32M` and about 11 s more with `potion-multilingual-128M`,
+  almost all of it loading the model.
+- Proposal commands (`semantic-lookup`, `curation-proposal`,
+  `semantic-hygiene`, `filing-proposal`, `wiki-synthesis-plan`) accept the
+  same `--actor` pair to record who generated a proposal; LLM manifests no
+  longer carry a fixed placeholder actor.
+
 ## [0.1.5] - 2026-09-23
 
 ### Fixed

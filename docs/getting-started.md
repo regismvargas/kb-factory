@@ -44,7 +44,7 @@ KB Factory lives in a single `.kb/` folder. The fastest way to create it is the
 published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.1.5/kb_factory-0.1.5-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.0/kb_factory-0.2.0-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 ```

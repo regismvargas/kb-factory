@@ -13,9 +13,9 @@ Workspace admins, technical leads, and maintainers who install the package for o
 - A clean release artifact built from this repository.
 - Access to the target client: Codex, Claude Code, Claude Cowork, or a Python-capable workspace.
 - The target workspace owner understands that `.kb/` remains canonical and `.kb-next/` is the vNext layer.
-- Release identity records product `0.2.0-rc.3`, KB Lifecycle `0.2.4`, plugin
-  `0.1.10`, bundled runtime `0.1.8`, Session Gate `0.2.8`, and marketplace
-  `0.3.9` separately.
+- Release identity records product `0.2.0-rc.4`, KB Lifecycle `0.2.5`, plugin
+  `0.2.0`, bundled runtime `0.2.0`, Session Gate `0.2.8`, and marketplace
+  `0.3.11` separately.
 
 ## Steps
 
@@ -23,13 +23,13 @@ Build all affected KB plugin distributables and the stand-alone bundle:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.3
+python tools\build_vnext_standalone.py --version 0.2.0-rc.4
 ```
 
 Validate the product before sharing:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.3-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.4-standalone.zip
 ```
 
 Distribute only the artifact that matches the recipient:
@@ -45,7 +45,7 @@ Distribute only the artifact that matches the recipient:
 
 The Codex CLI has no plugin-management command. In the Codex app, use the
 Plugins settings with the public `regismvargas/kb-factory` marketplace or
-upload `kb-wiki-vnext-plugin-0.1.10.zip` when file-based installation is
+upload `kb-wiki-vnext-plugin-0.2.0.zip` when file-based installation is
 available. Restarting alone does not fetch a newer marketplace version.
 
 Every vNext plugin ZIP must contain `runtime/kb_next.py` at archive root. Do

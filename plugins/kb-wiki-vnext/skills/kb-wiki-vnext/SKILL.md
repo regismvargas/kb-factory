@@ -30,7 +30,15 @@ release gates.
    If `session-start` reports `wiki.status` = `classic_wiki_off`, recommend
    re-running `activation-wizard --choice kb-wiki`; if it reports pending
    `wiki_drafts`, point to the `vnext-wiki-drafts` command.
-5. For any planning or execution of vNext development until vNext is 100% developed,
+5. Widen a `lookup` query with the words a record might use instead.
+   `lookup` ORs the words of a query, matches words of three or more letters
+   as prefixes, and ranks records that match more words first. Keep the
+   original words first and use at most six words in total. Add first the
+   synonyms a record would use in the language the records are written in,
+   less obvious ones included; add translations only with words to spare.
+   When the question asks for one item or the most recent one, leave out
+   broad words that many records share, or also run the original query alone.
+6. For any planning or execution of vNext development until vNext is 100% developed,
    run `compliance-preflight` for the closest work type before
    planning, editing, review, packaging, rollout, or Track B work. Simple
    operational use does not require this development preflight.
@@ -49,6 +57,16 @@ release gates.
   hand-copied template.
 - Apply durable changes only through `proposal-apply` with explicit approval or
   through the classic `.kb/kb.py` runtime.
+- `proposal-apply` requires `--actor <id>` and `--actor-runtime
+  <claude-code|codex|cowork|human>`. `--actor` is the person who approved the
+  proposal; ask when it is unknown and never invent or reuse one from docs.
+  When `.kb-next/kb-next.config.json` sets `proposal_apply.default_actor`,
+  omit `--actor` for an approval by that person: the runtime records the
+  configured id with `actor_source: config`. Pass `--actor` when someone else
+  approves. Never write that key yourself unless the user names the id.
+  `--actor-runtime` is the runtime that runs the apply (`claude-code`,
+  `codex` or `cowork` for an agent). Proposal commands accept the same pair
+  as an option to record who generated the proposal.
 - For HOT overflow or memory hygiene, prefer read-only `hygiene-audit` first;
   use `semantic-hygiene --write-proposals` only for governed `.kb-next`
   proposals, not automatic demotion.
@@ -60,6 +78,8 @@ release gates.
 - Simple operational use is exempt unless it is part of a development round.
 - Verify LLM manifests, proposal hashes, draft hashes, confidence, provenance,
   stale/conflict warnings, and derived-authority markers.
+- Verify each proposal-apply manifest and its `operations.jsonl` entry name
+  the approving actor.
 - Verify hygiene proposals preserve the grouped outputs `keep_hot`,
   `demote_candidate`, `supersede_or_merge_candidate`, `resolve_candidate`, and
   `needs_sponsor`; only approved `demote_hot` and `resolve` may apply.

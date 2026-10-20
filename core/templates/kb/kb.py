@@ -113,7 +113,7 @@ from runtime.wiki_materialization import (
 
 def emit(data, as_json: bool) -> None:
     if as_json:
-        print(json.dumps(data, ensure_ascii=False, indent=2))
+        print(json.dumps(data, ensure_ascii=True, indent=2))
         return
     if isinstance(data, list):
         for item in data:
@@ -587,6 +587,11 @@ def build_parser():
 
 
 def main() -> int:
+    # A piped Windows stdout defaults to cp1252; escape what it cannot encode
+    # (e.g. U+2192 in record text) instead of crashing with UnicodeEncodeError.
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(errors="backslashreplace")
     parser = build_parser()
     args = parser.parse_args()
     args.func(args)
