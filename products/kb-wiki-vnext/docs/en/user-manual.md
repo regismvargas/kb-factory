@@ -18,14 +18,14 @@ Project users who receive the plugin ZIP or stand-alone bundle from a maintainer
 
 Choose the package that matches your client:
 
-- Codex: `kb-wiki-vnext-plugin-0.2.0.zip`
-- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.0.zip`
-- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.0.zip`
-- Stand-alone: `kb-wiki-vnext-0.2.0-rc.4-standalone.zip`
+- Codex: `kb-wiki-vnext-plugin-0.2.1.zip`
+- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.1.zip`
+- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.1.zip`
+- Stand-alone: `kb-wiki-vnext-0.2.0-rc.5-standalone.zip`
 
 The product, KB Lifecycle, plugin container, bundled runtime, Session Gate, and
-marketplace have separate version lines: `0.2.0-rc.4`, `0.2.5`, `0.2.0`,
-`0.2.0`, `0.2.8`, and `0.3.11`, respectively. Record all applicable values
+marketplace have separate version lines: `0.2.0-rc.5`, `0.2.5`, `0.2.1`,
+`0.2.1`, `0.2.8`, and `0.3.12`, respectively. Record all applicable values
 during install or upgrade.
 
 For a plugin installation, use `existing-project-activate-vnext` to resolve the

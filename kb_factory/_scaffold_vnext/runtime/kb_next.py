@@ -38,7 +38,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.2.0"
+RUNTIME_VERSION = "0.2.1"
 # Classic lifecycle events that keep an enabled classic wiki current. Mirrors
 # WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
 CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
@@ -138,6 +138,13 @@ HYGIENE_GROUP_KEYS = [
     "resolve_candidate",
     "needs_sponsor",
 ]
+# Automatic curation (2026-10-20): detection runs at every session end and in
+# the weekly maintenance run, and at most this many valid hygiene proposals stay
+# open per project and review window. Five per project keeps the nine projects
+# that held candidates on 2026-10-20 at 45 decisions a week, which fits the
+# 15-minute weekly review only at about 20 s per decision (assumed, not measured).
+HYGIENE_WEEKLY_DEFAULT = 5
+HYGIENE_REVIEW_WINDOW_DAYS = 7
 HYGIENE_ACTION_BY_GROUP = {
     "keep_hot": "keep_hot",
     "demote_candidate": "demote_hot",
@@ -2502,6 +2509,13 @@ DENSE_MODELS: dict[str, dict[str, Any]] = {
         "revision": "73908c3438cf03b6a01bcb9611d62b23d0726f08",
         "license": "MIT",
         "languages": "multilingual, Portuguese included",
+        # Kept pinned until 0.3 so existing indexes still load; see dense_model_advisory.
+        "recommended": False,
+        "advisory": (
+            "costs about 11.7 s per cold CLI lookup against 0.5 s words-only, and query expansion "
+            "by the agent reaches the same Portuguese synonyms at no cost; prefer potion-base-32M or "
+            "words only (docs/benchmarks/kb-value/README.md)"
+        ),
         "files": {
             "config.json": (271, "595e4cab2093732efd5dbe084fd5c1826b5eea693b73b4c1fd971672867d2e54"),
             "model.safetensors": (512361560, "14b5eb39cb4ce5666da8ad1f3dc6be4346e9b2d601c073302fa0a31bf7943397"),
@@ -2538,6 +2552,14 @@ def dense_settings(config: dict[str, Any] | None) -> dict[str, Any]:
         raise ValueError("retrieval.dense needs integers 1 <= chunk_stride <= chunk_words")
     settings["enabled"] = settings["enabled"] is True
     return settings
+
+
+def dense_model_advisory(name: str) -> str | None:
+    """The warning for a pinned model marked not recommended; None for the others."""
+    spec = DENSE_MODELS.get(name) or {}
+    if spec.get("recommended", True):
+        return None
+    return f"dense model {name} is not recommended: {spec['advisory']}"
 
 
 def dense_model_cache(root: Path) -> Path:
@@ -2840,8 +2862,12 @@ def make_dense_list_provider(root: Path, settings: dict[str, Any]) -> Any:
     of this list (the word list still sees them) and counted in a warning.
     """
 
+    advisory = dense_model_advisory(settings["model"])
+
     def dense_list_provider(request: dict[str, Any]) -> list[str] | None:
         warnings = request["warnings"]
+        if advisory:
+            warnings.append(advisory)
         manifest = read_dense_manifest(root)
         if manifest is None:
             warnings.append("dense list skipped: no dense index; build it with: kb_next.py dense-index")
@@ -3411,6 +3437,7 @@ def cmd_dense_index(args: argparse.Namespace) -> int:
     root = project_root(args)
     config = load_config_or_fail(root)
     settings = dense_settings(config)
+    advisory = dense_model_advisory(settings["model"])
     fetched: list[str] = []
     if args.fetch_model:
         # Without the extra the index cannot be built, so stop before
@@ -3428,6 +3455,7 @@ def cmd_dense_index(args: argparse.Namespace) -> int:
         "identity": manifest["identity"],
         "fetched_model_files": fetched,
         "library": manifest["library"],
+        "warnings": [advisory] if advisory else [],
         **stats,
     }
     append_operation(
@@ -3444,6 +3472,7 @@ def cmd_dense_index(args: argparse.Namespace) -> int:
         ]
         if not settings["enabled"]:
             lines.append("Lookup fuses it after retrieval.dense.enabled is set to true in .kb-next/kb-next.config.json.")
+        lines.extend(f"Warning: {warning}" for warning in result["warnings"])
         emit("\n".join(lines), False)
     return 0
 
@@ -3921,10 +3950,111 @@ def hygiene_proposal_payload(
     }
 
 
+def weekly_hygiene_limit(config: dict[str, Any]) -> int:
+    """`semantic_curation.weekly_hygiene_proposals`: open hygiene proposals allowed per review window."""
+    section = config.get("semantic_curation") if isinstance(config, dict) else None
+    value = section.get("weekly_hygiene_proposals", HYGIENE_WEEKLY_DEFAULT) if isinstance(section, dict) else HYGIENE_WEEKLY_DEFAULT
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError("semantic_curation.weekly_hygiene_proposals in .kb-next/kb-next.config.json must be an integer >= 0")
+    return value
+
+
+def parse_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def applied_proposal_ids(root: Path) -> set[str]:
+    applied: set[str] = set()
+    for path in proposal_apply_manifests_root(root).glob("*.json"):
+        try:
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(manifest, dict) and manifest.get("status") == "applied" and manifest.get("proposal_id"):
+            applied.add(str(manifest["proposal_id"]))
+    return applied
+
+
+def hygiene_target_still_qualifies(action: Any, record: sqlite3.Row | None) -> bool:
+    if record is None or record["status"] != "ATIVO":
+        return False
+    if action == "demote_hot":
+        return record["tier"] == "HOT"
+    if action == "resolve":
+        return record["category"] == "PENDENCIA"
+    return True
+
+
+def open_hygiene_proposals(root: Path) -> list[dict[str, Any]]:
+    """Valid hygiene proposals of the review window that still wait for a decision.
+
+    A proposal leaves the queue when it is applied, when its target no longer
+    qualifies (demoted, resolved or superseded by other means) or when it ages
+    past HYGIENE_REVIEW_WINDOW_DAYS; an unreviewed or declined item may then be
+    proposed again if detection still finds it.
+    """
+    directory = proposals_root(root) / "hygiene"
+    if not directory.is_dir():
+        return []
+    cutoff = datetime.now(timezone.utc).timestamp() - HYGIENE_REVIEW_WINDOW_DAYS * 86400
+    applied = applied_proposal_ids(root)
+    pending: list[dict[str, Any]] = []
+    for path in sorted(directory.glob("*.json")):
+        try:
+            proposal = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(proposal, dict) or proposal.get("validation_status") != "valid":
+            continue
+        proposal_id = str(proposal.get("proposal_id") or path.stem)
+        created = parse_utc(proposal.get("created_at"))
+        if proposal_id in applied or created is None or created.timestamp() < cutoff:
+            continue
+        pending.append(
+            {
+                "proposal_id": proposal_id,
+                "path": path_relative_to_root(root, path),
+                "created_at": proposal.get("created_at"),
+                "group": proposal.get("group"),
+                "action": proposal.get("action"),
+                "target_record_id": proposal.get("target_record_id"),
+                "title": (proposal.get("target_record") or {}).get("title"),
+                "rationale": proposal.get("rationale"),
+            }
+        )
+    targets = [str(item["target_record_id"]) for item in pending if item["target_record_id"]]
+    records = fetch_records_by_ids(root, targets) if targets else {}
+    return [
+        item
+        for item in pending
+        if hygiene_target_still_qualifies(item["action"], records.get(str(item["target_record_id"])))
+    ]
+
+
+def hygiene_review_budget(limit: int, pending: list[dict[str, Any]]) -> dict[str, Any]:
+    return {
+        "window_days": HYGIENE_REVIEW_WINDOW_DAYS,
+        "weekly_limit": limit,
+        "open_count": len(pending),
+        "room": max(0, limit - len(pending)),
+        "open": pending,
+    }
+
+
 def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
     root = project_root(args)
     actor = actor_from_args(args)
     config = load_config_or_fail(root)
+    weekly_limit = weekly_hygiene_limit(config)
+    pending = open_hygiene_proposals(root)
+    deferred: list[dict[str, Any]] = []
+    already_open: list[dict[str, Any]] = []
     records = active_hygiene_records(root, args.limit)
     candidates_by_id = {record["id"]: record for record in records}
     mechanical_groups = build_mechanical_hygiene_groups(root, records)
@@ -3964,11 +4094,22 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
             actor=actor,
         )
         if judgment is not None:
+            open_keys = {(item["target_record_id"], item["action"]): item["proposal_id"] for item in pending}
+            room = max(0, weekly_limit - len(pending))
             for group_name in ("demote_candidate", "supersede_or_merge_candidate", "resolve_candidate", "needs_sponsor"):
                 for item in judgment_groups[group_name]:
                     record = candidates_by_id.get(item["record_id"])
                     if record is None:
                         continue
+                    action = str(item.get("action") or HYGIENE_ACTION_BY_GROUP[group_name])
+                    entry = {"group": group_name, "action": action, "target_record_id": item["record_id"]}
+                    if (item["record_id"], action) in open_keys:
+                        already_open.append({**entry, "proposal_id": open_keys[(item["record_id"], action)]})
+                        continue
+                    if room <= 0:
+                        deferred.append(entry)
+                        continue
+                    room -= 1
                     payload = hygiene_proposal_payload(
                         manifest_id=manifest_id,
                         group_name=group_name,
@@ -3989,8 +4130,11 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
                 "status": status,
                 "manifest_id": manifest_id,
                 "proposal_ids": proposal_ids,
+                "deferred_count": len(deferred),
+                "already_open_count": len(already_open),
             },
         )
+        pending = open_hygiene_proposals(root)
 
     result = {
         "event": "semantic-hygiene",
@@ -4007,6 +4151,9 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
         "warnings": warnings,
         "manifest_id": manifest_id,
         "proposal_ids": proposal_ids,
+        "review_budget": hygiene_review_budget(weekly_limit, pending),
+        "already_open": already_open,
+        "deferred": deferred,
         "paths": {
             "manifest": str(manifest_path) if manifest_path else None,
             "proposals": proposal_paths,
@@ -4090,6 +4237,12 @@ def cmd_filing_proposal(args: argparse.Namespace) -> int:
         action = "defer"
     else:
         validation_status, warnings, action = validate_filing_judgment(judgment, candidates)
+        if action in {"new", "update", "supersede"}:
+            # Same provenance rule as proposal-apply, so a "valid" filing can be applied.
+            problems = provenance_problems(root, judgment.get("provenance", []) or [])
+            if problems:
+                warnings = dedupe_strings([*warnings, *problems])
+                validation_status = "blocked"
     context = {
         "command": "filing-proposal",
         "category": args.category,
@@ -4251,6 +4404,24 @@ def proposal_provenance_ids(provenance: Any) -> tuple[list[str], list[str], list
             else:
                 malformed.append(f"provenance[{index}]")
     return dedupe_strings(record_ids), dedupe_strings(source_ids), malformed
+
+
+def provenance_problems(root: Path, provenance: Any) -> list[str]:
+    """Why `provenance` cannot back a canonical write; [] when it can.
+
+    The one rule for filing-proposal and proposal-apply: each entry names an
+    existing record (`record_id`) or a registered source (`source_id`, from
+    `kb.py ingest`). Free text such as a file path or URL is not provenance.
+    """
+    record_ids, source_ids, malformed = proposal_provenance_ids(provenance)
+    problems = [f"invalid_{item}" for item in malformed]
+    if not record_ids and not source_ids:
+        problems.append("missing_provenance")
+    records = fetch_records_by_ids(root, record_ids)
+    problems.extend(f"unknown_record_reference:{rid}" for rid in record_ids if rid not in records)
+    sources = source_ids_exist(root, source_ids)
+    problems.extend(f"unknown_source_reference:{sid}" for sid in source_ids if sid not in sources)
+    return problems
 
 
 def duplicate_candidate_ids(value: Any) -> list[str]:
@@ -4649,16 +4820,7 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         warnings.append(f"low_confidence:{confidence}")
 
     provenance = proposal.get("provenance") or (source_manifest or {}).get("provenance_pointers") or []
-    record_ids, source_ids, malformed_provenance = proposal_provenance_ids(provenance)
-    warnings.extend([f"invalid_{item}" for item in malformed_provenance])
-    if not record_ids and not source_ids:
-        warnings.append("missing_provenance")
-    records_by_id = fetch_records_by_ids(root, record_ids)
-    missing_records = [rid for rid in record_ids if rid not in records_by_id]
-    warnings.extend([f"unknown_record_reference:{rid}" for rid in missing_records])
-    existing_source_ids = source_ids_exist(root, source_ids)
-    missing_sources = [sid for sid in source_ids if sid not in existing_source_ids]
-    warnings.extend([f"unknown_source_reference:{sid}" for sid in missing_sources])
+    warnings.extend(provenance_problems(root, provenance))
 
     if action == "supersede":
         target_record_id, target_errors = resolve_supersede_target(args, proposal, record_draft)
@@ -5712,6 +5874,8 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
         root = project_root(args)
         config = load_config_or_fail(root)
         wiki_on = bool((config.get("wiki") or {}).get("enabled"))
+        gate = config.get("write_gate")
+        gate_on = not (isinstance(gate, dict) and gate.get("enabled") is False)
     except Exception:
         return 0
     lines = [
@@ -5721,12 +5885,66 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
         "Classic `.kb/` stays canonical: use `lookup --facet ... [--domain ...]` or `python .kb/kb.py search` "
         "for targeted reads; classic NOW/HOT/INDEX are on demand, not a default preload.",
     ]
+    if gate_on:
+        lines.append(
+            "Canonical records change through a proposal (`filing-proposal`, or `semantic-hygiene --write-proposals` "
+            "for HOT demotion and open items) and `proposal-apply` after the user approves; the kb-wiki-vnext "
+            "plugin hook denies direct `.kb/kb.py create|file|supersede|update`."
+        )
     if wiki_on:
         lines.append(
             "KB + Wiki is active: at session end run the vnext-wiki-drafts plugin command "
             "(runtime `wiki-draft-status`) for topics that need drafts."
         )
     print("\n".join(lines))
+    return 0
+
+
+def subagent_lookup_command(root: Path) -> str:
+    """The read-only lookup a subagent can run: the local runtime when bootstrapped, else this file."""
+    if (kb_next_root(root) / "runtime" / "kb_next.py").is_file():
+        runtime = ".kb-next/runtime/kb_next.py"
+    else:
+        runtime = f'"{Path(__file__).resolve().as_posix()}" --project-root "{root.as_posix()}"'
+    return f'python {runtime} lookup --facet status --query "<words>" --json'
+
+
+def cmd_subagent_hint(args: argparse.Namespace) -> int:
+    """SubagentStart hook context for vNext workspaces; silent anywhere else.
+
+    The hook cannot see the subagent's brief, so it gives the contract and a
+    read-only lookup command instead of records: records picked by the words of
+    a short task description were mostly unrelated, and some briefs isolate the
+    subagent on purpose. The main agent adds the records under `KB records`.
+    """
+    try:
+        root = project_root(args)
+        load_config_or_fail(root)
+        has_db = (classic_kb_root(root) / "kb.db").is_file()
+        lookup = subagent_lookup_command(root)
+    except Exception:
+        return 0
+    lines = [
+        "KB/Wiki vNext note for subagents, added by the kb-wiki-vnext plugin's SubagentStart hook.",
+        "This workspace keeps a project knowledge base in `.kb/`; the main session is its only writer "
+        "and files what subagents report.",
+    ]
+    if has_db:
+        lines.append(
+            f"- If your brief allows shell commands, you can read it with `{lookup}` (at most six words). "
+            "This does not change `.kb/`; it appends one line to `.kb-next/operations.jsonl`."
+        )
+    lines.extend(
+        [
+            "- Do not run commands that write the knowledge base: `filing-proposal`, `proposal-apply`, "
+            "`.kb/kb.py` commands that change records, or SQL on `.kb/kb.db`.",
+            "- Unless your brief fixes the output format, end your report with a `KB candidates` section: "
+            "each fact, decision or learning worth keeping, one line each with its source "
+            "(file and line, command, URL or person), or `none`.",
+        ]
+    )
+    payload = {"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": "\n".join(lines)}}
+    print(json.dumps(payload, ensure_ascii=True))
     return 0
 
 
@@ -5785,6 +6003,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     hint = sub.add_parser("session-hint", help="SessionStart hook text; silent outside vNext workspaces")
     hint.set_defaults(func=cmd_session_hint)
+
+    subagent_hint = sub.add_parser(
+        "subagent-hint", help="SubagentStart hook JSON: subagent KB contract; silent outside vNext workspaces"
+    )
+    subagent_hint.set_defaults(func=cmd_subagent_hint)
 
     boot = sub.add_parser("bootstrap", help="Install this runtime into <project>/.kb-next/runtime/kb_next.py")
     boot.add_argument("--force", action="store_true")

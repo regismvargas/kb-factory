@@ -455,8 +455,9 @@ def build_artifacts(
     # plugins/kb-wiki-vnext/runtime/kb_next.py (kept byte-identical to the master
     # by tools/sync_vnext_runtime.py + the parity gate) so every install path —
     # ZIP (via iter_files), marketplace (repo source), and pip — carries it.
-    # required_entries locks its presence in the built ZIP.
-    vnext_runtime_required = ("runtime/kb_next.py",)
+    # required_entries locks its presence, and that of the write-gate hook
+    # script, in the built ZIP.
+    vnext_runtime_required = ("runtime/kb_next.py", "scripts/write_gate.py")
     vnext_artifacts: list[Artifact] = [
         Artifact(
             source_root=vnext_root,

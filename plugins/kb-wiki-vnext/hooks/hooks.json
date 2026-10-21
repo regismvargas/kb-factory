@@ -1,5 +1,16 @@
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/scripts/write_gate.py\""
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "matcher": "*",
@@ -7,6 +18,17 @@
           {
             "type": "command",
             "command": "python \"${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py\" --project-root . session-hint"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py\" --project-root . subagent-hint"
           }
         ]
       }

@@ -60,6 +60,43 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrading To 0.2.1 (Runtime 0.2.1)
+
+This release adds the subagent memory bridge, the write gate and automatic
+curation, and marks the multilingual dense model not recommended. It changes
+no data and no schema.
+
+- Subagent bridge: the skill and `AGENTS.md` tell the main agent to put KB
+  records in subagent briefs and to file the `KB candidates` that subagents
+  report; the Claude Code plugin adds a `SubagentStart` hook (runtime
+  `subagent-hint`).
+- Write gate: a `PreToolUse` hook (`scripts/write_gate.py`, Bash and
+  PowerShell) denies an agent's `.kb/kb.py create`, `file`, `supersede` or
+  `update` in a vNext project and names the proposal path. A project owner
+  can turn it off with `{"write_gate": {"enabled": false}}` in
+  `.kb-next/kb-next.config.json`.
+- `filing-proposal` now blocks provenance that `proposal-apply` would refuse
+  (a file path, a URL or an unknown id); cite an existing `record_id` or the
+  `source_id` of a file registered with `python .kb/kb.py ingest <path> --json`.
+- Curation: `vnext-session-end` runs read-only hygiene detection and writes
+  judged hygiene proposals, at most
+  `semantic_curation.weekly_hygiene_proposals` (default 5) open per project
+  over 7 days; `semantic-hygiene` reports `review_budget`, `already_open` and
+  `deferred`.
+- `dense-index` and dense lookups warn while `potion-multilingual-128M` is
+  configured; the model stays pinned until 0.3.
+
+1. Install the 0.2.1 plugin ZIP or marketplace entry; the hooks take effect
+   in the next Claude Code session. Codex asks to trust the changed hooks
+   before it runs them.
+2. Where the project pins a local runtime, refresh it:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (expect `runtime_version` `0.2.1`).
+
+Rollback: reinstall the 0.2.0 plugin and run `bootstrap` from its runtime.
+Nothing to undo in `.kb/`; hygiene proposals that 0.2.1 wrote stay in
+`.kb-next/proposals/hygiene` as review evidence, and the hooks write nothing.
+
 ## Upgrading To 0.2.0 (Runtime 0.2.0)
 
 This release breaks the `proposal-apply` command line: every apply must name
@@ -103,9 +140,13 @@ python .\.kb-next\runtime\kb_next.py --project-root . lookup --facet status --qu
 ```
 
    Set `retrieval.dense.enabled` to `true` in `.kb-next/kb-next.config.json`
-   and `retrieval.dense.model` to `potion-multilingual-128M` for Portuguese
-   content or `potion-base-32M` for English (the default) before the
-   `dense-index` run, so the index is built with that model. The model
+   and keep `retrieval.dense.model` at `potion-base-32M` (the default) before
+   the `dense-index` run, so the index is built with that model.
+   `potion-multilingual-128M` is not recommended: a cold command-line lookup
+   costs about 11.7 s with it against 0.5 s words-only, and query expansion
+   by the agent reaches the same Portuguese synonyms at no cost. It stays
+   pinned until 0.3 so existing indexes keep loading, and `dense-index` and
+   `lookup` print a warning while it is configured. The model
    downloads once into `~/.cache/kb-factory/models` (or `KBF_MODEL_CACHE`),
    outside the project, and `.kb-next/index/` ignores itself in Git. The
    lookup check must list `dense` in `retrieval.lists` with no warning.

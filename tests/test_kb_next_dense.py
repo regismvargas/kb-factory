@@ -413,6 +413,51 @@ def test_dense_settings_reject_an_unknown_model_or_a_bad_window() -> None:
     assert kb_next.dense_settings(None) == kb_next.DENSE_DEFAULTS
 
 
+def test_only_the_multilingual_model_is_marked_not_recommended() -> None:
+    assert kb_next.dense_model_advisory("potion-base-32M") is None
+    advisory = kb_next.dense_model_advisory("potion-multilingual-128M")
+    assert advisory and "not recommended" in advisory and "11.7 s" in advisory
+    # Still pinned and still accepted, so an existing multilingual index keeps loading until 0.3.
+    assert kb_next.dense_settings({"retrieval": {"dense": {"model": "potion-multilingual-128M"}}})["model"] == (
+        "potion-multilingual-128M"
+    )
+    identity = kb_next.dense_index_identity({**kb_next.DENSE_DEFAULTS, "model": "potion-multilingual-128M"}, DIM)
+    assert "recommended" not in json.dumps(identity) and "advisory" not in identity
+
+
+def test_dense_index_warns_when_the_multilingual_model_is_configured(project: Path, stub: StubEmbedder) -> None:
+    assert dense_index(project)["warnings"] == []
+    set_dense(project, model="potion-multilingual-128M")
+
+    result = dense_index(project)
+    code, text, err = run_kb_next(project, "dense-index")
+
+    assert result["model"] == "potion-multilingual-128M"
+    assert [warning for warning in result["warnings"] if "not recommended" in warning]
+    assert code == 0, err
+    assert "Warning: dense model potion-multilingual-128M is not recommended" in text
+
+
+def test_lookup_warns_only_when_the_multilingual_dense_list_runs(project: Path, stub: StubEmbedder) -> None:
+    set_dense(project, model="potion-multilingual-128M")
+    dense_index(project)
+
+    words_only = lookup(project, "despesa")
+    set_dense(project, enabled=True)
+    fused = lookup(project, "custo")
+    set_dense(project, model="potion-base-32M")
+    dense_index(project)
+    base = lookup(project, "custo")
+
+    def advised(result: dict) -> bool:
+        return any("not recommended" in warning for warning in result["retrieval"]["warnings"])
+
+    assert not advised(words_only) and words_only["retrieval"]["lists"] == ["words"]
+    assert advised(fused) and fused["retrieval"]["lists"] == ["words", "dense"]
+    assert [item["id"] for item in fused["results"]][0] == "FAT-DESPESA"
+    assert not advised(base)
+
+
 def test_the_model_cache_must_live_outside_the_project(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(kb_next.DENSE_MODEL_CACHE_ENV, str(project / "models"))
 

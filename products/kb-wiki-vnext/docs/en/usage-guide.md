@@ -10,10 +10,10 @@ Project users, admins, and maintainers who need more than install instructions: 
 
 ## Prerequisites
 
-- KB/Wiki vNext `0.2.0-rc.4` installed through a plugin ZIP or the stand-alone bundle.
-- Component identity recorded by the maintainer: product `0.2.0-rc.4`, KB
-  Lifecycle `0.2.5`, plugin container `0.2.0`, bundled runtime `0.2.0`, Session
-  Gate `0.2.8`, and marketplace `0.3.11`.
+- KB/Wiki vNext `0.2.0-rc.5` installed through a plugin ZIP or the stand-alone bundle.
+- Component identity recorded by the maintainer: product `0.2.0-rc.5`, KB
+  Lifecycle `0.2.5`, plugin container `0.2.1`, bundled runtime `0.2.1`, Session
+  Gate `0.2.8`, and marketplace `0.3.12`.
 - A workspace with `.kb/` available as canonical memory.
 - Python available as `python`.
 - Agreement that `.kb-next/` is operational memory, proposal evidence, and draft materialization, not the canonical source of truth.
@@ -32,7 +32,7 @@ Mutation summary:
 |---|---|---|
 | `bootstrap` | no change | installs only `runtime/kb_next.py` |
 | `install-classic`, `upgrade-classic` | `install-classic` creates a missing `.kb/` from the classic scaffold and runs classic `init`; `upgrade-classic` replaces only `kb.py` and `runtime/*.py` | append operations evidence |
-| `compliance-preflight`, `source-linkage-audit`, default `semantic-hygiene`, `wiki-draft-status`, `session-hint` | read-only | no write |
+| `compliance-preflight`, `source-linkage-audit`, default `semantic-hygiene`, `wiki-draft-status`, `session-hint`, `subagent-hint` | read-only | no write |
 | `session-start`, `lookup` | read-only | append operational evidence |
 | activation, semantic, proposal, export, and wiki commands | read-only, except `activation-wizard`: `--choice kb-wiki` writes the classic wiki keys in `.kb/kb.config.json` and runs the first `wiki-sync` (publishes `.kb/wiki/live`); `--disable-classic-wiki` turns the classic wiki off | write governed config, manifests, proposals, drafts, exports, or operations evidence |
 | approved `proposal-apply` | mutates only through `.kb/kb.py` | writes apply evidence and operations evidence |
@@ -333,6 +333,42 @@ prints nothing, so the classic kb-lifecycle hook governs.
 Risks: it writes nothing. Hook support is client-specific; where hooks are
 disabled, start the session manually.
 
+### `subagent-hint`
+
+Purpose: print the SubagentStart hook JSON for a vNext workspace.
+
+Use when: wiring or checking a client SubagentStart hook; the Claude Code
+plugin hook calls this subcommand for every subagent.
+
+Do not use when: you want KB records for a brief; run `lookup` and paste the
+records under `KB records`.
+
+Repository example:
+
+```powershell
+python core\versions\kb-wiki-vnext\runtime\kb_next.py subagent-hint
+```
+
+Stand-alone example:
+
+```powershell
+python runtime\kb_next.py subagent-hint
+```
+
+Expected output: one JSON object with `hookSpecificOutput.additionalContext`.
+The text tells the subagent that the main session is the only KB writer, that
+it must not run commands that write the KB, and that its report ends with a
+`KB candidates` section (each fact, decision or learning with its source, or
+`none`) unless its brief fixes the output format. When `.kb/kb.db` exists it
+adds a complete `lookup --facet status` command: the bootstrapped
+`.kb-next/runtime/kb_next.py` when present, else this runtime with
+`--project-root`. Outside a vNext workspace, or on any error, it prints nothing.
+
+Risks: it writes nothing. The hook cannot read the brief, so it adds no
+records; records chosen by the words of a task description were mostly
+unrelated in a check on real launches, and some briefs isolate the subagent on
+purpose.
+
 ### `compliance-preflight`
 
 Purpose: check the required gates for a work type before planning or implementation.
@@ -483,7 +519,7 @@ python runtime\kb_next.py dense-index --json
 python runtime\kb_next.py dense-index --rebuild --json
 ```
 
-Then set `retrieval.dense.enabled` to `true` in `.kb-next/kb-next.config.json`. `retrieval.dense.model` is `potion-base-32M` (English, the model that met the LongMemEval target) or `potion-multilingual-128M` (Portuguese included, better on Portuguese synonyms); `chunk_words` and `chunk_stride` set the passage window (32 and 32).
+Then set `retrieval.dense.enabled` to `true` in `.kb-next/kb-next.config.json`. `retrieval.dense.model` is `potion-base-32M` (English, the model that met the LongMemEval target) or `potion-multilingual-128M` (Portuguese included; not recommended: about 11.7 s per cold lookup against 0.5 s words-only, while query expansion by the agent reaches the same Portuguese synonyms at no cost; pinned until 0.3, and `dense-index` and `lookup` warn while it is configured); `chunk_words` and `chunk_stride` set the passage window (32 and 32).
 
 Expected output: record, passage, embedded, reused and removed counts, the model identity and the library versions. The index lives in `.kb-next/index/dense/` (`manifest.json` and `vectors.sqlite3`), is derived, and can be deleted at any time; `.kb/kb.db` is only read.
 
@@ -584,15 +620,28 @@ This default invocation is report-only. A reviewed second pass may add
 `resolve_candidate`, and `needs_sponsor`, and reference only record IDs returned
 by the first pass.
 
+Automatic curation runs both passes at every `vnext-session-end` and in the
+weekly maintenance run (an agent session, since the second pass needs
+judgment), next to the read-only classic `python .kb/kb.py hygiene-audit --json`.
+The output carries `review_budget`: valid hygiene proposals of the last 7 days
+that are neither applied nor stale (`open`, `open_count`), the
+`weekly_limit` and the `room` left. The write pass skips a target that
+already has an open proposal (`already_open`) and lists what exceeds the
+room under `deferred`. The limit is `semantic_curation.weekly_hygiene_proposals`
+in `.kb-next/kb-next.config.json`, default 5 per project: the nine projects
+that held candidates on 2026-10-20 then reach at most 45 decisions a week,
+which fits the 15-minute weekly review only if each takes about 20 s (an
+assumption, not a measurement). Lower it when reviews take longer.
+
 Conversation prompt:
 
 ```text
 Review HOT overflow in report-only mode first. If there are clear candidates, propose changes but do not apply them.
 ```
 
-Expected output: report-only findings or proposal IDs when `--write-proposals` is used.
+Expected output: report-only findings, `review_budget`, or proposal IDs when `--write-proposals` is used.
 
-Risks: writing proposals is still not applying them, but it does create review artifacts that need triage.
+Risks: writing proposals is still not applying them, but it does create review artifacts that need triage. A declined proposal is not recorded as declined; it ages out after 7 days and detection may propose it again.
 
 ### `filing-proposal`
 
@@ -635,6 +684,15 @@ Turn this new operational rule into a filing proposal with provenance. Do not wr
 ```
 
 Expected output: filing proposal and manifest under `.kb-next/proposals`.
+
+Provenance in `--judgment` follows the `proposal-apply` rule: a list of
+`{"record_id": "<existing id>"}` or `{"source_id": "<SRC id>"}`. A file path
+or URL is not provenance; register the file first with
+`python .kb/kb.py ingest <path> --json` and cite its `source_id`. Since runtime
+0.2.1 a judgment whose provenance `proposal-apply` would refuse is `blocked`
+here, with the same `invalid_provenance[...]`, `unknown_record_reference:...`
+or `unknown_source_reference:...` warning, instead of `valid` and then refused
+at apply. A supersede names its target in `record_draft.supersedes_id`.
 
 Risks: low-provenance memory should be blocked or left as draft evidence.
 
@@ -691,6 +749,18 @@ Apply this proposal only if it is bound to a valid manifest and I have explicitl
 Expected output: applied/blocked status and canonical bridge details.
 
 Risks: this is the only command in the workflow intended to mutate canonical memory; use it deliberately.
+
+Write gate: in a project with `.kb-next/kb-next.config.json`, the plugin's
+PreToolUse hook (`scripts/write_gate.py`, matcher `Bash|PowerShell`) denies an
+agent shell command that runs `.kb/kb.py create`, `file`, `supersede` or
+`update`, and its message names `filing-proposal`, `semantic-hygiene` and this
+command. `proposal-apply` runs the classic CLI in its own subprocess, which
+the hook never sees. Reads and the other classic commands pass, classic-only
+projects are not gated, and `session-hint` adds one line stating the rule. The
+hook steers agents; it does not authenticate them. Claude Code runs it as
+installed; Codex runs it after the user trusts the changed hook. A project
+owner can turn it off with `{"write_gate": {"enabled": false}}` merged into
+the vNext config.
 
 ### `wiki-synthesis-plan`
 

@@ -35,7 +35,7 @@ If that prints `FTS5 OK`, you are ready.
 The fastest way is the published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.0/kb_factory-0.2.0-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.1/kb_factory-0.2.1-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init        # scaffolds .kb/ and initializes the SQLite store
 ```
@@ -165,7 +165,7 @@ Cowork installs plugins from a folder or marketplace through the UI:
 1. Open Claude Desktop and switch to Cowork.
 2. Open **Customize → Plugins**.
 3. Add `regismvargas/kb-factory` as a GitHub plugin marketplace, or upload
-   `kb-lifecycle-cowork-plugin-0.2.5.zip` from release `v0.2.0`.
+   `kb-lifecycle-cowork-plugin-0.2.5.zip` from release `v0.2.1`.
 
 **Verify:** the plugin appears under **Customize → Plugins**, and asking the
 agent to start a KB session reads only `.kb/memory/NOW.md` by default.
@@ -186,7 +186,7 @@ To use the thin-session model and the project setup/migration commands, install
 claude plugin install kb-wiki-vnext@kb-factory-tools   # Claude Code
 ```
 
-(or upload `kb-wiki-vnext-cowork-plugin-0.2.0.zip` via **Customize → Plugins**
+(or upload `kb-wiki-vnext-cowork-plugin-0.2.1.zip` via **Customize → Plugins**
 in Cowork). It
 adds 13 slash commands (`/vnext-session-start`, `/new-project-wizard`,
 `/existing-project-*`, `/vnext-wiki-drafts`, …) and keeps `.kb/` canonical while
@@ -194,27 +194,37 @@ using `.kb-next/` for proposals. See [plugins.md](plugins.md).
 
 ### Codex
 
-The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
-open the Plugins settings, select the public `regismvargas/kb-factory`
-marketplace when available, and install the target plugin. For a file-based
-install, use the Codex artifact from release `v0.2.0`, for example
-`kb-wiki-vnext-plugin-0.2.0.zip`; do not upload the Claude or Cowork ZIP.
+The Codex CLI manages plugins from the command line (checked on codex-cli
+0.156.1). Add the public marketplace once, then install the plugins:
 
-If the app exposes plugin management to chat, use:
+```bash
+codex plugin marketplace add regismvargas/kb-factory
+```
 
-> Update the KB Factory plugins from the public `regismvargas/kb-factory`
-> marketplace. Do not use `kb-factory-local` or a workbench source. Confirm the
-> installed name, source, and version before changing anything.
+```bash
+codex plugin add kb-wiki-vnext@kb-factory-tools
+```
 
-If that capability is not exposed, use the Plugins settings. Restarting Codex
-alone reloads the current cache; it does not fetch a newer marketplace version.
+Install `kb-lifecycle@kb-factory-tools` and `session-gate@kb-factory-tools`
+the same way. To update after a release, refresh the marketplace snapshot;
+`codex plugin list` then shows the new versions:
+
+```bash
+codex plugin marketplace upgrade kb-factory-tools
+```
+
+In the Codex app, the Plugins settings do the same. For a file-based install,
+use the Codex artifact from release `v0.2.1`, for example
+`kb-wiki-vnext-plugin-0.2.1.zip`; do not upload the Claude or Cowork ZIP.
+Restarting Codex alone reloads the current cache; it does not fetch a newer
+marketplace version.
 
 ## Upgrading
 
 If you installed via pip, update an existing project's runtime with:
 
 ```bash
-pip install --upgrade https://github.com/regismvargas/kb-factory/releases/download/v0.2.0/kb_factory-0.2.0-py3-none-any.whl
+pip install --upgrade https://github.com/regismvargas/kb-factory/releases/download/v0.2.1/kb_factory-0.2.1-py3-none-any.whl
 kb-factory update      # in the project root; refreshes .kb/ runtime, keeps your data
 ```
 

@@ -3,8 +3,8 @@
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
 classic `kb-lifecycle` and `session-gate`.
 
-Release-candidate identities: plugin `0.2.0`, bundled runtime `0.2.0`, product
-`0.2.0-rc.4`, Session Gate companion `0.2.8`, and marketplace `0.3.11`.
+Release-candidate identities: plugin `0.2.1`, bundled runtime `0.2.1`, product
+`0.2.0-rc.5`, Session Gate companion `0.2.8`, and marketplace `0.3.12`.
 
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
@@ -34,6 +34,9 @@ Prerequisites:
   synthesis and review; `session-start` reports the backlog.
 - The SessionStart hook prints vNext guidance only in vNext workspaces, so the
   classic hook never gives a conflicting default read.
+- The SubagentStart hook (runtime `subagent-hint`) shows every subagent in a
+  vNext workspace the no-write rule, the `KB candidates` report section and a
+  lookup command; the KB records themselves come from the main agent's brief.
 
 ## Boundaries
 
@@ -46,9 +49,15 @@ Prerequisites:
 - `activation-wizard` is the only vNext path that edits `.kb/kb.config.json`,
   limited to `wiki.enabled` and the lifecycle `run_wiki_sync` flags, with the
   previous values recorded as `classic-config-sync`.
+- The PreToolUse write gate (`scripts/write_gate.py`, Bash and PowerShell)
+  denies an agent's direct `.kb/kb.py create`, `file`, `supersede` or
+  `update` in a vNext project and names the proposal path instead.
 - HOT overflow governance starts with read-only `hygiene-audit`.
 - `semantic-hygiene --write-proposals` writes only governed `.kb-next`
-  proposal evidence.
+  proposal evidence, at most `semantic_curation.weekly_hygiene_proposals`
+  (default 5) open proposals per 7 days; `vnext-session-end` and the weekly
+  maintenance run detect automatically and leave every correction to an
+  approved `proposal-apply`.
 - Only approved `demote_hot` and `resolve` proposals may apply through the
   classic runtime.
 
@@ -56,9 +65,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.2.0.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/` |
-| `kb-wiki-vnext-claude-plugin-0.2.0.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
-| `kb-wiki-vnext-cowork-plugin-0.2.0.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/` |
+| `kb-wiki-vnext-plugin-0.2.1.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-claude-plugin-0.2.1.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-cowork-plugin-0.2.1.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.

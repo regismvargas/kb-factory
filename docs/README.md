@@ -52,6 +52,7 @@ These are the precise, deeper docs.
 | [comparison.md](comparison.md) | Honest comparison vs. Anthropic's memory stack and the OSS field |
 | [merit-evaluation.md](merit-evaluation.md) | The adversarial/hostile/moderated merit debate behind the positioning |
 | [provenance-and-continuity.md](provenance-and-continuity.md) | How continuity & provenance work across sessions and agents |
+| [evidence.md](evidence.md) | Two pre-registered experiments on what the knowledge base adds to an agent |
 
 For licensing, contributing, security policy, and design credits, see the
 repository root: [`../README.md`](../README.md), [`../CONTRIBUTING.md`](../CONTRIBUTING.md),

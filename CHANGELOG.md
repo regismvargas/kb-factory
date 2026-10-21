@@ -7,6 +7,48 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-20
+
+### Added
+- Subagent memory bridge. The `kb-wiki-vnext` skill and plugin `AGENTS.md`
+  tell the main agent to run a widened `lookup --facet status` before it
+  launches a subagent and to paste the records that bear on the subtask into
+  the brief under `KB records`; subagents report `KB candidates`, which the
+  main agent turns into `filing-proposal` entries. A new runtime
+  `subagent-hint` command and a `SubagentStart` plugin hook give every Claude
+  Code subagent in a vNext workspace the no-write rule and the candidates
+  section. Subagents never write the KB.
+- Write gate. A `PreToolUse` plugin hook (`scripts/write_gate.py`) denies an
+  agent shell command that runs `.kb/kb.py create`, `file`, `supersede` or
+  `update` in a vNext project and points to `filing-proposal`,
+  `semantic-hygiene` and `proposal-apply`. Reads and classic-only projects are
+  not affected; `{"write_gate": {"enabled": false}}` in the vNext config turns
+  it off.
+- Automatic curation. `vnext-session-end` runs the read-only detection
+  (`kb.py hygiene-audit`, `semantic-hygiene`) and writes a judged batch of
+  hygiene proposals. `semantic-hygiene` reports a `review_budget` (default 5
+  open proposals per project per 7 days), skips targets that already have an
+  open proposal and lists the rest under `deferred`. Corrections still need an
+  approved `proposal-apply`.
+- [docs/evidence.md](docs/evidence.md): two pre-registered counterfactual
+  experiments on real projects. The value of the knowledge base is its
+  curated content; the same content as plain Markdown matched it.
+
+### Changed
+- `filing-proposal` applies the provenance rule of `proposal-apply`: each
+  provenance entry must be an existing `record_id` or a registered
+  `source_id`, so an invalid judgment is `blocked` at proposal time instead of
+  refused at apply.
+- `potion-multilingual-128M` is not recommended for routine use (about 11.7 s
+  per cold command-line lookup against 0.5 s words-only); `dense-index` and
+  dense lookups report an advisory. It stays pinned until 0.3.
+- [docs/installation.md](docs/installation.md): the Codex CLI does have a
+  `plugin` subcommand; the Codex section now gives
+  `codex plugin marketplace upgrade` and `codex plugin add`.
+- Release lines: Python package `0.2.1`, catalog `0.3.12`, kb-wiki-vnext
+  `0.2.1`, vNext runtime `0.2.1`, stand-alone product `0.2.0-rc.5`;
+  kb-lifecycle `0.2.5` and session-gate `0.2.8` unchanged.
+
 ## [0.2.0] - 2026-10-20
 
 This release breaks the `proposal-apply` command line. See "Upgrading To

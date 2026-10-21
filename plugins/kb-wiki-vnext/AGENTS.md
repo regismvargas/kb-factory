@@ -32,6 +32,23 @@ Session start is thin:
   planning or editing. Simple operational use does not require the development
   preflight unless it is part of a development round.
 
+Subagents (`spawn_agent`) start without the KB, and only the main agent writes
+it. Codex has no hook that adds this for you:
+
+- Before spawning, run
+  `python <resolved-runtime-path> lookup --facet status --query "<words>" --limit 8 --json`
+  with a widened query and paste the records that bear on the subtask into the
+  brief under `KB records` (id, title, excerpt, source), or `none found`. Leave
+  it out only when the brief isolates the subagent on purpose.
+- The brief says: do not write to the KB; a shell may run the same `lookup`,
+  which changes no record and appends one line to `.kb-next/operations.jsonl`;
+  end the report with `KB candidates` (each fact, decision or learning with
+  its source, or `none`).
+- Turn each kept candidate into
+  `python <resolved-runtime-path> filing-proposal --input @candidate.json --category FATO --domain <domain> --json`
+  (`DECISAO` or `APRENDIZADO` as fits) and note why you drop the others;
+  `vnext-session-end` lists candidates left with neither.
+
 Governance boundaries:
 
 - `.kb/` is canonical durable memory.
@@ -40,10 +57,13 @@ Governance boundaries:
 - Do not write SQL or edit `.kb/kb.db` directly.
 - Do not publish vNext drafts to `.kb/wiki/live`; the classic runtime owns that
   directory and refreshes it on lifecycle events.
-- Canonical record changes must go through `.kb/kb.py` or vNext
-  `proposal-apply`, which itself calls the classic runtime and requires
-  `--actor` (who approved; defaults to `proposal_apply.default_actor` when the
-  vNext config sets it) and `--actor-runtime`.
+- Canonical record changes go through a proposal (`filing-proposal`, or
+  `semantic-hygiene --write-proposals` for HOT demotion and open items) and
+  then vNext `proposal-apply`, which itself calls the classic runtime and
+  requires `--actor` (who approved; defaults to `proposal_apply.default_actor`
+  when the vNext config sets it) and `--actor-runtime`. Do not run
+  `.kb/kb.py create`, `file`, `supersede` or `update` yourself; the plugin's
+  PreToolUse hook denies them in a vNext project once Codex trusts it.
 - HOT overflow governance must start read-only. Use
   `python .kb/kb.py hygiene-audit --json` for mechanical health and
   `semantic-hygiene --write-proposals` only for

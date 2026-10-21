@@ -2,7 +2,7 @@
   "name": "kb-factory-tools",
   "metadata": {
     "description": "KB Factory plugins for governed knowledge workflows across Claude Code and Claude Cowork.",
-    "version": "0.3.11"
+    "version": "0.3.12"
   },
   "owner": {
     "name": "KB Factory"
@@ -54,7 +54,7 @@
         "memory",
         "semantic-hygiene"
       ],
-      "version": "0.2.0"
+      "version": "0.2.1"
     }
   ]
 }

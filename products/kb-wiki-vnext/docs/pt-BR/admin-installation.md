@@ -13,9 +13,9 @@ Admins de workspace, leads técnicos e maintainers que instalam o pacote para ou
 - Artefato de release limpo, gerado a partir deste repositório.
 - Acesso ao cliente de destino: Codex, Claude Code, Claude Cowork ou workspace com Python.
 - Alinhamento com o dono do workspace de que `.kb/` segue canônico e `.kb-next/` é a camada vNext.
-- A identidade de release registra separadamente produto `0.2.0-rc.4`, KB
-  Lifecycle `0.2.5`, plugin `0.2.0`, runtime incluído `0.2.0`, Session Gate
-  `0.2.8` e marketplace `0.3.11`.
+- A identidade de release registra separadamente produto `0.2.0-rc.5`, KB
+  Lifecycle `0.2.5`, plugin `0.2.1`, runtime incluído `0.2.1`, Session Gate
+  `0.2.8` e marketplace `0.3.12`.
 
 ## Passos
 
@@ -23,13 +23,13 @@ Gere todos os distribuíveis KB afetados e o bundle stand-alone:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.4
+python tools\build_vnext_standalone.py --version 0.2.0-rc.5
 ```
 
 Valide antes de compartilhar:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.4-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.5-standalone.zip
 ```
 
 Distribua apenas o artefato correspondente:
