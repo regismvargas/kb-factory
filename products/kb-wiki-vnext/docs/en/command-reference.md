@@ -24,7 +24,7 @@ clients. Session Gate follows the same distinction with the logical basename
 | Command | Project type | Platforms | Runtime or instruction | Mutation behavior |
 |---|---|---|---|---|
 | `vnext-session-start` | general vNext session | Codex, Claude Code, Claude Cowork | `python ./.kb-next/runtime/kb_next.py session-start --json` after bootstrap | no canonical write; appends `.kb-next/operations.jsonl` |
-| `vnext-session-end` | general vNext session | Codex, Claude Code, Claude Cowork | summarize vNext evidence; run `python .kb/kb.py lifecycle session-end` and, with KB + Wiki, the runtime `wiki-draft-status` | classic session-end refreshes exports and the enabled wiki; no canonical record write |
+| `vnext-session-end` | general vNext session | Codex, Claude Code, Claude Cowork | summarize vNext evidence; collect subagent `KB candidates`; run `python .kb/kb.py lifecycle session-end` and, with KB + Wiki, the runtime `wiki-draft-status`; refresh the dense index when `retrieval.dense.enabled` is on and records changed; curation: read-only `hygiene-audit` and `semantic-hygiene`, then a judged batch within `review_budget` | classic session-end refreshes exports and the enabled wiki; filing and hygiene proposals go to `.kb-next/` only; no canonical record write |
 | `vnext-wiki-drafts` | KB + Wiki session | Codex, Claude Code, Claude Cowork | `wiki-draft-status`, then per topic `wiki-synthesis-plan` with agent judgment and `wiki-draft-review --materialize` | writes `.kb-next/wiki/` drafts, manifests and pages; no canonical write |
 | `existing-project-diagnose` | existing/legacy | Codex, Claude Code, Claude Cowork | inspect `.kb/`, `.kb-next/`, runtime, and `NOW.md` | no canonical write; appends operations evidence if it runs `session-start` |
 | `existing-project-activate-vnext` | existing/legacy | Codex, Claude Code, Claude Cowork | `activation-wizard --mode short --choice kb-alone` by default | writes `.kb-next/`; with `kb-wiki` also enables the classic wiki keys in `.kb/kb.config.json` and syncs `.kb/wiki/live` |
@@ -49,6 +49,26 @@ Runtime-only commands:
 | `wiki-draft-status` | list wiki topics that need synthesis, review or refresh | read-only |
 | `session-hint` | SessionStart hook text for vNext workspaces | read-only; prints nothing outside vNext workspaces |
 | `subagent-hint` | SubagentStart hook JSON for vNext workspaces: the subagent KB contract and a lookup command | read-only; prints nothing outside vNext workspaces |
+
+Agent-facing runtime subcommands that changed in 0.2.x (details in
+`usage-guide.md`):
+
+| Subcommand | Purpose | Mutation behavior |
+|---|---|---|
+| `lookup` | ranked lookup: an FTS5 word list (BM25) fused by Reciprocal Rank Fusion; `--lists` picks from `words`, `trigram` and `dense`; the default is `words`, plus `dense` when `retrieval.dense.enabled` is `true` | no canonical write |
+| `dense-index` | build or refresh the optional local dense index; `--fetch-model` downloads the pinned model, `--rebuild` embeds every active record again | writes `.kb-next/index/` only, which Git ignores; needs the dense extra; reports an advisory for `potion-multilingual-128M`, which is not recommended |
+| `proposal-apply` | apply an approved proposal to `.kb/`; needs `--approve`, `--approval-note`, `--actor-runtime` (`claude-code`, `codex`, `cowork` or `human`) and an approver from `--actor` or `proposal_apply.default_actor` | the only canonical write path for agents in a vNext project; with no approver it exits 2 before reading the proposal |
+| `semantic-hygiene` | detect demotion, resolution and supersede candidates; with `--judgment` and `--write-proposals`, write a judged batch | writes `.kb-next/` proposals only, and only with `--write-proposals`; reports `review_budget` (`semantic_curation.weekly_hygiene_proposals`, default 5 open proposals per project per 7 days), skips targets that already have an open proposal and lists the overflow under `deferred` |
+
+Plugin hooks, as registered in `hooks/hooks.json`. Claude Code runs all three.
+Codex runs plugin hooks only after the user trusts that file and has no
+subagent hook; its main agent follows the subagent protocol in `AGENTS.md`.
+
+| Hook | Runs | Behavior |
+|---|---|---|
+| `SessionStart` | runtime `session-hint` | prints the vNext startup instruction in vNext workspaces |
+| `SubagentStart` | runtime `subagent-hint` | gives each Claude Code subagent the no-write rule and the `KB candidates` report section |
+| `PreToolUse` on shell calls | `scripts/write_gate.py` | denies `.kb/kb.py create`, `file`, `supersede` and `update` in a vNext project and points to `filing-proposal` and `proposal-apply`; `"write_gate": {"enabled": false}` in `.kb-next/kb-next.config.json` turns it off |
 
 Classic `.kb/` remains canonical durable memory. `.kb-next/` remains governed
 proposal, evidence, draft, materialization, and operations state.

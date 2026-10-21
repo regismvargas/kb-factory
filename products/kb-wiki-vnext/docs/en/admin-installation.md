@@ -43,10 +43,20 @@ Distribute only the artifact that matches the recipient:
   slash commands.
 - Admins bootstrapping a fresh workspace receive the stand-alone bundle.
 
-The Codex CLI has no plugin-management command. In the Codex app, use the
-Plugins settings with the public `regismvargas/kb-factory` marketplace or
-upload `kb-wiki-vnext-plugin-0.2.0.zip` when file-based installation is
-available. Restarting alone does not fetch a newer marketplace version.
+The Codex CLI manages plugins from the command line (checked on codex-cli
+0.156.1). Add the public marketplace once, then install the plugin:
+
+```powershell
+codex plugin marketplace add regismvargas/kb-factory
+codex plugin add kb-wiki-vnext@kb-factory-tools
+```
+
+Install `session-gate@kb-factory-tools` the same way where Session Gate is
+distributed. After a release, `codex plugin marketplace upgrade kb-factory-tools`
+refreshes the marketplace snapshot. In the Codex app, the Plugins settings do
+the same, or upload `kb-wiki-vnext-plugin-0.2.1.zip` when file-based
+installation is available. Restarting alone does not fetch a newer marketplace
+version.
 
 Every vNext plugin ZIP must contain `runtime/kb_next.py` at archive root. Do
 not distribute an artifact that contains only commands referring to a bundled

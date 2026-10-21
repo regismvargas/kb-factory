@@ -17,11 +17,14 @@ vice-versa.
 
 Once a plugin is installed (see [installation.md](installation.md)):
 
-- **Slash commands** appear in the `/` menu — type `/` to see them.
-  `kb-wiki-vnext` adds 13 (`/vnext-session-start`, `/new-project-wizard`,
-  `/vnext-wiki-drafts`, …);
-  `session-gate` adds 2 (`/gate-session-start`, `/gate-session-end`);
-  `kb-lifecycle` adds none — it works through its skill.
+- **Plugin commands.** `kb-wiki-vnext` adds 13 (`vnext-session-start`,
+  `new-project-wizard`, `vnext-wiki-drafts`, …); `session-gate` adds 2
+  (`gate-session-start`, `gate-session-end`); `kb-lifecycle` adds none and
+  works through its skill. These are logical names, not one literal invocation
+  for every client: Claude Code lists them in the `/` menu prefixed with the
+  plugin name (for example `/kb-wiki-vnext:vnext-session-start`), Codex runs
+  them through the plugin's skill when you ask in natural language, and Cowork
+  uses the action its plugin UI exposes.
 - **An auto-triggering skill.** `kb-lifecycle`'s `kb-wiki-maintainer` skill
   activates on its own when you mention things like "KB", "knowledge base",
   "ingest this source", "session start", "update the wiki", or "answer from the
@@ -33,20 +36,28 @@ Once a plugin is installed (see [installation.md](installation.md)):
   defers to vNext instead: it does not ask the agent to read `.kb/memory/NOW.md`,
   and the agent reads `.kb-next/memory/NOW.md` by default. Cowork doesn't do
   this automatically. That's what `session-gate` is for.
+- **(vNext projects) a write gate.** With `kb-wiki-vnext` installed and vNext
+  active, the agent files new records and supersessions through a proposal: it
+  prepares one, shows it to you, and applies it with `proposal-apply` once you
+  approve. The plugin's write gate hook denies an agent's direct
+  `.kb/kb.py create`, `file`, `supersede` or `update` (in Codex, once you
+  trust the plugin's PreToolUse hook). Classic-only projects keep the direct
+  commands.
 
 ## First session — in Claude Code
 
 1. **Open the project** (one that has a `.kb/`). The `kb-lifecycle` hook fires
    and the agent reads `.kb/memory/NOW.md` — a short, always-loaded summary.
    (No `.kb/` yet? Ask the agent to set one up — the `kb-lifecycle` plugin bundles
-   the scaffold, so no repo checkout is needed — or run `/new-project-wizard`, or
-   `kb-factory init` from a terminal.)
+   the scaffold, so no repo checkout is needed; or use the `new-project-wizard`
+   plugin command; or run `kb-factory init` from a terminal.)
 2. **Work normally.** When something durable comes up, just say so:
    > "Record a decision: we'll use SQLite for storage — it's local-first and
    > needs no service."
 
    The agent files it as a typed `DECISAO` record (it runs `create`/`file` under
-   the hood). Same for facts, assumptions, open items, and learnings.
+   the hood; with vNext active it prepares a proposal and applies it after you
+   approve). Same for facts, assumptions, open items, and learnings.
 3. **Recall later — in this or a future session:**
    > "What did we decide about storage, and why?"
 
@@ -60,15 +71,16 @@ Once a plugin is installed (see [installation.md](installation.md)):
 
 Cowork does **not** auto-fire hooks, so start the session explicitly:
 
-1. Run **`/gate-session-start`** (or say "session start"). `session-gate` detects
+1. Start with the **`gate-session-start`** plugin command, as your Cowork plugin
+   UI exposes it (or say "session start"). `session-gate` detects
    whether `.kb/` / `.kb-next/` are present and loads the thin context for you.
    (If you installed only `kb-lifecycle`, just say "start a KB session" to invoke
    its skill.)
 2. **Work the same way** as above — ask the agent to record decisions/facts and
    to answer from the KB.
-3. **Close with `/gate-session-end`** (optionally with a session id, e.g.
-   `/gate-session-end S14`). It runs the pre-close audit and the matching
-   closeout.
+3. **Close with the `gate-session-end` plugin command** (optionally with a
+   session id, such as `S14`), or say "wrap up". It runs the pre-close audit
+   and the matching closeout.
 
 ## The conversational workflow (both platforms)
 
@@ -98,14 +110,19 @@ Every conversational action is just a CLI call the plugin makes for you:
 | "what's still open?" | `python .kb/kb.py pending` |
 | "close the session" | `python .kb/kb.py lifecycle session-end --json` |
 
+In a project with KB/Wiki vNext active, the "record" and "supersede" rows go
+through `filing-proposal` and, after your approval, `proposal-apply` instead;
+the write gate denies the direct commands, and the session starts with the
+vNext startup. See [KB/Wiki vNext runtime](commands.md#kbwiki-vnext-runtime).
+
 Full command reference (slash **and** CLI): [commands.md](commands.md).
 
 ## Platform differences
 
 | | Claude Code | Claude Cowork | Codex |
 |---|---|---|---|
-| Session start | **Automatic** (hook loads `NOW.md`) | **Manual** — `/gate-session-start` or the skill | command / skill |
-| Slash menu | Yes (`/`) | Yes (plugin) | Yes |
+| Session start | **Automatic** (hook loads `NOW.md`) | **Manual**: the `gate-session-start` command or the skill | command / skill |
+| Slash menu | Yes (`/`, plugin commands prefixed with the plugin name) | plugin actions in the UI | no plugin slash commands: ask in plain language and the plugin skill runs |
 | Skill auto-trigger | Yes | Probabilistic — invoke explicitly if needed | Yes |
 | Exports to other tools | `.kb/` is read directly | point-in-time export packs | point-in-time export packs |
 

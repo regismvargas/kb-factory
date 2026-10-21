@@ -42,11 +42,21 @@ Distribua apenas o artefato correspondente:
   correspondente e usam `gate-session-start` / `gate-session-end`.
 - Admins que criam workspace novo recebem o bundle stand-alone.
 
-O Codex CLI não possui comando de gerenciamento de plugins. No app Codex, use
-as configurações de Plugins com o marketplace público
-`regismvargas/kb-factory` ou carregue
-`kb-wiki-vnext-plugin-0.2.0.zip` quando a instalação por arquivo estiver
-disponível. Reiniciar sozinho não busca uma versão mais nova do marketplace.
+O Codex CLI gerencia plugins pela linha de comando (verificado no codex-cli
+0.156.1). Adicione o marketplace público uma vez e depois instale o plugin:
+
+```powershell
+codex plugin marketplace add regismvargas/kb-factory
+codex plugin add kb-wiki-vnext@kb-factory-tools
+```
+
+Instale `session-gate@kb-factory-tools` da mesma forma quando o Session Gate
+fizer parte da distribuição. Depois de uma release,
+`codex plugin marketplace upgrade kb-factory-tools` atualiza o snapshot do
+marketplace. No app Codex, as configurações de Plugins fazem o mesmo, ou
+carregue `kb-wiki-vnext-plugin-0.2.1.zip` quando a instalação por arquivo
+estiver disponível. Reiniciar sozinho não busca uma versão mais nova do
+marketplace.
 
 Todo ZIP de plugin vNext deve conter `runtime/kb_next.py` na raiz do arquivo.
 Não distribua artefato que contenha apenas comandos referindo-se ao engine

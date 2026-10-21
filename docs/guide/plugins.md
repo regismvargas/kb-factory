@@ -24,6 +24,13 @@ If you want to know what each plugin actually *does for you in chat*, keep readi
 > a searchable, typed record that survives across sessions and shows its work.
 > See the [comparison](../comparison.md).
 
+> **About command names.** This page writes plugin commands as `/name` for
+> short. How you call one depends on where you work: Claude Code shows each
+> command with its plugin name in front (for example
+> `/kb-wiki-vnext:vnext-session-start`), in Codex you ask for it in plain
+> words and the plugin's skill runs it, and Cowork uses the action its plugin
+> screen offers. The short `/name` form is not promised everywhere.
+
 ---
 
 ## What each plugin gives you (in plain terms)
@@ -73,8 +80,9 @@ to open and close a session.
 
 **What you'll notice in chat:**
 
-- **`/gate-session-start`** — figures out what your project has set up and loads
-  just the context you need, then gives you a short briefing. Use this (or say
+- **`/gate-session-start`** (in Cowork, the start action the session-gate
+  plugin exposes): figures out what your project has set up and loads just the
+  context you need, then gives you a short briefing. Use this (or say
   "session start" / "iniciar sessão") as the first thing you do in Cowork.
 - **`/gate-session-end`** — runs a quick pre-close check, tidies and consolidates,
   and hands you a summary. You can pass a session id, e.g. `/gate-session-end S14`.
@@ -109,7 +117,9 @@ your canonical knowledge base until you approve.
 **What you'll notice in chat — 13 slash commands**, grouped by what you're doing:
 
 *Running a thin session*
-- `/vnext-session-start` — start a session reading only `NOW.md` by default.
+- `/vnext-session-start` (in Claude Code, `/kb-wiki-vnext:vnext-session-start`;
+  in Codex, ask the `kb-wiki-vnext` skill to start the session): start a
+  session reading only `NOW.md` by default.
 - `/vnext-session-end` — close the session, recording useful evidence; durable
   changes go through the reviewed apply step rather than being written silently.
 
@@ -148,10 +158,13 @@ recorded under `.kb-next/`, and it only reaches `.kb/` after an explicit apply
 step. Related capabilities: `semantic-lookup` (LLM-assisted retrieval),
 `semantic-hygiene` (report-only review of HOT overflow / duplicates / stale
 items), the proposal → apply flow, and `compliance-preflight` (a checklist gate
-for development work). The session hook is informational only (it prints a
-reminder to run the start command rather than firing automatically). Runs on
+for development work). Where the client supports hooks, the plugin prints the
+vNext startup guidance at session start, tells every Claude Code subagent not
+to write the knowledge base, and runs a write gate that denies an agent's direct
+`create`, `file`, `supersede` or `update` and points it to the proposal path.
+Runs on
 Claude Code, Cowork, and Codex. Underlying CLI verbs are in
-[the command reference](../commands.md).
+[the command reference](../commands.md#kbwiki-vnext-runtime).
 
 </details>
 

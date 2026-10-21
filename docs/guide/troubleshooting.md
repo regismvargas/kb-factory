@@ -205,10 +205,12 @@ What to do when a search comes up empty:
   it can often find what you mean even when your first search term missed, and
   then tell you the exact wording so your next search lands.
 
-If you genuinely need paraphrase-level or relationship-based recall across a large
-store, that's a job for a vector- or graph-backed memory system rather than KB
-Factory — see the [comparison](../comparison.md) for an honest take on the
-trade-off.
+If you genuinely need paraphrase-level recall and your project uses KB/Wiki
+vNext, ask a maintainer about its optional dense list: it is off by default,
+ranks by meaning as well as words, and adds about 3 seconds to a cold lookup.
+Relationship-based recall across a large store is a job for a vector- or
+graph-backed memory system rather than KB Factory; see the
+[comparison](../comparison.md) for an honest take on the trade-off.
 
 <details><summary>Under the hood / for the CLI</summary>
 

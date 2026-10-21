@@ -38,6 +38,15 @@ routes startup and closeout back to them.
 - Claude Code: `dist/agent-packages/session-gate-claude-plugin-0.2.8.zip`
 - Claude Cowork: `dist/agent-packages/session-gate-cowork-plugin-0.2.8.zip`
 
-The Codex CLI has no plugin-management command. Use the Codex app Plugins
-settings with the public marketplace, or upload
-`session-gate-plugin-0.2.8.zip` when file-based installation is available.
+The Codex CLI manages plugins from the command line (checked on codex-cli
+0.156.1). Add the public marketplace once, then install the plugin:
+
+```bash
+codex plugin marketplace add regismvargas/kb-factory
+codex plugin add session-gate@kb-factory-tools
+```
+
+After a release, `codex plugin marketplace upgrade kb-factory-tools` refreshes
+the marketplace snapshot. In the Codex app, the Plugins settings do the same,
+or upload `session-gate-plugin-0.2.8.zip` when file-based installation is
+available.

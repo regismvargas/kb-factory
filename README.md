@@ -34,8 +34,10 @@ vector database, no API key, works offline, and backs up as a single file.
 
 ## Don't use this if…
 
-- You need **per-user chatbot recall** or **semantic/embedding search** → use
-  Mem0, Zep, or Letta. KB Factory's search is lexical (SQLite FTS5).
+- You need **per-user chatbot recall** or embedding search as the primary
+  retrieval → use Mem0, Zep, or Letta. KB Factory's search is lexical by
+  default (SQLite FTS5, BM25 ranking); KB/Wiki vNext adds an optional local
+  dense (embedding) list, off by default, that adds about 3 s to a cold lookup.
 - You just need lightweight notes and don't care about an auditable *history* →
   `CLAUDE.md` + your agent's built-in memory is simpler and correct.
 
@@ -110,8 +112,30 @@ changes only routing metadata (tier/tags); when *meaning* changes you
 - **Mechanical maintenance** — `doctor` (integrity), `consolidate` (dedupe +
   tier demotion), tier audits. *(Mechanical, not semantic — semantic merge is
   the operator's/LLM's job.)*
-- **Agent integration** — plugins for Claude Code and Claude Cowork; the same
-  `.kb/` is the canonical store all of them read.
+- **Agent integration** — plugins for Claude Code, Claude Cowork and Codex;
+  the same `.kb/` is the canonical store all of them read.
+- **Governed writes (KB/Wiki vNext):** agents file through proposals that a
+  named person approves (`proposal-apply --actor`), a write gate hook keeps
+  agents on that path, and subagents report `KB candidates` instead of writing.
+
+## What we measured
+
+Two pre-registered counterfactual experiments on real projects and a public
+retrieval benchmark, reported with method and limits in
+[docs/evidence.md](docs/evidence.md):
+
+- With the knowledge base, the agent recalled every core fact of the lookup
+  tasks; with only its native memory it recalled about half, and 9% of the
+  facts that exist only in the knowledge base. False claims fell from 0.63 to 0
+  per run.
+- The same records exported to plain Markdown matched the knowledge base. The
+  value is the curated, governed content, not the search machinery.
+- On LongMemEval M, the optional dense list reaches the session recall of the
+  paper's dense retriever with zero margin; words plus agent query expansion
+  reach the same target without it.
+- Limits: two projects, one agent model, read-only tasks; the write side was
+  not measured, and none of this is a head-to-head comparison with other
+  memory systems.
 
 ## Requirements
 
@@ -171,7 +195,9 @@ Pre-`1.0.0`, and actively developed. The core runtime is tested across the
 public CI matrix and ships as a wheel plus source distribution on the GitHub
 release. Latest release: **v0.2.1**. PyPI is not the active distribution channel
 for this release.
-Expect additive `0.1.x` releases as the API settles toward `1.0.0`.
+Expect further pre-1.0 `0.x` releases as the API settles toward `1.0.0`. A
+`0.x` release can still break a command line, as `0.2.0` did for vNext
+`proposal-apply`; the changelog then carries an upgrade note.
 
 ## License
 

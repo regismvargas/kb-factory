@@ -148,9 +148,11 @@ something else when:
 - **You don't need an auditable belief *history*.** If lightweight,
   overwritable notes are enough, `CLAUDE.md` plus your agent's built-in memory is
   the simpler, correct choice. Don't take on the filing discipline you won't use.
-- **You need semantic or paraphrase recall.** KB Factory's search is **lexical**
-  (SQLite FTS5) — it matches words, not meaning. If you need embedding-based
-  recall, prefer Mem0, Zep, or similar.
+- **You need semantic recall as the main retrieval path.** KB Factory's search
+  is **lexical** by default (SQLite FTS5, ranked by BM25): it matches words, not
+  meaning. KB/Wiki vNext offers an optional local dense (embedding) list, off by
+  default, at about 3 s extra per cold lookup. If embedding-based or relational
+  recall is what you need above all, prefer Mem0, Zep, or similar.
 - **You need per-user chatbot recall at scale**, an **autonomous agent that runs
   for days** managing its own memory, or a **temporal / document knowledge
   graph** — those are different tools (Mem0, Letta/MemGPT, Zep, Cognee). See

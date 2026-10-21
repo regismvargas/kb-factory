@@ -35,8 +35,18 @@ source  →  record  →  { wiki page | export / context pack | session surface 
   what, when, and why" is reconstructable.
 
 For multi-agent workflows, the same canonical `.kb/` is the shared substrate:
-agents file and read records through the CLI, so a learning captured by one
-agent is immediately available — and attributable — to the next.
+agents read records through the CLI and file them through it (or, in a KB/Wiki
+vNext project, through a proposal a person approves), so a learning captured by
+one agent is available, and attributable, to the next as soon as it is filed.
+
+Subagents are the boundary. In a KB/Wiki vNext workspace the main agent is the
+only writer: before it launches a subagent, it runs `lookup` and pastes the
+records that bear on the subtask into the brief under `KB records`. The
+subagent never writes the KB; it ends its report with `KB candidates` (each
+fact, decision or learning with its source), which the main agent turns into
+`filing-proposal` entries for approval. The kb-wiki-vnext plugin's
+SubagentStart hook (runtime `subagent-hint`) gives every Claude Code subagent
+that rule.
 
 ## Implementation status
 

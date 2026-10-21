@@ -15,6 +15,14 @@ tiers, supersession), see [concepts](../concepts.md).
 > record is created or changed, tell you its id (something like
 > `ACME-KB-20260616091500-4f8a2c`, prefixed from the project's slug).
 
+> **KB/Wiki vNext projects.** The "Under the hood" blocks show the classic
+> commands. With vNext active, the kb-wiki-vnext plugin's write gate denies an
+> agent's direct `create`, `file`, `supersede` and `update`. New records and
+> supersessions go through a `filing-proposal`, and a HOT demotion through
+> `semantic-hygiene`; the agent shows you the proposal and applies it with
+> `proposal-apply` once you approve. Other `update` edits, such as a retag,
+> have no proposal path. Classic-only projects run the commands as shown.
+
 ---
 
 ## 1. Capture a decision and *why* you made it
@@ -211,8 +219,9 @@ The agent points you at the `.kb/` folder; copying it copies the entire memory.
 > **When this is the deciding factor.** Disconnected networks, strict proxies, or
 > just not wanting to run and pay for a vector database — KB Factory is viable
 > where hosted memory layers aren't an option. (If you *do* have connectivity and
-> want embedding-based semantic recall, KB Factory's search is lexical, not
-> semantic — see the [comparison](../comparison.md).)
+> want embedding-based semantic recall, KB Factory's search is lexical by
+> default; KB/Wiki vNext's optional dense list downloads its model once and is
+> off by default. See the [comparison](../comparison.md).)
 
 <details><summary>Under the hood / for the CLI</summary>
 

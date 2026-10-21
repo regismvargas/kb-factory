@@ -34,8 +34,11 @@ To stay honest (and because each of these was dismantled under hostile review):
 - **Not** a "synchronized cross-runtime store." There is one canonical SQLite
   store; the Cowork/claude.ai surfaces are **point-in-time exports**, not a live
   sync, and can go stale if not regenerated.
-- **Not** recall-quality parity with embedding/graph systems. Retrieval is
-  lexical (SQLite FTS5); paraphrased/relational recall loses to Mem0/Zep/Cognee.
+- **Not** general recall-quality parity with embedding/graph systems. Retrieval
+  is lexical by default (SQLite FTS5, BM25). The optional KB/Wiki vNext dense
+  list matched the paper's dense retriever on one benchmark, with zero margin
+  (see [evidence](evidence.md#search)); there is no head-to-head test against
+  Mem0, Zep or Cognee, and relational recall remains their ground.
 - **Not** for the median user. If you don't need an auditable belief *history*,
   `CLAUDE.md` + auto-memory is the simpler correct choice.
 
@@ -128,18 +131,27 @@ typing, and governance on top.
 These are honest weaknesses surfaced by lining KB Factory up against the field.
 They feed feature add/cut decisions for v1:
 
-1. **No semantic retrieval out of the box.** FTS5 is lexical; competitors lean
-   on embeddings. This is a **deliberate trade-off** to keep the core
-   zero-dependency, local, and offline — paraphrase/relational recall is the known
-   ceiling (the mitigation is agent-side: ask the agent to rephrase the query or
-   browse by category/domain). An **optional embeddings adapter** may land later
-   as an *opt-in* extension, but it will never be required by the core.
+1. **No semantic retrieval by default.** Search is lexical (FTS5, ranked by
+   BM25); competitors lean on embeddings. This is a **deliberate trade-off** to
+   keep the core zero-dependency, local, and offline. Paraphrase recall is
+   mitigated agent-side (the skills tell the agent to widen a query with
+   synonyms, or browse by category/domain) and, in KB/Wiki vNext, by an
+   **optional local dense list** (`dense-index`, `retrieval.dense.enabled`). It
+   is off by default, needs the extra `pip install model2vec==0.10.0`, and adds
+   about 3 s to a cold lookup with `potion-base-32M`; the core never requires
+   it. Relational recall remains the known ceiling.
 2. **No automatic extraction.** KB Factory expects the agent to *file* records;
    Mem0/Zep auto-extract. This is a feature (curation, not noise) but must be
    framed as such, not hidden.
 3. **Benchmarks.** Competitors cite LongMemEval-style numbers. KB Factory has
-   none; consider a small, honest task-continuity demonstration rather than a
-   contrived benchmark claim.
+   bounded results, collected in [evidence.md](evidence.md). On LongMemEval M,
+   the optional dense list reaches the session recall of the paper's dense
+   retriever with zero margin, inside the measurement's calibration error, and
+   words plus agent query expansion reach the same target without it. Two
+   pre-registered counterfactual experiments on real projects show that the
+   value sits in the curated content, which a plain Markdown export matched.
+   None of this is a head-to-head comparison with the systems above or a claim
+   of general superiority.
 4. **Cross-agent continuity proof.** The cross-conversation/cross-agent claim
    needs a concrete, reproducible demo (see [provenance-and-continuity.md](provenance-and-continuity.md)).
 

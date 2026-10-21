@@ -1,11 +1,14 @@
 # Command Reference
 
-This is the authoritative reference for the KB Factory CLI. Every command runs
-through one entry point:
+This is the authoritative reference for the KB Factory CLI. Every classic
+command runs through one entry point:
 
 ```bash
 python .kb/kb.py <command> [options]
 ```
+
+Projects that activate KB/Wiki vNext also have a second entry point, the vNext
+runtime; see [KB/Wiki vNext runtime](#kbwiki-vnext-runtime).
 
 It is stdlib-only (Python 3.8+ and SQLite with FTS5) — no service, no API key,
 works offline. Records are **typed** and **append-only**: you supersede, you
@@ -51,24 +54,36 @@ tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
 ## Slash commands (in a chat session)
 
-If you drive KB Factory through a [plugin](plugins.md) in Claude Code or Cowork,
-you use **slash commands** (and an auto-triggering skill) instead of typing the
-CLI — but they run exactly the CLI verbs documented on this page. See
+If you drive KB Factory through a [plugin](plugins.md) in Claude Code, Cowork or
+Codex, you use plugin commands (and an auto-triggering skill) instead of typing
+the CLI. They call the classic verbs documented on this page, and the
+kb-wiki-vnext commands also call the [vNext runtime](#kbwiki-vnext-runtime). In
+a project with vNext active, the write gate denies an agent's direct `create`,
+`file`, `supersede` and `update`: the agent files new records and supersessions
+through `filing-proposal`, and HOT demotions through `semantic-hygiene`, then
+applies them with `proposal-apply` after you approve. See
 [agent-sessions.md](agent-sessions.md) for the workflow.
 
-- **kb-lifecycle** — no slash commands; its `kb-wiki-maintainer` skill auto-runs
-  session-start, `ingest`, `create`/`file`, `search`, and `wiki-sync` when you
-  ask in plain language.
-- **kb-wiki-vnext** — 13 commands:
+The names below are logical basenames, not one literal invocation for every
+client. Claude Code prefixes each plugin command with its plugin name (for
+example `/kb-wiki-vnext:vnext-session-start`); Codex runs them through the
+plugin's skill when you ask in natural language; Cowork uses the action its
+plugin UI exposes. Do not count on a bare alias such as `/vnext-session-start`
+in every client.
+
+- **kb-lifecycle**: no plugin commands; its `kb-wiki-maintainer` skill runs the
+  classic session start, `ingest`, `create`/`file`, `search`, and `wiki-sync`
+  when you ask in plain language.
+- **kb-wiki-vnext**: 13 commands:
 
   | Command(s) | Does |
   |---|---|
-  | `/vnext-session-start`, `/vnext-session-end` | start a thin session / close it |
-  | `/new-project-wizard`, `/new-project-init-kb-alone`, `/new-project-init-kb-wiki`, `/new-project-verify-install` | bootstrap a new project |
-  | `/existing-project-diagnose`, `/existing-project-activate-vnext`, `/existing-project-configure-vnext`, `/existing-project-verify-install`, `/existing-project-upgrade-vnext`, `/existing-project-rollback-vnext` | set up / migrate an existing project |
-  | `/vnext-wiki-drafts` | draft and review vNext wiki pages for topics that need them |
+  | `vnext-session-start`, `vnext-session-end` | start a thin session / close it |
+  | `new-project-wizard`, `new-project-init-kb-alone`, `new-project-init-kb-wiki`, `new-project-verify-install` | bootstrap a new project |
+  | `existing-project-diagnose`, `existing-project-activate-vnext`, `existing-project-configure-vnext`, `existing-project-verify-install`, `existing-project-upgrade-vnext`, `existing-project-rollback-vnext` | set up / migrate an existing project |
+  | `vnext-wiki-drafts` | draft and review vNext wiki pages for topics that need them |
 
-- **session-gate** — `/gate-session-start`, `/gate-session-end` (Cowork session
+- **session-gate**: `gate-session-start`, `gate-session-end` (Cowork session
   boundaries; routes to whichever KB plugins are present).
 
 Full per-plugin detail and when to use each: [plugins.md](plugins.md).
@@ -139,6 +154,8 @@ Filters: `--category`, `--domain`, `--status`, `--tier`, `--limit` (default 20),
 > Search is **lexical**, not semantic — it matches words and phrases, not
 > meaning. There is no embedding or vector recall. If you need paraphrase or
 > relational recall, see the alternatives in [comparison](comparison.md).
+> KB/Wiki vNext `lookup` has an optional dense list; see
+> [KB/Wiki vNext runtime](#kbwiki-vnext-runtime).
 
 ### `get`
 
@@ -474,6 +491,58 @@ not need these and can stick to `create`.
 | `filing-policy` | Show the active filing policy (`--json`) |
 | `analysis-status` | Coverage of analysis filings (`--domain`, `--json`) |
 | `summarize-status` | Summarization coverage by domain (`--domain`, `--json`) |
+
+---
+
+## KB/Wiki vNext runtime
+
+Projects that activate KB/Wiki vNext have a second entry point next to
+`.kb/kb.py`. The `kb-wiki-vnext` plugin installs it into the workspace through
+the runtime `bootstrap` subcommand (`kb-factory vnext-init` does the same from
+the pip package). Every vNext command runs through it, for example the session
+start:
+
+```bash
+python .kb-next/runtime/kb_next.py session-start --json
+```
+
+`.kb/` stays canonical. The vNext runtime reads it and writes only under
+`.kb-next/`, except for an approved `proposal-apply`. The commands below change
+everyday use; every command, with examples and risks, is in the
+[vNext usage guide](../products/kb-wiki-vnext/docs/en/usage-guide.md).
+
+| Command | What it does |
+|---|---|
+| `lookup` | Ranked read-only retrieval by facet (`decisions`, `learnings`, `definitions`, `open-items`, `status`). It ranks with an FTS5 word list (BM25) fused by Reciprocal Rank Fusion. `--lists words,trigram` adds a trigram substring list for one call; `--lists words,dense` adds the optional dense list. Appends one line to `.kb-next/operations.jsonl`. |
+| `dense-index` | Builds or refreshes the optional local dense (embedding) index under `.kb-next/index/dense/`. Needs `pip install model2vec==0.10.0`; `--fetch-model` downloads the pinned model once, `--rebuild` starts over. `lookup` fuses it by default only when `retrieval.dense.enabled` is `true` in `.kb-next/kb-next.config.json`. Off by default. A cold lookup costs about 3 s more with `potion-base-32M`; `potion-multilingual-128M` takes about 11.7 s per cold lookup and is not recommended. |
+| `filing-proposal` | Turns a candidate record into a governed proposal under `.kb-next/proposals`; it does not write `.kb/`. |
+| `proposal-apply` | Applies a reviewed proposal through `.kb/kb.py` after explicit approval, with `--approve`, `--approval-note`, `--actor` (who approves) and `--actor-runtime` (`claude-code`, `codex`, `cowork` or `human`). A project with one usual approver can set `proposal_apply.default_actor` in `.kb-next/kb-next.config.json`; `--actor` then defaults to it, and `--actor-runtime` stays required. |
+| `semantic-hygiene` | Report-only review of HOT overflow by default; a reviewed second pass with `--judgment` and `--write-proposals` writes hygiene proposals. The output carries `review_budget`: at most `semantic_curation.weekly_hygiene_proposals` open proposals per project per 7 days (default 5); the rest are listed under `deferred`. |
+| `subagent-hint` | Prints the SubagentStart hook JSON. Subagents never write the KB and end their report with `KB candidates`; the main agent pastes the records that bear on the subtask into the brief under `KB records`. |
+
+A ranked lookup with the trigram list added:
+
+```bash
+python .kb-next/runtime/kb_next.py lookup --facet decisions --query "storage" --limit 5 --lists words,trigram --json
+```
+
+Applying a reviewed proposal (replace both placeholder values with the reviewed
+proposal id and the approver):
+
+```bash
+python .kb-next/runtime/kb_next.py proposal-apply --proposal replace-with-reviewed-proposal-id --approve --approval-note "Approved after review" --actor replace-with-approver-id --actor-runtime human --json
+```
+
+**Write gate.** In a project with `.kb-next/kb-next.config.json`, the
+kb-wiki-vnext plugin's PreToolUse hook denies an agent shell command that runs
+`.kb/kb.py create`, `file`, `supersede` or `update`, and names
+`filing-proposal`, `semantic-hygiene` and `proposal-apply` instead. Reads and
+the other classic commands pass, and classic-only projects are not gated. The
+hook steers agents; it does not authenticate them. Claude Code runs it as
+installed; Codex runs a plugin hook only after you trust it, so check that the
+PreToolUse hook of kb-wiki-vnext is trusted in Codex. A project owner can turn it
+off with `{"write_gate": {"enabled": false}}` merged into
+`.kb-next/kb-next.config.json`.
 
 ---
 
