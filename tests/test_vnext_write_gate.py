@@ -306,7 +306,8 @@ def vnext_json(root: Path, *argv: str) -> dict:
 def file_and_apply(root: Path, judgment: dict) -> tuple[dict, dict | None]:
     """Run the deny's two commands: filing-proposal, then proposal-apply when the filing is valid."""
     candidate = root / "candidate.json"
-    candidate.write_text(json.dumps({k: judgment["record_draft"][k] for k in ("title", "content")} | {"source": "notes.md"}), encoding="utf-8")
+    draft = {k: judgment["record_draft"][k] for k in ("title", "content")}
+    candidate.write_text(json.dumps({**draft, "source": "notes.md"}), encoding="utf-8")
     judgment_path = root / "judgment.json"
     judgment_path.write_text(json.dumps(judgment), encoding="utf-8")
     filed = vnext_json(
