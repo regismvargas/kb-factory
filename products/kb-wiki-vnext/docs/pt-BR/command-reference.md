@@ -48,6 +48,7 @@ Comandos apenas de runtime:
 | `upgrade-classic` | atualizar só `.kb/kb.py` e `.kb/runtime/*.py` a partir do scaffold encontrado | só arquivos do motor; nunca `kb.db`, dados ou `kb.config.json` |
 | `wiki-draft-status` | listar tópicos do wiki que precisam de síntese, revisão ou atualização | somente leitura |
 | `session-hint` | texto do hook SessionStart para workspaces vNext | somente leitura; não imprime nada fora de workspaces vNext |
+| `subagent-hint` | JSON do hook SubagentStart para workspaces vNext: o contrato de KB do subagente e um comando de lookup | somente leitura; não imprime nada fora de workspaces vNext |
 
 `.kb/` continua sendo memória durável canônica. `.kb-next/` continua sendo
 estado governado de proposta, evidência, draft, materialização e operações.

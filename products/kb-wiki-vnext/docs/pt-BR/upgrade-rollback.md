@@ -63,6 +63,45 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrade Para 0.2.1 (Runtime 0.2.1)
+
+Esta versão acrescenta a ponte de memória para subagentes, o gate de escrita e
+a curadoria automática, e marca o modelo denso multilíngue como não
+recomendado. Não muda dados nem schema.
+
+- Ponte para subagentes: a skill e o `AGENTS.md` pedem ao agente principal que
+  ponha records da KB nos briefs de subagentes e que registre os
+  `KB candidates` que eles relatam; o plugin do Claude Code acrescenta um hook
+  `SubagentStart` (runtime `subagent-hint`).
+- Gate de escrita: um hook `PreToolUse` (`scripts/write_gate.py`, Bash e
+  PowerShell) nega `.kb/kb.py create`, `file`, `supersede` ou `update` vindos
+  de um agente num projeto vNext e indica o caminho das propostas. O dono do
+  projeto pode desligá-lo com `{"write_gate": {"enabled": false}}` em
+  `.kb-next/kb-next.config.json`.
+- `filing-proposal` agora bloqueia a proveniência que o `proposal-apply`
+  recusaria (caminho de arquivo, URL ou id desconhecido); cite um `record_id`
+  existente ou o `source_id` de um arquivo registrado com
+  `python .kb/kb.py ingest <caminho> --json`.
+- Curadoria: o `vnext-session-end` roda a detecção de higiene somente leitura
+  e grava propostas de higiene julgadas, no máximo
+  `semantic_curation.weekly_hygiene_proposals` (padrão 5) abertas por projeto
+  em 7 dias; o `semantic-hygiene` reporta `review_budget`, `already_open` e
+  `deferred`.
+- `dense-index` e o lookup denso avisam enquanto `potion-multilingual-128M`
+  estiver configurado; o modelo fica fixado até a 0.3.
+
+1. Instale o ZIP do plugin 0.2.1 ou a entrada do marketplace; os hooks valem a
+   partir da próxima sessão do Claude Code. O Codex pede confiança nos hooks
+   alterados antes de rodá-los.
+2. Onde o projeto fixa um runtime local, atualize-o:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (espere `runtime_version` `0.2.1`).
+
+Rollback: reinstale o plugin 0.2.0 e rode `bootstrap` a partir do runtime dele.
+Nada a desfazer em `.kb/`; as propostas de higiene gravadas pela 0.2.1 ficam em
+`.kb-next/proposals/hygiene` como evidência de revisão, e os hooks não escrevem
+nada.
+
 ## Upgrade Para 0.2.0 (Runtime 0.2.0)
 
 Esta versão quebra a linha de comando do `proposal-apply`: todo apply precisa
@@ -106,10 +145,14 @@ python .\.kb-next\runtime\kb_next.py --project-root . lookup --facet status --qu
 ```
 
    Antes do `dense-index`, ponha `retrieval.dense.enabled` em `true` em
-   `.kb-next/kb-next.config.json` e `retrieval.dense.model` em
-   `potion-multilingual-128M` para conteúdo em português ou `potion-base-32M`
-   para inglês (o padrão), para que o índice seja construído com esse modelo.
-   O modelo é baixado uma vez para `~/.cache/kb-factory/models` (ou
+   `.kb-next/kb-next.config.json` e mantenha `retrieval.dense.model` em
+   `potion-base-32M` (o padrão), para que o índice seja construído com esse
+   modelo. `potion-multilingual-128M` não é recomendado: um lookup a frio na
+   linha de comando custa cerca de 11,7 s com ele, contra 0,5 s só com
+   palavras, e a expansão de consulta pelo agente alcança os mesmos sinônimos
+   em português sem custo. Ele fica fixado até a 0.3 para que índices
+   existentes continuem carregando, e `dense-index` e `lookup` imprimem um
+   aviso enquanto ele estiver configurado. O modelo é baixado uma vez para `~/.cache/kb-factory/models` (ou
    `KBF_MODEL_CACHE`), fora do projeto, e `.kb-next/index/` se ignora no Git.
    A verificação com `lookup` precisa listar `dense` em `retrieval.lists`, sem
    aviso. Rode `python .kb-next/runtime/kb_next.py dense-index --json` de novo

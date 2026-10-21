@@ -43,6 +43,41 @@ release gates.
    planning, editing, review, packaging, rollout, or Track B work. Simple
    operational use does not require this development preflight.
 
+## Subagents
+
+A subagent (Claude Code `Agent` tool, Codex `spawn_agent`) starts without the
+KB. The main agent stays its only writer.
+
+1. Before launching one, run `lookup` for the subtask with a widened query
+   (step 5):
+   `python <resolved-runtime-path> lookup --facet status --query "<words>" --limit 8 --json`.
+   Paste the records that bear on the subtask into the brief under a
+   `KB records` heading, one line each: id, title, excerpt and source. Write
+   `none found` when nothing fits, so the subagent does not repeat the search.
+   Leave the section out only when the brief isolates the subagent on purpose
+   (blind grading, held-out authoring, no-tool tasks).
+2. Say in the brief that the subagent must not write to the KB, and that its
+   report ends with a `KB candidates` section: each fact, decision or learning
+   worth keeping, one line each with its source (file and line, command, URL
+   or person), or `none`.
+3. A subagent with a shell may run the same `lookup` itself. It does not
+   change `.kb/`; it appends one line to `.kb-next/operations.jsonl`. No other
+   KB command runs in a subagent: not `filing-proposal`, not `proposal-apply`,
+   not a `.kb/kb.py` command that changes records.
+4. When the report comes back, turn each candidate you keep into a proposal,
+   with `candidate.json` holding `title`, `content` and `source`:
+   `python <resolved-runtime-path> filing-proposal --input @candidate.json --category FATO --domain <domain> --json`
+   (`DECISAO` for a decision, `APRENDIZADO` for a learning). Note a reason for
+   each candidate you drop. `vnext-session-end` lists candidates left with
+   neither.
+5. In Claude Code the plugin's `SubagentStart` hook (runtime `subagent-hint`)
+   shows rules 2 and 3 and the lookup command to every subagent in a vNext
+   workspace. It is a backstop, not a substitute: subagents follow it less
+   reliably than the brief, so the brief still states rules 2 and 3. Its rules
+   yield to a brief that forbids commands or fixes the output format, so an
+   isolated brief should say so in words. The hook cannot see the brief and
+   adds no records; picking them is rule 1. Codex has no such hook.
+
 ## Boundaries
 
 - Treat `.kb/` records as canonical durable memory.
@@ -55,8 +90,26 @@ release gates.
   generates that directory from records.
 - New projects get their classic `.kb/` from `install-classic`, never from a
   hand-copied template.
-- Apply durable changes only through `proposal-apply` with explicit approval or
-  through the classic `.kb/kb.py` runtime.
+- Change canonical records only through a proposal and then `proposal-apply`
+  after the approver says yes. Do not run `.kb/kb.py create`, `file`,
+  `supersede` or `update` yourself. In Claude Code the plugin's PreToolUse
+  hook denies them in a vNext project and names the proposal commands (Codex
+  runs the same hook once it is trusted); the rule holds where the hook does
+  not run. A new record or a content change starts with
+  `python <resolved-runtime-path> filing-proposal --input @candidate.json --category <CATEGORY> --domain <domain> --judgment @judgment.json --json`
+  (`judgment.json` holds `action` `new` or `supersede`, a `record_draft` with
+  `category`, `domain`, `title` and `content`, plus `supersedes_id` for a
+  supersede, `confidence`, `rationale` and `provenance` as a list of
+  `{"record_id": "<existing id>"}` or `{"source_id": "<SRC id>"}`). A file
+  path or URL is not provenance: register a file first with
+  `python .kb/kb.py ingest <path> --json` and cite its `source_id`. A HOT
+  demotion or a resolved open item starts with `semantic-hygiene` (see
+  Curation below). Then
+  `python <resolved-runtime-path> proposal-apply --proposal <proposal_id> --approve --approval-note "<who approved and why>" --actor-runtime claude-code --json`
+  applies it (`--actor-runtime codex` or `cowork` in those clients, `--actor`
+  as the next rule says). A metadata-only edit
+  (tags, confidence, review dates) has no proposal path: give the user the
+  command to run in their own terminal.
 - `proposal-apply` requires `--actor <id>` and `--actor-runtime
   <claude-code|codex|cowork|human>`. `--actor` is the person who approved the
   proposal; ask when it is unknown and never invent or reuse one from docs.
@@ -67,9 +120,40 @@ release gates.
   `--actor-runtime` is the runtime that runs the apply (`claude-code`,
   `codex` or `cowork` for an agent). Proposal commands accept the same pair
   as an option to record who generated the proposal.
-- For HOT overflow or memory hygiene, prefer read-only `hygiene-audit` first;
-  use `semantic-hygiene --write-proposals` only for governed `.kb-next`
-  proposals, not automatic demotion.
+- For HOT overflow or memory hygiene, follow Curation below: read-only
+  detection first, then governed `.kb-next` proposals, never automatic
+  demotion.
+
+## Curation
+
+Detection runs by itself; corrections are proposals the user approves.
+
+1. At every session end (`vnext-session-end`) and in the weekly maintenance
+   run, detect with `python .kb/kb.py hygiene-audit --json` and
+   `python <resolved-runtime-path> semantic-hygiene --json`. Neither changes
+   `.kb/` or writes a proposal.
+2. When `review_budget.room` is above zero, classify at most that many
+   candidates that are not in `review_budget.open`, taken from the records
+   `semantic-hygiene` returned (it drops others), and write the batch with
+   `python <resolved-runtime-path> semantic-hygiene --judgment @hygiene-judgment.json --write-proposals --json`.
+   Per project the runtime keeps at most
+   `semantic_curation.weekly_hygiene_proposals` (default 5) valid hygiene
+   proposals open over 7 days, skips a target that already has one and lists
+   the rest under `deferred`.
+3. Never apply in the detection step. In the weekly review, show each open
+   proposal (target, action, rationale) and apply only the ones the user
+   approves with
+   `python <resolved-runtime-path> proposal-apply --proposal <proposal_id> --approve --approval-note "<who approved and why>" --actor-runtime claude-code --json`,
+   with `--actor-runtime codex` or `cowork` in those clients and
+   `--actor <id>` unless `proposal_apply.default_actor` names the approver.
+   A proposal leaves the queue when it is applied, when its target changed by
+   other means, or after 7 days; detection may then propose it again.
+4. The weekly maintenance run is an agent session (a scheduled Claude Code or
+   Codex task in the project), because step 2 needs judgment; a plain
+   scheduler can only run step 1. In a vNext project it uses
+   `python .kb/kb.py lifecycle session-end --json` for exports and the wiki,
+   not `lifecycle scheduled-maintenance`, whose default config demotes stale
+   HOT records without a proposal.
 
 ## Review Checklist
 

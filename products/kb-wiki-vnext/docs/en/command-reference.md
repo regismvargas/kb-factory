@@ -48,6 +48,7 @@ Runtime-only commands:
 | `upgrade-classic` | refresh only `.kb/kb.py` and `.kb/runtime/*.py` from the discovered scaffold | engine files only; never `kb.db`, data or `kb.config.json` |
 | `wiki-draft-status` | list wiki topics that need synthesis, review or refresh | read-only |
 | `session-hint` | SessionStart hook text for vNext workspaces | read-only; prints nothing outside vNext workspaces |
+| `subagent-hint` | SubagentStart hook JSON for vNext workspaces: the subagent KB contract and a lookup command | read-only; prints nothing outside vNext workspaces |
 
 Classic `.kb/` remains canonical durable memory. `.kb-next/` remains governed
 proposal, evidence, draft, materialization, and operations state.

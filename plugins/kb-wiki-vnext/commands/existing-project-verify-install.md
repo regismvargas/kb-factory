@@ -30,7 +30,9 @@ operational evidence to `.kb-next/operations.jsonl`.
 5. If a runtime resolved, run a deterministic lookup:
    `python <resolved-runtime-path> lookup --facet status --query "status atual" --json`
 6. Confirm vNext made no direct `.kb/kb.db` edit. Canonical writes go only
-   through `.kb/kb.py` or approved `proposal-apply`.
+   through approved `proposal-apply`, which runs the classic `.kb/kb.py`
+   itself; the plugin's PreToolUse hook denies an agent's direct
+   `.kb/kb.py create`, `file`, `supersede` or `update` in this project.
 7. Check the wiki layer against the activation mode reported by
    `session-start`:
    - `kb_alone`: `wiki.status` is `aligned` or `classic_wiki_independent`.

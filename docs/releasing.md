@@ -9,13 +9,13 @@ The coordinated release has independent version lines:
 
 | Surface | Version |
 |---|---:|
-| GitHub/Python release | `0.2.0` |
-| Marketplace metadata | `0.3.11` |
+| GitHub/Python release | `0.2.1` |
+| Marketplace metadata | `0.3.12` |
 | kb-lifecycle | `0.2.5` |
-| kb-wiki-vnext plugin | `0.2.0` |
+| kb-wiki-vnext plugin | `0.2.1` |
 | session-gate | `0.2.8` |
-| vNext runtime | `0.2.0` |
-| vNext stand-alone product | `0.2.0-rc.4` |
+| vNext runtime | `0.2.1` |
+| vNext stand-alone product | `0.2.0-rc.5` |
 
 ## 1. Validate the source tree
 
@@ -59,9 +59,9 @@ python tools/organize_agent_packages.py --check
 ## 3. Build and validate the stand-alone product
 
 ```bash
-python tools/build_vnext_standalone.py --version 0.2.0-rc.4
+python tools/build_vnext_standalone.py --version 0.2.0-rc.5
 python tools/validate_vnext_product.py --json \
-  --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.4-standalone.zip
+  --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.5-standalone.zip
 ```
 
 The bundle contains the public product docs, plugin, runtime, classic template,
@@ -73,18 +73,18 @@ writes a SHA-256 sidecar.
 
 ```bash
 python -m build
-python -m twine check dist/kb_factory-0.2.0*
+python -m twine check dist/kb_factory-0.2.1*
 ```
 
 Inspect the wheel and source distribution before publication. They must include
 `kb_factory/_scaffold/kb.py`, the classic runtime mirror, and
 `kb_factory/_scaffold_vnext/runtime/kb_next.py`.
 
-For `v0.2.0`, attach the wheel and source distribution to the GitHub release.
+For `v0.2.1`, attach the wheel and source distribution to the GitHub release.
 The supported install command is:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.0/kb_factory-0.2.0-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.1/kb_factory-0.2.1-py3-none-any.whl
 ```
 
 PyPI is optional. Upload only when a project token or trusted-publishing flow is
@@ -96,7 +96,7 @@ is visible on PyPI.
 After CI is green on the release commit:
 
 1. Fast-forward `main` to the validated commit.
-2. Create and push tag `v0.2.0`.
+2. Create and push tag `v0.2.1`.
 3. Create the GitHub release from `CHANGELOG.md`.
 4. Attach the nine plugin ZIPs, platform manifest, stand-alone ZIP and checksum,
    wheel, and source distribution.
