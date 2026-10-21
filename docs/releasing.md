@@ -19,7 +19,8 @@ The coordinated release has independent version lines:
 
 ## 1. Validate the source tree
 
-Run from a clean public checkout:
+Run from a clean public checkout (for a release, the detached worktree described
+in [Publish](#5-publish)):
 
 ```bash
 claude plugin validate .
@@ -93,14 +94,30 @@ is visible on PyPI.
 
 ## 5. Publish
 
-After CI is green on the release commit:
+Public `main` is protected by the `protect-main` ruleset: every change lands
+through a pull request with the 10 CI checks green (the nine `pytest` matrix
+jobs plus `public release artifacts`), with no bypass and no force push. You
+cannot push or fast-forward `main` to the release commit directly.
 
-1. Fast-forward `main` to the validated commit.
-2. Create and push tag `v0.2.1`.
-3. Create the GitHub release from `CHANGELOG.md`.
-4. Attach the nine plugin ZIPs, platform manifest, stand-alone ZIP and checksum,
+Prepare and validate the release commit in a detached worktree, then push it
+as the release branch:
+
+```bash
+git push origin HEAD:refs/heads/release/v0.2.1
+```
+
+1. Open a pull request from `release/v0.2.1` to `main` and wait for the 10
+   checks to pass on it.
+2. Merge with **rebase and merge**, so `main` gets the validated tree without a
+   merge commit. After `git fetch origin`, confirm that
+   `git rev-parse 'origin/main^{tree}'` equals `git rev-parse 'HEAD^{tree}'` in
+   the release worktree.
+3. Create and push tag `v0.2.1` on the commit that the rebase merge put on
+   `main`.
+4. Create the GitHub release from `CHANGELOG.md`.
+5. Attach the nine plugin ZIPs, platform manifest, stand-alone ZIP and checksum,
    wheel, and source distribution.
-5. Download representative assets and verify their SHA-256 values and archive
+6. Download representative assets and verify their SHA-256 values and archive
    inventories.
 
 Restarting Codex or Claude does not change a plugin's marketplace source or

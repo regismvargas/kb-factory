@@ -67,7 +67,9 @@ project. Each stored note ("record") also carries a **domain** (a workstream you
 define, like `architecture` or `billing` — pick 4 to 12), a title, the content,
 a status, a tier, a source link, tags, and timestamps. Creating one by hand is
 `python .kb/kb.py create --category FATO --domain infra --title "…" --content "…"`,
-but in chat you never type that — you just ask, and the plugin runs it. See the
+but in chat you never type that: you just ask, and the plugin runs it (with
+KB/Wiki vNext active, the agent files it through a proposal you approve,
+`filing-proposal` then `proposal-apply`, instead of running `create`). See the
 full set in the [command reference](../commands.md) and the deeper writeup in
 [concepts](../concepts.md).
 
@@ -282,8 +284,10 @@ meaning-based or relational recall, KB Factory may be the wrong tool — see the
 
 <details><summary>Under the hood / for the CLI</summary>
 
-Search is lexical full-text search over a SQLite FTS5 index — no embeddings, no
-semantic recall in the runtime. The mechanical hygiene pass `consolidate` only
+By default, search is lexical full-text search over a SQLite FTS5 index, ranked
+by BM25. KB/Wiki vNext `lookup` can add an optional local dense (embedding)
+list, off by default, at about 3 s extra per cold lookup; even then, semantic
+judgment stays with the agent. The mechanical hygiene pass `consolidate` only
 does exact lowercased-title dedupe, date-based tier demotion, and integrity
 reconciliation; it never merges records that *mean* the same thing. Semantic
 merging and supersession run through an LLM-proposes / runtime-validates pipeline.

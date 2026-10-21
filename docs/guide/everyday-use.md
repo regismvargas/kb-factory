@@ -21,6 +21,14 @@ You never have to type a command. You ask, the agent runs the right thing. If
 you *want* to drive it from a terminal yourself, every step has a CLI equivalent
 in a collapsible block below — but lead with the conversation.
 
+Those blocks show the classic commands. If your project has KB/Wiki vNext
+active, the kb-wiki-vnext plugin's write gate denies an agent's direct `create`,
+`file`, `supersede` and `update`. New records and supersessions go through a
+`filing-proposal`, and a HOT demotion through `semantic-hygiene`; the agent
+shows you the proposal and applies it with `proposal-apply` once you approve.
+Other `update` edits, such as a retag, have no proposal path. Classic-only
+projects run the commands as shown.
+
 > If your project doesn't actually need an auditable *history* — what was
 > believed, what changed it, when — then a `CLAUDE.md` file plus your agent's
 > built-in memory is the simpler, honest choice. KB Factory earns its keep when
@@ -208,13 +216,14 @@ To see what's still unresolved, ask for the open items:
 
 > "What's still open?" / "Show me the unresolved questions in billing."
 
-One honest caveat: **search is lexical, not semantic.** It matches words and
-phrases, not meaning — a search for "auth" won't find a record that only ever
-says "login." There's no embedding model and no fuzzy paraphrase matching. The
-practical consequence flows back to step 2: title and word your records with the
-terms a future search will actually use. If you genuinely need
-paraphrase-tolerant or relational recall, KB Factory is the wrong tool, and the
-[comparison](../comparison.md) page says so plainly.
+One honest caveat: **search is lexical by default, not semantic.** It matches
+words and phrases, not meaning: a search for "auth" won't find a record that
+only ever says "login." The practical consequence flows back to step 2: title
+and word your records with the terms a future search will actually use. With
+KB/Wiki vNext, a maintainer can turn on an optional local dense list that also
+ranks by meaning; it is off by default and adds about 3 seconds to a cold
+lookup. If you genuinely need relational recall, KB Factory is the wrong tool,
+and the [comparison](../comparison.md) page says so plainly.
 
 <details><summary>Under the hood / for the CLI</summary>
 

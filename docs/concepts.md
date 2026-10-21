@@ -132,12 +132,17 @@ verification status, see
 
 ## Search is lexical
 
-Search is **lexical full-text search** over the SQLite FTS5 index — it matches
-words and phrases, not meaning. There is no embedding model and no semantic
-recall: a query for "auth" will not surface a record that only ever says
-"login." Choose titles and content with the words a future search will use. If
-you need paraphrase-tolerant or relational recall, KB Factory is the wrong tool
-(see [comparison](comparison.md)).
+By default, search is **lexical full-text search** over the SQLite FTS5 index,
+ranked by BM25: it matches words and phrases, not meaning. A query for "auth"
+will not surface a record that only ever says "login" unless the query also
+carries that word, so choose titles and content with the words a future search
+will use, and let the agent widen a query with synonyms. KB/Wiki vNext adds an
+optional local dense (embedding) list to its `lookup` that also ranks by
+meaning; it is off by default, needs the extra `pip install model2vec==0.10.0`,
+and adds about 3 s to a cold lookup (see the
+[usage guide](../products/kb-wiki-vnext/docs/en/usage-guide.md#dense-index)).
+If you need relational recall or per-user chatbot memory, KB Factory is the
+wrong tool (see [comparison](comparison.md)).
 
 ## Thin always-loaded context: NOW / HOT / INDEX
 
@@ -231,4 +236,4 @@ Putting it together, a normal session looks like:
 | **Thin context** | The small always-loaded layer (`NOW.md`, `HOT.md`) read at session start, generated from the store. |
 | **Wiki** | An optional, *derived* Markdown view synthesized from records — never canonical. |
 | **Export** | A point-in-time projection of the store (context packs, Cowork / claude.ai surfaces) — not a live sync. |
-| **Lexical search** | Word/phrase matching via SQLite FTS5; no embeddings, no semantic recall. |
+| **Lexical search** | Word/phrase matching via SQLite FTS5, ranked by BM25; the default for every search. vNext `lookup` can add an optional dense (embedding) list, off by default. |

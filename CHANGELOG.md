@@ -7,6 +7,21 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Documentation
+- Public docs brought level with 0.2.0 and 0.2.1: the optional dense list is
+  described where search is discussed; `docs/comparison.md` cites the measured
+  evidence instead of saying there is none; agent workflows name the vNext
+  proposal path and the write gate; `docs/commands.md` gains a KB/Wiki vNext
+  runtime section; the subagent boundary is in
+  `docs/provenance-and-continuity.md`; the README summarizes the evidence.
+- The Codex CLI `codex plugin` commands replace the "no plugin command"
+  wording in the plugin READMEs and the admin installation guides (en, pt-BR),
+  which 0.2.1 had fixed only in `docs/installation.md`.
+- `docs/releasing.md` describes the pull-request flow that the protected `main`
+  requires instead of a direct fast-forward.
+- The vNext command reference (en, pt-BR) lists the 0.2.x runtime subcommands
+  and the three plugin hooks, and the full `vnext-session-end` sequence.
+
 ## [0.2.1] - 2026-10-20
 
 ### Added

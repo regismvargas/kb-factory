@@ -157,7 +157,8 @@ python .kb/kb.py search "exact words from the record"
 python .kb/kb.py list --category DECISAO --domain architecture
 ```
 
-There is no embedding-based recall — see the FAQ below.
+Classic `kb.py search` has no embedding-based recall; for the optional vNext
+dense list, see the FAQ below.
 
 ### `init` fails or FTS queries error out
 
@@ -217,10 +218,18 @@ bypasses it — but fix the underlying drift rather than making bypass a habit.
 ## FAQ
 
 **Does KB Factory do semantic / embedding search?**
-No. Retrieval is **lexical** via SQLite FTS5 — keyword and prefix matching, no
-embeddings, no vector store, no semantic recall. If you need paraphrase or
-relational recall at scale, a vector- or graph-backed system (Mem0, Zep, Cognee)
-is the right tool. See [comparison](comparison.md).
+Not by default. Retrieval is **lexical** via SQLite FTS5 with BM25 ranking, and
+classic `kb.py search` stays that way. KB/Wiki vNext `lookup` can fuse an
+optional local dense (embedding) list: after `pip install model2vec==0.10.0`,
+build it with the runtime `dense-index` command and set
+`retrieval.dense.enabled` to `true` in `.kb-next/kb-next.config.json`. It adds
+about 3 s to a cold lookup with `potion-base-32M`; with
+`potion-multilingual-128M` a cold lookup takes about 11.7 s (0.5 s words-only),
+so that model is not recommended. See the
+[usage guide](../products/kb-wiki-vnext/docs/en/usage-guide.md#dense-index).
+For per-user chatbot recall or relational recall at scale, a vector- or
+graph-backed system (Mem0, Zep, Cognee) is the right tool. See
+[comparison](comparison.md).
 
 **Is `consolidate` "smart"? Will it clean up my KB by understanding it?**
 No. `consolidate` is purely **mechanical**: exact lowercased-title dedupe,

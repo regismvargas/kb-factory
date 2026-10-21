@@ -18,12 +18,19 @@ one, two, or all three.
 | Plugin | What it owns | Slash commands | Auto-triggering skill | Session hook | Platforms |
 |---|---|---|---|---|---|
 | **kb-lifecycle** | the everyday `.kb/` workflow | — (skill-driven) | `kb-wiki-maintainer` | ✅ SessionStart (Claude Code) | Code · Cowork · Codex |
-| **kb-wiki-vnext** | thin-session model + governed proposals (`.kb-next/`) | **13** (`/vnext-*`, `/existing-project-*`, `/new-project-*`) | `kb-wiki-vnext` | informational only | Code · Cowork · Codex |
+| **kb-wiki-vnext** | thin-session model + governed proposals (`.kb-next/`) | **13** (`/vnext-*`, `/existing-project-*`, `/new-project-*`) | `kb-wiki-vnext` | SessionStart hint, SubagentStart rule, write gate | Code · Cowork · Codex |
 | **session-gate** | nothing — detects & routes | **2** (`/gate-session-start`, `/gate-session-end`) | `session-gate` | — | Cowork (primarily) · Code · Codex |
 
 **The short version:** start with **kb-lifecycle** (the everyday workflow). Add
 **session-gate** if you work in **Cowork** (which doesn't auto-fire hooks). Add
 **kb-wiki-vnext** if you want the thin-session model and governed proposals.
+
+> **Command names.** This page writes plugin commands as `/name` for short.
+> They are logical basenames, not one literal invocation for every client:
+> Claude Code prefixes each with its plugin name (for example
+> `/kb-wiki-vnext:vnext-session-start`), Codex runs them through the plugin's
+> skill when you ask in natural language, and Cowork uses the action its plugin
+> UI exposes. Do not count on the short `/name` form in every client.
 
 ---
 
@@ -59,8 +66,12 @@ its working state (proposals, manifests, draft wiki) in a separate `.kb-next/`.
 
 - **Skill — `kb-wiki-vnext`:** auto-triggers for thin-session work, targeted
   lookup, proposal review/apply, and project setup.
-- **Session hook:** informational only (prints a reminder to run the
-  session-start command).
+- **Hooks, where the client supports them:** a SessionStart hook prints the
+  vNext startup guidance in vNext workspaces; a SubagentStart hook tells every
+  Claude Code subagent not to write the KB and to end its report with
+  `KB candidates`; a PreToolUse write gate denies an agent's direct
+  `.kb/kb.py create`, `file`, `supersede` or `update` in a vNext project and
+  points to the proposal path (Codex runs it only after you trust the hook).
 - **Platforms:** Claude Code, Claude Cowork, Codex.
 - **Use it when:** you want the thin-session model, you're **setting up or
   migrating a project**, or you want changes to go through a review/proposal step
@@ -69,7 +80,9 @@ its working state (proposals, manifests, draft wiki) in a separate `.kb-next/`.
 **Slash commands (13):**
 
 *Session*
-- `/vnext-session-start` — start a thin session; read only `NOW.md` by default.
+- `/vnext-session-start` (Claude Code: `/kb-wiki-vnext:vnext-session-start`;
+  Codex: the `kb-wiki-vnext` skill): start a thin session; read only `NOW.md`
+  by default.
 - `/vnext-session-end` — close the session, recording useful evidence; durable
   changes are routed through the governed apply step, not written silently.
 
@@ -110,7 +123,9 @@ canonical `.kb/` after an explicit apply step. The relevant capabilities are
 review of HOT overflow / duplicates / stale items), the proposal → apply flow,
 and `compliance-preflight` (a checklist gate for development work). Day-to-day
 users don't need these; they exist so durable memory is never mutated
-un-reviewed. See [commands.md](commands.md) for the underlying CLI verbs.
+un-reviewed, and the write gate keeps agents on that path. See
+[commands.md](commands.md#kbwiki-vnext-runtime) for the vNext runtime commands
+and the write gate.
 
 ---
 
@@ -123,8 +138,9 @@ session-boundary entry point. It **owns nothing** — it detects which subsystem
 are present (`.kb/`, `.kb-next/`) and routes startup and
 closeout to them.
 
-- **Slash commands (2):**
-  - `/gate-session-start` — detect the workspace, then route to the right
+- **Commands (2)**, invoked per client as described under
+  [Command names](#at-a-glance):
+  - `/gate-session-start`: detect the workspace, then route to the right
     startup (kb-wiki-vnext first if present, else kb-lifecycle), and present a
     briefing of only the subsystems that actually exist.
   - `/gate-session-end` — detect, run a pre-close audit, route the matching

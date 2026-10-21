@@ -202,7 +202,9 @@ Everything above maps to a small, plain-Python toolkit — no magic:
   `python .kb/kb.py supersede <id> ...`. The full surface — including the
   optional derived **wiki** layer and the LLM-curated-but-mechanically-governed
   proposal flow — is in the [command reference](../commands.md) and
-  [concepts](../concepts.md).
+  [concepts](../concepts.md). With KB/Wiki vNext active, the record and
+  supersede writes go through a proposal you approve (`filing-proposal`, then
+  `proposal-apply`) instead.
 
 One caveat worth stating plainly: `consolidate` is *mechanical* hygiene
 (exact-title dedupe + age-based tier demotion + integrity checks), **not**

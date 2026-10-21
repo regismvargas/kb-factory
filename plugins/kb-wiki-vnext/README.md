@@ -87,10 +87,18 @@ embedded skill; Cowork uses the action exposed by its UI or the skill in
 natural language. Existing and new project setup commands ship under explicit
 `existing-project-*` and `new-project-*` names.
 
-The Codex CLI has no plugin-management command. Use the Codex app Plugins
-settings with the public marketplace, or upload
-`kb-wiki-vnext-plugin-0.2.0.zip` when the app exposes file-based installation.
-For a skill-only fallback, copy `skills/kb-wiki-vnext/` into
+The Codex CLI manages plugins from the command line (checked on codex-cli
+0.156.1). Add the public marketplace once, then install the plugin:
+
+```bash
+codex plugin marketplace add regismvargas/kb-factory
+codex plugin add kb-wiki-vnext@kb-factory-tools
+```
+
+After a release, `codex plugin marketplace upgrade kb-factory-tools` refreshes
+the marketplace snapshot. In the Codex app, the Plugins settings do the same,
+or upload `kb-wiki-vnext-plugin-0.2.1.zip` when the app exposes file-based
+installation. For a skill-only fallback, copy `skills/kb-wiki-vnext/` into
 `~/.codex/skills/kb-wiki-vnext/`.
 
 ## Troubleshooting

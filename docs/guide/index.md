@@ -68,8 +68,10 @@ python .kb/kb.py supersede <record_id> ...          # replace when meaning chang
 python .kb/kb.py lifecycle session-start --json     # bootstrap, then read NOW.md
 ```
 
-When you use the conversational path, this is exactly what the plugin runs for
-you. The full command-line reference (and how chat phrases map to commands)
+When you use the conversational path in a classic project, this is what the
+plugin runs for you. With KB/Wiki vNext active, the agent files and supersedes
+through a proposal you approve (`filing-proposal`, then `proposal-apply`)
+instead of running `create` or `supersede` itself. The full command-line reference (and how chat phrases map to commands)
 lives in [the command reference](../commands.md) and
 [getting-started](../getting-started.md).
 

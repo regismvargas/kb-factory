@@ -152,9 +152,12 @@ rewrite history.
 provenance links, the append-only/supersession invariants, integrity checks, and
 the operations log are deterministic code. In particular:
 
-- **Search is lexical.** It is SQLite FTS5, not embeddings. There is no semantic
-  recall in the runtime; paraphrased or relational lookup is the LLM's job on top
-  of FTS results.
+- **Search is lexical by default.** Classic `kb.py search` and vNext `lookup`
+  rank SQLite FTS5 matches by BM25. vNext `lookup` can also fuse an optional
+  local dense (embedding) list through Reciprocal Rank Fusion; it is off by
+  default, needs an extra package (`model2vec`), and adds about 3 s to a cold
+  lookup. Neither list makes a semantic judgment: paraphrased or relational
+  lookup is still the LLM's job on top of the ranked results.
 - **`consolidate` is mechanical, not semantic.** It does exact lowercased-title
   dedupe, date-based tier demotion, and integrity housekeeping. It will **not**
   merge two records that *mean* the same thing in different words. The semantic

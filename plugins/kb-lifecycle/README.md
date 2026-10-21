@@ -33,10 +33,18 @@ The plugin is intentionally thin. It does not own durable memory. It points the 
 
 ### Codex
 
-The Codex CLI has no `plugin` or `marketplace` subcommand. In the Codex app,
-use the Plugins settings and the public `regismvargas/kb-factory` marketplace,
+The Codex CLI manages plugins from the command line (checked on codex-cli
+0.156.1). Add the public marketplace once, then install the plugin:
+
+```bash
+codex plugin marketplace add regismvargas/kb-factory
+codex plugin add kb-lifecycle@kb-factory-tools
+```
+
+After a release, `codex plugin marketplace upgrade kb-factory-tools` refreshes
+the marketplace snapshot. In the Codex app, the Plugins settings do the same,
 or upload `kb-lifecycle-plugin-0.2.5.zip` when file-based installation is
-available. CLI-only users can copy `skills/kb-wiki-maintainer/` to
+available. For a skill-only fallback, copy `skills/kb-wiki-maintainer/` to
 `~/.codex/skills/kb-wiki-maintainer/`.
 
 Restarting Codex reloads the installed cache but does not fetch a newer source

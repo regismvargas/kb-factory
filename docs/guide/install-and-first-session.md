@@ -234,13 +234,18 @@ HOT; most things are fine as WARM.
 
 <details><summary>Under the hood / for the CLI</summary>
 
-That request maps to a single CLI call the plugin makes for you:
+In a classic project, that request maps to a single CLI call the plugin makes
+for you:
 
 ```bash
 python .kb/kb.py create --category DECISAO --domain architecture \
   --title "Use SQLite for storage" \
   --content "Local-first, single file, no external services." --tier HOT
 ```
+
+With KB/Wiki vNext active, the agent does not run `create` itself: it writes a
+`filing-proposal`, shows it to you, and files it with `proposal-apply` once you
+approve. The kb-wiki-vnext plugin's write gate denies the direct command.
 
 The five categories are `DECISAO`, `PREMISSA`, `FATO`, `PENDENCIA`,
 `APRENDIZADO` (decision, assumption, fact, open-item, learning). The tiers are
