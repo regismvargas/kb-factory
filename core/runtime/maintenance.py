@@ -6,9 +6,10 @@ import sqlite3
 from pathlib import Path
 
 from .config import load_config
+from .constants import VNEXT_DEMOTIONS_SKIPPED
 from .db import connect, connect_readonly
 from .helpers import log_action, now_iso, row_to_dict, upsert_fts
-from .paths import KB_ROOT
+from .paths import KB_ROOT, vnext_active
 
 
 def build_audit_tiers_result(conn: sqlite3.Connection, config: dict) -> dict:
@@ -351,14 +352,18 @@ def build_consolidate_result(
 ) -> dict:
     duplicates = get_duplicate_groups(conn)
     demoted = []
-    if args.apply_demotions:
+    skipped = bool(args.apply_demotions) and vnext_active()
+    if args.apply_demotions and not skipped:
         demoted = apply_stale_hot_demotions(conn, "Automatic demotion during consolidate")
     refresh_exports()
-    return {
+    result = {
         "duplicates": duplicates,
-        "applied_demotions": args.apply_demotions,
+        "applied_demotions": bool(args.apply_demotions) and not skipped,
         "demoted_records": demoted,
     }
+    if skipped:
+        result["demotions_skipped"] = {"actions": ["apply_demotions"], "reason": VNEXT_DEMOTIONS_SKIPPED}
+    return result
 
 
 def cmd_audit_tiers(args: argparse.Namespace, *, emit) -> None:

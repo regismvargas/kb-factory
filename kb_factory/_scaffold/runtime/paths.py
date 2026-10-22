@@ -107,6 +107,22 @@ def resolve_kb_root(local_kb_root: Path = RUNTIME_KB_ROOT) -> tuple[Path, dict]:
 KB_ROOT, KB_ROOT_INFO = resolve_kb_root()
 CONFIG_PATH = KB_ROOT / "kb.config.json"
 DB_PATH = KB_ROOT / "kb.db"
+VNEXT_CONFIG_REL = Path(".kb-next") / "kb-next.config.json"
+
+
+def vnext_active() -> bool:
+    """True in a KB/Wiki vNext project, where records change only through an approved proposal.
+
+    A KB/Wiki vNext project keeps its config next to the classic `.kb/`. The
+    invoking workspace, the KB it resolves to (shared or local scope) and, for
+    a linked worktree, its main checkout all count, as for the plugin's write
+    gate: activation in any of them governs this KB.
+    """
+    roots = [RUNTIME_KB_ROOT.parent, KB_ROOT.parent]
+    main_root = linked_worktree_main_root(RUNTIME_KB_ROOT.parent)
+    if main_root is not None:
+        roots.append(main_root)
+    return any((root / VNEXT_CONFIG_REL).is_file() for root in roots)
 
 
 def missing_db_message() -> str:

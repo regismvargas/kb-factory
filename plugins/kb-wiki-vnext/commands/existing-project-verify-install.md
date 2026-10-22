@@ -33,7 +33,9 @@ read telemetry to the git-ignored `.kb-next/telemetry/events.jsonl` and leave
 6. Confirm vNext made no direct `.kb/kb.db` edit. Canonical writes go only
    through approved `proposal-apply`, which runs the classic `.kb/kb.py`
    itself; the plugin's PreToolUse hook denies an agent's direct
-   `.kb/kb.py create`, `file`, `supersede` or `update` in this project.
+   `.kb/kb.py create`, `file`, `supersede`, `update`, `resolve` or
+   `bulk-import`, `init --seed`, `raw-query --allow-write` and demotions in
+   this project.
 7. Check the wiki layer against the activation mode reported by
    `session-start`:
    - `kb_alone`: `wiki.status` is `aligned` or `classic_wiki_independent`.

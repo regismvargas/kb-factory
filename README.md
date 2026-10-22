@@ -60,12 +60,12 @@ and write the same `.kb/`.
 
 ## Quickstart (≈60 seconds)
 
-The core is a single stdlib-only CLI. Install v0.2.2 from the GitHub release
+The core is a single stdlib-only CLI. Install v0.2.3 from the GitHub release
 and scaffold a project, or copy the template directly:
 
 ```bash
-# 1. Install v0.2.2 and create a .kb/ in your project (initializes SQLite)
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.2/kb_factory-0.2.2-py3-none-any.whl
+# 1. Install v0.2.3 and create a .kb/ in your project (initializes SQLite)
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.3/kb_factory-0.2.3-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 #   No pip? Copy the scaffold instead:
@@ -114,9 +114,11 @@ changes only routing metadata (tier/tags); when *meaning* changes you
   the operator's/LLM's job.)*
 - **Agent integration** — plugins for Claude Code, Claude Cowork and Codex;
   the same `.kb/` is the canonical store all of them read.
-- **Governed writes (KB/Wiki vNext):** agents file through proposals that a
-  named person approves (`proposal-apply --actor`), a write gate hook keeps
-  agents on that path, and subagents report `KB candidates` instead of writing.
+- **Governed writes (KB/Wiki vNext):** agents file a record only after a named
+  person approves it, in one call when the approval is in chat
+  (`approved-filing`) or through a proposal (`proposal-apply --actor`); a
+  write gate hook keeps agents on that path, and subagents report
+  `KB candidates` instead of writing.
 
 ## What we measured
 
@@ -193,7 +195,7 @@ via the CLI — both read and write the same `.kb/`.
 
 Pre-`1.0.0`, and actively developed. The core runtime is tested across the
 public CI matrix and ships as a wheel plus source distribution on the GitHub
-release. Latest release: **v0.2.2**. PyPI is not the active distribution channel
+release. Latest release: **v0.2.3**. PyPI is not the active distribution channel
 for this release.
 Expect further pre-1.0 `0.x` releases as the API settles toward `1.0.0`. A
 `0.x` release can still break a command line, as `0.2.0` did for vNext

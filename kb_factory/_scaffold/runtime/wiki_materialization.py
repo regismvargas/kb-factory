@@ -370,14 +370,68 @@ def compute_page_id(target_slug: str) -> str:
 
 def compute_content_hash(content: str) -> str:
     # Hash a canonicalized version that strips the volatile generation
-    # timestamp line, so pages with unchanged substantive content
-    # produce a stable hash across re-syncs.
-    stable = "\n".join(
-        line
-        for line in content.splitlines()
-        if not line.lstrip().startswith("- **Generated:**")
-    )
+    # timestamp line of the provenance block, so pages with unchanged
+    # substantive content produce a stable hash across re-syncs. A line of
+    # the same shape outside that block is content and stays in the hash.
+    stable_lines = []
+    in_block = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped == WIKI_CITATION_FENCE:
+            in_block = True
+        elif stripped == "<!-- /kb-citation-block -->":
+            in_block = False
+        elif in_block and line.lstrip().startswith("- **Generated:**"):
+            continue
+        stable_lines.append(line)
+    stable = "\n".join(stable_lines)
     return hashlib.sha256(stable.encode("utf-8")).hexdigest()
+
+
+def _snapshot_due(live_row, now: str) -> bool:
+    """Keep a replaced live version as a snapshot only when it was generated on
+    an earlier UTC day than this sync.
+
+    Snapshots are dated artifacts (WIKI_LAYER_POLICY 5.3): each day's last
+    version of a page is kept, while the versions a batch of filings renders
+    within one day replace each other without piling up.
+    """
+    generated = (live_row["generated_at"] or "")[:10]
+    return not generated or generated < now[:10]
+
+
+def _page_file_current(conn, page_id: str, target_md: Path, content_hash: str, record_ids: list) -> bool:
+    """True when the stored row and the file already hold this content and no
+    supporting record changed after the file's Generated stamp.
+
+    The hash ignores the stamp, so rewriting such a page would only move the
+    stamp; `persist_page` keeps the row's `generated_at` as well. A record
+    updated after the stamp in a way the page does not show (tier, tags)
+    still gets the page restamped, because wiki-lint compares the two.
+    """
+    if not target_md.is_file():
+        return False
+    row = conn.execute(
+        "SELECT content_hash FROM wiki_pages WHERE page_id = ?", (page_id,)
+    ).fetchone()
+    if row is None or row["content_hash"] != content_hash:
+        return False
+    try:
+        if compute_content_hash(target_md.read_text(encoding="utf-8")) != content_hash:
+            return False
+    except (OSError, UnicodeDecodeError):
+        return False
+    stamp = (parse_citation_block(target_md) or {}).get("generated", "")
+    if not stamp:
+        return False
+    if not record_ids:
+        return True
+    placeholders = ",".join("?" for _ in record_ids)
+    newer = conn.execute(
+        f"SELECT 1 FROM records WHERE id IN ({placeholders}) AND updated_at > ? LIMIT 1",
+        list(record_ids) + [stamp],
+    ).fetchone()
+    return newer is None
 
 
 def _relative_stored_path(target_md: Path) -> str:
@@ -898,6 +952,7 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
             if (
                 existing_pre is not None
                 and (existing_pre["content_hash"] or "") != new_hash
+                and _snapshot_due(existing_pre, now)
             ):
                 snapshot_info = capture_snapshot(
                     conn,
@@ -907,8 +962,11 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
                 )
                 if snapshot_info:
                     snapshots_created.append(snapshot_info)
-        target_md.parent.mkdir(parents=True, exist_ok=True)
-        target_md.write_text(content, encoding="utf-8")
+        if not _page_file_current(
+            conn, page_id_pre, target_md, new_hash, candidate.get("supporting_record_ids") or []
+        ):
+            target_md.parent.mkdir(parents=True, exist_ok=True)
+            target_md.write_text(content, encoding="utf-8")
         written.append(candidate["candidate_id"])
         persisted.append(
             persist_page(

@@ -71,7 +71,8 @@ its working state (proposals, manifests, draft wiki) in a separate `.kb-next/`.
   Claude Code subagent not to write the KB and to end its report with
   `KB candidates`; a PreToolUse write gate denies an agent's direct
   `.kb/kb.py create`, `file`, `supersede` or `update` in a vNext project and
-  points to the proposal path (Codex runs it only after you trust the hook).
+  points to `approved-filing` and the proposal path (Codex runs it only after
+  you trust the hook).
 - **Platforms:** Claude Code, Claude Cowork, Codex.
 - **Use it when:** you want the thin-session model, you're **setting up or
   migrating a project**, or you want changes to go through a review/proposal step

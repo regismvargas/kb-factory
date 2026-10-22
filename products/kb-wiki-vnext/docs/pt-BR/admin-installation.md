@@ -13,9 +13,9 @@ Admins de workspace, leads técnicos e maintainers que instalam o pacote para ou
 - Artefato de release limpo, gerado a partir deste repositório.
 - Acesso ao cliente de destino: Codex, Claude Code, Claude Cowork ou workspace com Python.
 - Alinhamento com o dono do workspace de que `.kb/` segue canônico e `.kb-next/` é a camada vNext.
-- A identidade de release registra separadamente produto `0.2.0-rc.6`, KB
-  Lifecycle `0.2.5`, plugin `0.2.2`, runtime incluído `0.2.2`, Session Gate
-  `0.2.8` e marketplace `0.3.13`.
+- A identidade de release registra separadamente produto `0.2.0-rc.7`, KB
+  Lifecycle `0.2.7`, plugin `0.2.3`, runtime incluído `0.2.3`, Session Gate
+  `0.2.9` e marketplace `0.3.14`.
 
 ## Passos
 
@@ -23,13 +23,13 @@ Gere todos os distribuíveis KB afetados e o bundle stand-alone:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.6
+python tools\build_vnext_standalone.py --version 0.2.0-rc.7
 ```
 
 Valide antes de compartilhar:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.6-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.7-standalone.zip
 ```
 
 Distribua apenas o artefato correspondente:
@@ -38,7 +38,7 @@ Distribua apenas o artefato correspondente:
 - Usuários Claude Code recebem o ZIP de plugin Claude Code.
 - Usuários Claude Cowork recebem o ZIP Cowork e instruções explícitas de
   startup manual com `vnext-session-start`.
-- Usuários Session Gate recebem o artefato `session-gate-*-0.2.8.zip`
+- Usuários Session Gate recebem o artefato `session-gate-*-0.2.9.zip`
   correspondente e usam `gate-session-start` / `gate-session-end`.
 - Admins que criam workspace novo recebem o bundle stand-alone.
 

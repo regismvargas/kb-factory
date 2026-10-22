@@ -68,8 +68,9 @@ define, like `architecture` or `billing` — pick 4 to 12), a title, the content
 a status, a tier, a source link, tags, and timestamps. Creating one by hand is
 `python .kb/kb.py create --category FATO --domain infra --title "…" --content "…"`,
 but in chat you never type that: you just ask, and the plugin runs it (with
-KB/Wiki vNext active, the agent files it through a proposal you approve,
-`filing-proposal` then `proposal-apply`, instead of running `create`). See the
+KB/Wiki vNext active, the agent files it only after you approve, with
+`approved-filing` when you approve in chat or `filing-proposal` then
+`proposal-apply`, instead of running `create`). See the
 full set in the [command reference](../commands.md) and the deeper writeup in
 [concepts](../concepts.md).
 

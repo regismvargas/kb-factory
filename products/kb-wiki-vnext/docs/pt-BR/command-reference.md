@@ -37,7 +37,7 @@ Session Gate segue a mesma distinção com o basename lógico
 | `new-project-init-kb-wiki` | projeto novo | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-wiki` | cria `.kb/` quando ausente e `.kb-next/`; `--scope` registra o escopo do usuário como um `DECISAO` HOT; o wiki clássico fica dormente até 10 registros ativos citarem uma fonte registrada (`--wiki-min-sourced-records`, `0` liga na hora) e então publica `.kb/wiki/live` sozinho; drafts vNext nunca são copiados para lá |
 | `new-project-verify-install` | projeto novo | Codex, Claude Code, Claude Cowork | `session-start` mais `lookup` determinístico | sem escrita canônica; append de telemetria de leitura em `.kb-next/telemetry/events.jsonl`, ignorado pelo Git |
 | `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detectar `.kb-next/` e `.kb/`; rotear vNext primeiro | sem escrita canônica; rota vNext faz append de telemetria de leitura em `.kb-next/telemetry/events.jsonl` |
-| `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | detectar sistemas e resumir closeout | sem escrita canônica por padrão |
+| `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | detectar sistemas e resumir closeout; uma manutenção completa roda `scheduled-maintenance --apply-demotions` só num workspace só clássico e o passo de curadoria do vNext num workspace vNext | sem escrita canônica por padrão; a curadoria do vNext grava só propostas de higiene em `.kb-next/` |
 
 Comandos apenas de runtime:
 
@@ -59,7 +59,7 @@ Subcomandos de runtime usados pelo agente que mudaram na 0.2.x (detalhes em
 | `dense-index` | montar ou atualizar o índice denso local opcional; `--fetch-model` baixa o modelo fixado, `--rebuild` reindexa todos os records ativos | grava em `.kb-next/index/` e uma linha de telemetria em `.kb-next/telemetry/events.jsonl`, ambos ignorados pelo Git; exige o extra denso; emite aviso para o `potion-multilingual-128M`, que não é recomendado |
 | `proposal-apply` | aplicar uma proposta aprovada em `.kb/`; exige `--approve`, `--approval-note`, `--actor-runtime` (`claude-code`, `codex`, `cowork` ou `human`) e um aprovador vindo de `--actor` ou de `proposal_apply.default_actor` | um dos dois caminhos de escrita canônica para agentes num projeto vNext; sem aprovador sai com código 2 antes de ler a proposta |
 | `approved-filing` | registrar um registro que o usuário aprovou no chat: `--category`, `--domain`, `--title`, `--content`, `--confidence`, `--source-id` ou `--record-id`, `--supersedes` opcional, mais `--approval-note` e o par de aprovador do `proposal-apply` | escreve `.kb/` via `.kb/kb.py`, um manifest em `.kb-next/manifests/approved-filing/` e uma linha no oplog; uma chamada bloqueada não escreve nada e sai com código 1 |
-| `semantic-hygiene` | detectar candidatos a rebaixar, resolver e substituir; com `--judgment` e `--write-proposals`, gravar um lote julgado | grava propostas só em `.kb-next/` e só com `--write-proposals`; reporta `review_budget` (`semantic_curation.weekly_hygiene_proposals`, padrão de 5 propostas abertas por projeto a cada 7 dias), pula alvos que já têm proposta aberta e lista o excedente em `deferred` |
+| `semantic-hygiene` | detectar candidatos a rebaixar, resolver e substituir; com `--judgment` e `--write-proposals`, gravar um lote julgado, inclusive itens `retire` (`replacement_id` nomeia o record ATIVO existente que substitui o alvo) | grava propostas só em `.kb-next/` e só com `--write-proposals`; reporta `review_budget` (`semantic_curation.weekly_hygiene_proposals`, padrão de 5 propostas abertas por projeto a cada 7 dias), pula alvos que já têm proposta aberta e lista o excedente em `deferred` |
 
 Hooks do plugin, como registrados em `hooks/hooks.json`. O Claude Code executa
 os três. O Codex só executa hooks de plugin depois que o usuário confia nesse
@@ -70,7 +70,7 @@ subagentes do `AGENTS.md`.
 |---|---|---|
 | `SessionStart` | `session-hint` do runtime | imprime a instrução de início do vNext em workspaces vNext |
 | `SubagentStart` | `subagent-hint` do runtime | dá a cada subagente do Claude Code a regra de não escrever e a seção `KB candidates` do relatório |
-| `PreToolUse` em chamadas de shell | `scripts/write_gate.py` | nega `.kb/kb.py create`, `file`, `supersede` e `update` num projeto vNext e aponta `approved-filing`, `filing-proposal` e `proposal-apply`; `"write_gate": {"enabled": false}` em `.kb-next/kb-next.config.json` desliga |
+| `PreToolUse` em chamadas de shell | `scripts/write_gate.py` | nega `.kb/kb.py create`, `file`, `supersede`, `update`, `resolve`, `bulk-import`, `init --seed`, `raw-query --allow-write`, `lifecycle scheduled-maintenance` e `--apply-demotions` ou `--apply-cold-demotions` num projeto vNext e aponta `approved-filing`, `filing-proposal`, `semantic-hygiene` e `proposal-apply`; `"write_gate": {"enabled": false}` em `.kb-next/kb-next.config.json` desliga |
 
 `.kb/` continua sendo memória durável canônica. `.kb-next/` continua sendo
 estado governado de proposta, evidência, draft, materialização e operações.

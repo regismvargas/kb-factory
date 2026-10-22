@@ -17,8 +17,10 @@ tiers, supersession), see [concepts](../concepts.md).
 
 > **KB/Wiki vNext projects.** The "Under the hood" blocks show the classic
 > commands. With vNext active, the kb-wiki-vnext plugin's write gate denies an
-> agent's direct `create`, `file`, `supersede` and `update`. New records and
-> supersessions go through a `filing-proposal`, and a HOT demotion through
+> agent's direct `create`, `file`, `supersede`, `update`, `resolve` and
+> `bulk-import`. A new record or
+> supersession you approve in chat goes through one `approved-filing` call.
+> Otherwise it goes through a `filing-proposal`, and a HOT demotion through
 > `semantic-hygiene`; the agent shows you the proposal and applies it with
 > `proposal-apply` once you approve. Other `update` edits, such as a retag,
 > have no proposal path. Classic-only projects run the commands as shown.
@@ -339,7 +341,7 @@ To scaffold a knowledge base manually from the terminal — quickest is the
 published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.2/kb_factory-0.2.2-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.3/kb_factory-0.2.3-py3-none-any.whl
 kb-factory init                                      # run in the project root
 # no pip? copy the scaffold instead:
 # cp -r core/templates/kb /path/to/your-project/.kb && python .kb/kb.py init

@@ -44,7 +44,7 @@ The `.kb/` is a single stdlib-only Python CLI plus a SQLite store — local-firs
 offline, no API key. The quickest way to create it by hand is the published CLI:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.2/kb_factory-0.2.2-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.3/kb_factory-0.2.3-py3-none-any.whl
 cd /path/to/your-project
 kb-factory init
 python .kb/kb.py stats   # confirm it worked
@@ -125,7 +125,7 @@ claude plugin install kb-wiki-vnext@kb-factory-tools
 1. Open Claude Desktop and switch to **Cowork**.
 2. Go to **Customize → Plugins**.
 3. Add `regismvargas/kb-factory` as a GitHub plugin marketplace, or upload
-   `kb-lifecycle-cowork-plugin-0.2.6.zip` from release `v0.2.2`.
+   `kb-lifecycle-cowork-plugin-0.2.7.zip` from release `v0.2.3`.
 
 If you're on Cowork, also install **`session-gate`** the same way — you'll want
 its explicit session commands, because Cowork won't start sessions on its own.
@@ -133,8 +133,8 @@ its explicit session commands, because Cowork won't start sessions on its own.
 <details><summary>Under the hood / for the CLI</summary>
 
 Cowork installs plugins through the UI, not a command line. To add the optional
-plugins, repeat step 3 with `session-gate-cowork-plugin-0.2.8.zip` and
-`kb-wiki-vnext-cowork-plugin-0.2.2.zip`. A plugin never stores your memory —
+plugins, repeat step 3 with `session-gate-cowork-plugin-0.2.9.zip` and
+`kb-wiki-vnext-cowork-plugin-0.2.3.zip`. A plugin never stores your memory —
 the `.kb/` you created in Step 1 stays the single source of truth.
 
 </details>
@@ -243,9 +243,11 @@ python .kb/kb.py create --category DECISAO --domain architecture \
   --content "Local-first, single file, no external services." --tier HOT
 ```
 
-With KB/Wiki vNext active, the agent does not run `create` itself: it writes a
-`filing-proposal`, shows it to you, and files it with `proposal-apply` once you
-approve. The kb-wiki-vnext plugin's write gate denies the direct command.
+With KB/Wiki vNext active, the agent does not run `create` itself. When you
+approve the record in chat, it files it with one `approved-filing` call;
+otherwise it writes a `filing-proposal`, shows it to you, and files it with
+`proposal-apply` once you approve. The kb-wiki-vnext plugin's write gate denies
+the direct command.
 
 The five categories are `DECISAO`, `PREMISSA`, `FATO`, `PENDENCIA`,
 `APRENDIZADO` (decision, assumption, fact, open-item, learning). The tiers are

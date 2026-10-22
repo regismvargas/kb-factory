@@ -48,7 +48,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.2.2"
+RUNTIME_VERSION = "0.2.3"
 # Classic lifecycle events that keep an enabled classic wiki current. Mirrors
 # WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
 CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
@@ -74,7 +74,8 @@ WIKI_DORMANT_MIN_SOURCED_RECORDS = 10
 PROJECT_SCOPE_TAG = "project-scope"
 RECORD_CATEGORIES = ("DECISAO", "PREMISSA", "FATO", "PENDENCIA", "APRENDIZADO")
 # Template seeds of kb-lifecycle < 0.2.6, the same list as the classic
-# runtime/constants.py. Derived surfaces leave them out; kb.db keeps them.
+# runtime/constants.py, Portuguese translations included. Derived surfaces
+# leave them out; kb.db keeps them.
 BOOTSTRAP_SEED_SOURCES = ("project-bootstrap", "kb-factory-blueprint")
 BOOTSTRAP_SEED_TITLES = (
     "KB enabled as the project's operating memory",
@@ -82,6 +83,11 @@ BOOTSTRAP_SEED_TITLES = (
     "The primary runtime is local-first",
     "Review HOT criteria after first real sessions",
     "Search before assuming reduces context drift",
+    "A KB e a memoria operacional do projeto",
+    "O runtime da KB e local-first",
+    "Revisar o criterio de HOT depois das primeiras sessoes reais",
+    "Buscar antes de supor reduz deriva de contexto",
+    "Consultar KB antes de assumir reduz drift de contexto",
 )
 NOT_BOOTSTRAP_SEED = (
     "NOT (COALESCE(source, '') IN ("
@@ -888,6 +894,16 @@ def write_now(root: Path, config: dict[str, Any]) -> dict[str, Any]:
     wiki_enabled = config["wiki"]["enabled"] and dormant is None
     classic_wiki = classic_wiki_enabled(root)
     classic_label = "absent" if classic_wiki is None else str(classic_wiki).lower()
+    # A dormant wiki wakes by itself on a record write, and nothing rewrites
+    # this file then, so NOW states when it starts instead of a state that ends.
+    if dormant is None:
+        wiki_line = f"- Wiki active: `{str(wiki_enabled).lower()}`"
+    else:
+        wiki_line = (
+            f"- Wiki: starts by itself once `{dormant['min_sourced_records']}` active records cite a registered "
+            f"source (`{dormant['sourced_records']}` when this file was generated); `session-start` "
+            "`wiki.status` gives the current state."
+        )
     lines = [
         NOW_TEMPLATE_TITLE,
         NOW_GENERATED_MARKER,
@@ -895,14 +911,9 @@ def write_now(root: Path, config: dict[str, Any]) -> dict[str, Any]:
         f"- Generated: `{now_iso()}`",
         f"- Activation mode: `{mode}`",
         f"- Classic KB: `{config['classic_kb']['root']}` (`read_only`)",
-        f"- Wiki active: `{str(wiki_enabled).lower()}`",
+        wiki_line,
         f"- Classic wiki enabled (`.kb/kb.config.json`): `{classic_label}`",
     ]
-    if dormant is not None:
-        lines.append(
-            f"- Wiki dormant until `{dormant['min_sourced_records']}` active records cite a registered source "
-            f"(now `{dormant['sourced_records']}`); it then publishes by itself and `session-start` reports it."
-        )
     lines += [
         "",
         "## Required Default Read",
@@ -4174,6 +4185,25 @@ def normalize_hygiene_judgment_groups(
     return groups, warnings
 
 
+def retire_item_warnings(root: Path, groups: dict[str, list[dict[str, Any]]]) -> list[str]:
+    """A `retire` item needs replacement_id naming another ATIVO record."""
+    items = [item for entries in groups.values() for item in entries if item.get("action") == "retire"]
+    named = [str(item["replacement_id"]) for item in items if item.get("replacement_id")]
+    replacements = fetch_records_by_ids(root, named) if named else {}
+    warnings: list[str] = []
+    for item in items:
+        replacement_id = str(item.get("replacement_id") or "")
+        if not replacement_id:
+            warnings.append(f"invalid_retire_item:{item['record_id']}:missing_replacement_id")
+        elif replacement_id == item["record_id"]:
+            warnings.append(f"invalid_retire_item:{item['record_id']}:replaces_itself")
+        elif replacement_id not in replacements:
+            warnings.append(f"unknown_replacement_record:{replacement_id}")
+        elif replacements[replacement_id]["status"] != "ATIVO":
+            warnings.append(f"invalid_retire_item:{item['record_id']}:replacement_not_active")
+    return warnings
+
+
 def hygiene_validation_status(judgment: dict[str, Any] | None, warnings: list[str]) -> str:
     if judgment is None:
         return "needs_llm_judgment"
@@ -4218,6 +4248,7 @@ def hygiene_proposal_payload(
         "risk": item.get("risk", judgment.get("risk")),
         "provenance": provenance,
         "record_draft": item.get("record_draft"),
+        "replacement_id": item.get("replacement_id"),
         "duplicate_candidates": item.get("duplicate_candidates", []),
         "resolution_notes": item.get("resolution_notes") or item.get("notes") or rationale,
         "tier_reason": item.get("tier_reason") or rationale,
@@ -4300,17 +4331,28 @@ def open_hygiene_proposals(root: Path) -> list[dict[str, Any]]:
                 "group": proposal.get("group"),
                 "action": proposal.get("action"),
                 "target_record_id": proposal.get("target_record_id"),
+                "replacement_id": proposal.get("replacement_id"),
                 "title": (proposal.get("target_record") or {}).get("title"),
                 "rationale": proposal.get("rationale"),
             }
         )
-    targets = [str(item["target_record_id"]) for item in pending if item["target_record_id"]]
-    records = fetch_records_by_ids(root, targets) if targets else {}
+    ids = [str(item[key]) for item in pending for key in ("target_record_id", "replacement_id") if item.get(key)]
+    records = fetch_records_by_ids(root, dedupe_strings(ids)) if ids else {}
     return [
         item
         for item in pending
         if hygiene_target_still_qualifies(item["action"], records.get(str(item["target_record_id"])))
+        and (item["action"] != "retire" or retire_replacement_still_valid(item, records))
     ]
+
+
+def retire_replacement_still_valid(item: dict[str, Any], records: dict[str, sqlite3.Row]) -> bool:
+    """A retire proposal stays open only while its replacement is another ATIVO record."""
+    replacement_id = str(item.get("replacement_id") or "")
+    replacement = records.get(replacement_id)
+    return bool(replacement_id) and replacement_id != str(item["target_record_id"]) and (
+        replacement is not None and replacement["status"] == "ATIVO"
+    )
 
 
 def hygiene_review_budget(limit: int, pending: list[dict[str, Any]]) -> dict[str, Any]:
@@ -4336,6 +4378,7 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
     mechanical_groups = build_mechanical_hygiene_groups(root, records)
     judgment = judgment_arg(args)
     judgment_groups, warnings = normalize_hygiene_judgment_groups(judgment, records)
+    warnings.extend(retire_item_warnings(root, judgment_groups))
     if judgment is not None and judgment.get("conflicts"):
         warnings.append("conflict")
     if judgment is not None and not judgment.get("provenance"):
@@ -4436,7 +4479,9 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
         },
         "llm_task": build_llm_task(
             "semantic_hygiene",
-            "Classify KB hygiene and HOT overflow records into keep-HOT, demote, supersede-or-merge, resolve, and needs-owner-review groups.",
+            "Classify KB hygiene and HOT overflow records into keep-HOT, demote, supersede-or-merge, resolve, and needs-owner-review groups. "
+            "A supersede-or-merge item carries a record_draft for a new version, or action retire with replacement_id naming the "
+            "existing ATIVO record that replaces it.",
             ["groups", "rationale", "confidence", "risk", "provenance", "conflicts"],
         ),
     }
@@ -4746,11 +4791,22 @@ def resolve_supersede_target(
     proposal: dict[str, Any],
     record_draft: dict[str, Any],
 ) -> tuple[str | None, list[str]]:
-    if args.target_record_id:
-        return args.target_record_id, []
-    if record_draft.get("supersedes_id"):
-        return str(record_draft["supersedes_id"]), []
+    # `--target-record-id` only picks among the targets the approved proposal
+    # names; it never redirects the proposal to another record.
+    override = str(args.target_record_id) if args.target_record_id else None
+    named = record_draft.get("supersedes_id")
+    if not named and proposal.get("kind") == "semantic-hygiene":
+        named = proposal.get("target_record_id")
     candidates = duplicate_candidate_ids(proposal.get("duplicate_candidates"))
+    if named:
+        named = str(named)
+        if override and override != named:
+            return None, [f"invalid_target_override:{override}"]
+        return named, []
+    if override:
+        if override not in candidates:
+            return None, [f"invalid_target_override:{override}"]
+        return override, []
     if len(candidates) == 1:
         return candidates[0], []
     if not candidates:
@@ -4799,7 +4855,10 @@ def canonical_supersede_command(
     proposal_id: str,
     target_record_id: str,
     record_draft: dict[str, Any],
+    *,
+    category: str | None = None,
 ) -> list[str]:
+    """The classic `supersede` for an approved draft; `category` only when the draft changes it."""
     cmd = [
         sys.executable,
         str(classic_kb_script(root)),
@@ -4807,6 +4866,7 @@ def canonical_supersede_command(
         target_record_id,
     ]
     add_optional_cli_arg(cmd, "--new-id", record_draft.get("id"))
+    add_optional_cli_arg(cmd, "--category", category)
     add_optional_cli_arg(cmd, "--title", record_draft.get("title"))
     add_optional_cli_arg(cmd, "--content", record_draft.get("content"))
     add_optional_cli_arg(cmd, "--tier", record_draft.get("tier") or "WARM")
@@ -4865,6 +4925,49 @@ def canonical_resolve_command(
         str(notes),
         "--json",
     ]
+
+
+def canonical_retire_command(root: Path, target_record_id: str, replacement_id: str) -> list[str]:
+    return [
+        sys.executable,
+        str(classic_kb_script(root)),
+        "supersede",
+        target_record_id,
+        "--replacement-id",
+        replacement_id,
+        "--json",
+    ]
+
+
+def classic_supports_option(root: Path, subcommand: str, option: str) -> bool:
+    """True when the project's classic engine lists `option` in `kb.py <subcommand> --help`."""
+    try:
+        script = classic_kb_script(root)
+        result = subprocess.run(
+            [sys.executable, str(script), subcommand, "--help"],
+            cwd=str(script.parent),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError:
+        return False
+    return option in result.stdout
+
+
+def classic_supports_retire(root: Path) -> bool:
+    """`supersede --replacement-id` exists from classic runtime 0.2.7 (kb-lifecycle 0.2.7)."""
+    return classic_supports_option(root, "supersede", "--replacement-id")
+
+
+def supersede_category_change(root: Path, record_draft: dict[str, Any], target: Any) -> tuple[str | None, list[str]]:
+    """The new category when the draft changes the target's, and a warning when the engine cannot."""
+    category = record_draft.get("category")
+    if target is None or not category or str(category) == str(target["category"]):
+        return None, []
+    if not classic_supports_option(root, "supersede", "--category"):
+        return None, ["unsupported_action:supersede that changes the category needs classic supersede --category; run upgrade-classic"]
+    return str(category), []
 
 
 def run_canonical_command(root: Path, cmd: list[str]) -> dict[str, Any]:
@@ -5079,7 +5182,7 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         apply_manifest["warnings"] = dedupe_strings(warnings)
         return finalize_proposal_apply(root, apply_manifest, json_mode=args.json)
 
-    if action not in {"new", "supersede", "demote_hot", "resolve"}:
+    if action not in {"new", "supersede", "demote_hot", "resolve", "retire"}:
         warnings.append(f"unsupported_action:{action}")
 
     if action in {"new", "supersede"}:
@@ -5098,6 +5201,7 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
     provenance = proposal.get("provenance") or (source_manifest or {}).get("provenance_pointers") or []
     warnings.extend(provenance_problems(root, provenance))
 
+    category_change: str | None = None
     if action == "supersede":
         target_record_id, target_errors = resolve_supersede_target(args, proposal, record_draft)
         warnings.extend(target_errors)
@@ -5105,9 +5209,17 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
             target_records = fetch_records_by_ids(root, [target_record_id])
             if target_record_id not in target_records:
                 warnings.append(f"unknown_supersede_target:{target_record_id}")
+            category_change, category_errors = supersede_category_change(
+                root, record_draft, target_records.get(target_record_id)
+            )
+            warnings.extend(category_errors)
             apply_manifest["target_record_id"] = target_record_id
-    elif action in {"demote_hot", "resolve"}:
-        target_record_id = args.target_record_id or proposal.get("target_record_id")
+    elif action in {"demote_hot", "resolve", "retire"}:
+        # The approved proposal names its target; `--target-record-id` may only repeat it.
+        target_record_id = proposal.get("target_record_id")
+        if args.target_record_id and str(args.target_record_id) != str(target_record_id or ""):
+            warnings.append(f"invalid_target_override:{args.target_record_id}")
+            target_record_id = None
         if not target_record_id:
             warnings.append("missing_target_record")
         else:
@@ -5120,7 +5232,22 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
                 warnings.append("invalid_demote_target")
             elif action == "resolve" and not (target["category"] == "PENDENCIA" and target["status"] == "ATIVO"):
                 warnings.append("invalid_resolve_target")
+            elif action == "retire" and target["status"] != "ATIVO":
+                warnings.append("invalid_retire_target")
             apply_manifest["target_record_id"] = target_record_id
+        if action == "retire":
+            # Retire = SUPERSEDIDO by an existing ATIVO record; RESOLVIDO stays PENDENCIA-only.
+            replacement_id = str(proposal.get("replacement_id") or "")
+            replacement = fetch_records_by_ids(root, [replacement_id]).get(replacement_id) if replacement_id else None
+            if not replacement_id:
+                warnings.append("missing_replacement_id")
+            elif replacement is None:
+                warnings.append(f"unknown_replacement_record:{replacement_id}")
+            elif replacement_id == target_record_id or replacement["status"] != "ATIVO":
+                warnings.append("invalid_replacement_record")
+            elif not classic_supports_retire(root):
+                warnings.append("unsupported_action:retire needs classic supersede --replacement-id; run upgrade-classic")
+            apply_manifest["replacement_id"] = replacement_id or None
 
     warnings = dedupe_strings(warnings)
     apply_manifest["warnings"] = warnings
@@ -5131,11 +5258,15 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         if action == "new":
             canonical_cmd = canonical_create_command(root, proposal_id, record_draft)
         elif action == "supersede" and target_record_id:
-            canonical_cmd = canonical_supersede_command(root, proposal_id, target_record_id, record_draft)
+            canonical_cmd = canonical_supersede_command(
+                root, proposal_id, target_record_id, record_draft, category=category_change
+            )
         elif action == "demote_hot" and target_record_id:
             canonical_cmd = canonical_demote_hot_command(root, proposal_id, target_record_id, proposal)
         elif action == "resolve" and target_record_id:
             canonical_cmd = canonical_resolve_command(root, proposal_id, target_record_id, proposal)
+        elif action == "retire" and target_record_id:
+            canonical_cmd = canonical_retire_command(root, target_record_id, str(proposal["replacement_id"]))
         else:
             warnings.append(f"unsupported_action:{action}")
             apply_manifest["warnings"] = dedupe_strings(warnings)
@@ -5214,14 +5345,16 @@ def cmd_approved_filing(args: argparse.Namespace) -> int:
     if args.confidence < min_confidence:
         warnings.append(f"low_confidence:{args.confidence}")
     warnings.extend(provenance_problems(root, provenance))
+    category_change: str | None = None
     if action == "supersede":
         target = fetch_records_by_ids(root, [args.supersedes]).get(args.supersedes)
         if target is None:
             warnings.append(f"unknown_supersede_target:{args.supersedes}")
         elif target["status"] != "ATIVO":
             warnings.append(f"inactive_supersede_target:{args.supersedes}")
-        elif target["category"] == args.category:
-            record_draft.pop("category")  # the classic supersede keeps it; older engines lack --category
+        else:
+            category_change, category_errors = supersede_category_change(root, record_draft, target)
+            warnings.extend(category_errors)
     duplicates = same_title_records(root, args.title, args.supersedes)
     if duplicates:
         warnings.append("duplicate_title:" + ",".join(duplicates))
@@ -5240,9 +5373,7 @@ def cmd_approved_filing(args: argparse.Namespace) -> int:
         emit(result, args.json)
         return 1
     if action == "supersede":
-        cmd = canonical_supersede_command(root, filing_id, args.supersedes, record_draft)
-        if record_draft.get("category"):
-            cmd[-1:-1] = ["--category", str(record_draft["category"])]
+        cmd = canonical_supersede_command(root, filing_id, args.supersedes, record_draft, category=category_change)
     else:
         cmd = canonical_create_command(root, filing_id, record_draft)
     canonical_result = run_canonical_command(root, cmd)
@@ -6308,8 +6439,8 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
         "KB/Wiki vNext workspace detected.",
         f"Run the vnext-session-start command (shell: `{runtime} session-start --json`) "
         "and read only `.kb-next/memory/NOW.md` by default.",
-        "Classic `.kb/` stays canonical: use `lookup --facet ... [--domain ...]` or `python .kb/kb.py search` "
-        "for targeted reads; classic NOW/HOT/INDEX are on demand, not a default preload.",
+        "Classic `.kb/` stays canonical: read it with `lookup` (below) or `python .kb/kb.py search`; "
+        "classic NOW/HOT/INDEX are on demand, not a default preload.",
     ]
     if skew:
         lines.append(skew)
@@ -6317,9 +6448,12 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
         lines.append(
             "Canonical records change only after the user approves: a record the user approved in chat takes one "
             "`approved-filing` call; otherwise write a proposal (`filing-proposal`, or `semantic-hygiene "
-            "--write-proposals` for HOT demotion and open items) and run `proposal-apply` after the yes. The "
-            "kb-wiki-vnext plugin hook denies direct `.kb/kb.py create|file|supersede|update`."
+            "--write-proposals` for HOT demotion, open items and retirement) and run `proposal-apply` after the yes. "
+            "The kb-wiki-vnext plugin hook denies direct `.kb/kb.py create|file|supersede|update|resolve|bulk-import`, "
+            "`init --seed`, `raw-query --allow-write` and demotions (`lifecycle scheduled-maintenance`, "
+            "`--apply-demotions`)."
         )
+    lines += command_sheet(runtime)
     if wiki_on:
         lines.append(
             "KB + Wiki is active: at session end run the vnext-wiki-drafts plugin command "
@@ -6327,6 +6461,22 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
         )
     print("\n".join(lines))
     return 0
+
+
+def command_sheet(runtime: str) -> list[str]:
+    """Exact commands for the agent's frequent tasks, so a session needs no `--help` to find flags."""
+    return [
+        "Commands (each <...> is one value):",
+        f"- Look up: `{runtime} lookup --facet <{'|'.join(MEMORY_FACETS)}> --query \"<terms>\" --json`",
+        "- Register a source: `python .kb/kb.py ingest <file> --domain <domain> --json`",
+        f"- File a record the user approved in chat: `{runtime} approved-filing --category "
+        f"<{'|'.join(RECORD_CATEGORIES)}> --domain <domain> --title \"<title>\" --content \"<content>\" "
+        "--confidence <0-1> --source-id <source-id> --approval-note \"<who approved, in their words>\" "
+        "--actor <approver> --actor-runtime <claude-code|codex> --json` (no source: `--record-id <record-id>`)",
+        "- Replace a record: the same call with `--supersedes <record-id>`",
+        "- Close the session: run the vnext-session-end plugin command, which runs "
+        "`python .kb/kb.py lifecycle session-end --json`",
+    ]
 
 
 def runtime_command(root: Path) -> str:
@@ -6641,7 +6791,55 @@ def build_parser() -> argparse.ArgumentParser:
     wiki_status.add_argument("--json", action="store_true")
     wiki_status.set_defaults(func=cmd_wiki_draft_status)
 
+    add_help_tiers(parser, sub.choices, AGENT_COMMANDS, AGENT_HELP_NOTE)
     return parser
+
+
+# `--help` lists the commands an agent uses day to day; `--help-all` prints
+# the full help with every command. Subcommands and their help are unchanged.
+AGENT_COMMANDS = {
+    "session-start": "session contract; then read .kb-next/memory/NOW.md only",
+    "lookup": "targeted read: lookup --facet <facet> --query \"<terms>\" --json",
+    "semantic-lookup": "lookup ranked by your judgment (--judgment)",
+    "approved-filing": "file a record the user approved in chat (--supersedes replaces one)",
+    "filing-proposal": "propose a record for later approval",
+    "proposal-apply": "apply a proposal after the user's yes",
+    "semantic-hygiene": "HOT demotion, open-item and retirement candidates",
+    "wiki-draft-status": "wiki topics that need drafts (KB + Wiki)",
+}
+AGENT_HELP_NOTE = "The session hint prints these commands with every required flag."
+
+
+class _HelpAllAction(argparse.Action):
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        sys.stdout.write(parser.format_help_all())
+        parser.exit()
+
+
+def add_help_tiers(parser: argparse.ArgumentParser, commands: dict, agent: dict, note: str) -> None:
+    """Make `--help` short (the agent commands) and add `--help-all` (everything, tiers named)."""
+    parser.add_argument("--help-all", action=_HelpAllAction, help="show every command, agent and maintenance")
+    full_help = parser.format_help
+    width = max(len(name) for name in agent)
+    agent_lines = [f"  {name.ljust(width)}  {text}" for name, text in agent.items()]
+
+    def short_help() -> str:
+        lines = [f"usage: {parser.prog} [-h] [--help-all] [--project-root PROJECT_ROOT] <command> ...", "",
+                 parser.description or "", "", "Agent commands:", *agent_lines, "", note,
+                 f"All {len(commands)} commands: {parser.prog} --help-all. "
+                 f"One command's flags: {parser.prog} <command> --help."]
+        return "\n".join(lines) + "\n"
+
+    def help_all() -> str:
+        maintenance = [name for name in commands if name not in agent]
+        return "\n".join([full_help().rstrip(), "", "Agent commands:", *agent_lines, "",
+                          "Maintenance commands: " + ", ".join(maintenance)]) + "\n"
+
+    parser.format_help = short_help
+    parser.format_help_all = help_all
 
 
 def main(argv: list[str] | None = None) -> int:

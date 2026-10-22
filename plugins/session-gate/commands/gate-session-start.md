@@ -43,13 +43,18 @@ default session orientation because `.kb-next/memory/NOW.md` is the only
 default read.
 
 1. If the detector reports `runtime_ref`, run
-   `python <runtime_ref> session-start --json`.
+   `python <runtime_ref> --project-root <vnext.details.project_root> session-start --json`.
+   `vnext.details.project_root` is the folder that holds the vNext config:
+   this workspace, or the main checkout of a linked worktree activated only
+   there (`vnext.details.activation` is `main_checkout`).
 2. If `runtime_ref` is absent, resolve the runtime in this order and use the
-   first runnable path: `.kb-next/runtime/kb_next.py`, an installed client-plugin
-   path matching `**/kb-wiki-vnext/runtime/kb_next.py` (the engine ships with
-   the kb-wiki-vnext plugin; this session-gate plugin carries no runtime), then
-   `core/versions/kb-wiki-vnext/runtime/kb_next.py` in the authoring monorepo.
-3. Read only `.kb-next/memory/NOW.md`.
+   first runnable path: `<vnext.details.project_root>/.kb-next/runtime/kb_next.py`,
+   an installed client-plugin path matching
+   `**/kb-wiki-vnext/runtime/kb_next.py` (the engine ships with the
+   kb-wiki-vnext plugin; this session-gate plugin carries no runtime), then
+   `core/versions/kb-wiki-vnext/runtime/kb_next.py` in the authoring monorepo,
+   and run it with the same `--project-root`.
+3. Read only `<vnext.details.project_root>/.kb-next/memory/NOW.md`.
 4. Stop. HOT, INDEX, wiki pages, and historical artifacts remain on demand.
 
 If no vNext runtime resolves, invoke the installed namespaced
@@ -57,7 +62,8 @@ If no vNext runtime resolves, invoke the installed namespaced
 do not treat `vnext-session-start` as a shell/PATH executable. If neither
 surface is available, run the classic lifecycle fallback
 `python .kb/kb.py lifecycle session-start --json` when present, read
-`.kb-next/memory/NOW.md` directly, and report degraded data-only vNext mode.
+`<vnext.details.project_root>/.kb-next/memory/NOW.md` directly, and report
+degraded data-only vNext mode.
 
 ## Step 3: KB-lifecycle startup (only if `kb.found == true` and `vnext.found == false`)
 

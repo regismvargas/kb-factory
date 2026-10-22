@@ -1,5 +1,6 @@
-"""The kb-wiki-vnext write gate: agent shells in a vNext project cannot run the
-classic `kb.py create|file|supersede|update`; the deny names the proposal path.
+"""The kb-wiki-vnext write gate: agent shells in a vNext project cannot write
+classic records directly (`kb.py create|file|supersede|update|resolve|bulk-import`,
+`raw-query --allow-write`, demotions); the deny names the proposal path.
 
 Product requirement from 2026-10-20 (docs/benchmarks/kb-value/README.md): in 60
 days, 0 of 123 agent writes went through filing-proposal and proposal-apply.
@@ -110,8 +111,11 @@ def test_reads_and_other_commands_pass(project: Path, command: str) -> None:
     assert gate.decide(payload(command, project)) is None
 
 
+DENY_KEYS = (*gate.GATED_SUBCOMMANDS, "init", "raw-query", "demotions", "cold-demotions")
+
+
 def test_the_commands_the_deny_recommends_are_not_gated(project: Path) -> None:
-    for subcommand in gate.GATED_SUBCOMMANDS:
+    for subcommand in DENY_KEYS:
         reason = gate.deny_reason(subcommand, project)
         for quoted in re.findall(r"`(python [^`]+)`", reason):
             assert gate.decide(payload(quoted, project)) is None, quoted
@@ -433,9 +437,130 @@ def test_the_hook_denies_a_write_inside_a_block_or_a_nested_shell(spaced: tuple[
 
 
 def test_codex_argv_commands_are_read(project: Path) -> None:
+    # The argv forms come from the Codex documentation; the live hook payload of
+    # 2026-10-21 carried a plain string (see the verbatim fixture below).
     argv = ["bash", "-lc", "python .kb/kb.py create --category FATO --domain ops --title T --content C"]
 
     assert gate.decide(payload(argv, project))
+
+
+def test_codex_powershell_argv_is_read(project: Path) -> None:
+    argv = [r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe", "-NoProfile", "-Command",
+            "python .kb/kb.py resolve KB-1 --notes done"]
+
+    assert gate.decide(payload(argv, project))
+
+
+# The PreToolUse payload codex-cli 0.156.1 sent on Windows (probe of 2026-10-21,
+# thread c393, run with --dangerously-bypass-hook-trust), verbatim except `cwd`.
+# Codex runs the command through powershell.exe -Command, but the hook gets
+# tool_name "Bash" and the raw command; the wrapped string exists only in the
+# `codex exec --json` event stream.
+CODEX_PAYLOAD = {
+    "session_id": "01a16096-c393-7e82-8efa-a23422a0cb06",
+    "turn_id": "01a16096-e946-7583-893c-77efc141e8a5",
+    "transcript_path": None,
+    "cwd": "<project>",
+    "hook_event_name": "PreToolUse",
+    "model": "gpt-6-astra",
+    "permission_mode": "bypassPermissions",
+    "tool_name": "Bash",
+    "tool_input": {
+        "command": 'python .kb/kb.py create --category FATO --domain general --title "Gate probe" '
+        '--content "Codex write gate probe" --source probe --json'
+    },
+    "tool_use_id": "exec-39c2c0a3-03fb-41db-9f77-133f95eab2f9",
+}
+
+
+def codex_payload(project: Path, command: str | None = None) -> dict:
+    data = json.loads(json.dumps(CODEX_PAYLOAD))
+    data["cwd"] = str(project)
+    if command is not None:
+        data["tool_input"]["command"] = command
+    return data
+
+
+def test_the_live_codex_payload_is_denied(project: Path) -> None:
+    result = run_hook(codex_payload(project))
+
+    assert result.returncode == 0, result.stderr
+    decision = json.loads(result.stdout)["hookSpecificOutput"]
+    assert decision["permissionDecision"] == "deny"
+    assert "filing-proposal" in decision["permissionDecisionReason"]
+
+
+@pytest.mark.parametrize(
+    "command",
+    ["python .kb-next/runtime/kb_next.py session-start --json", "Get-Content -LiteralPath .kb-next/memory/NOW.md"],
+)
+def test_the_other_live_codex_calls_pass(project: Path, command: str) -> None:
+    result = run_hook(codex_payload(project, command))
+
+    assert result.returncode == 0 and result.stdout == b""
+
+
+@pytest.mark.parametrize(
+    "command, shown",
+    [
+        ("python .kb/kb.py resolve KB-1 --notes done", "`kb.py resolve`"),
+        ("python .kb/kb.py bulk-import seed.jsonl", "`kb.py bulk-import`"),
+        ('python .kb/kb.py raw-query "UPDATE records SET tier = \'WARM\'" --allow-write', "`kb.py raw-query --allow-write`"),
+        ('python .kb/kb.py raw-query "DELETE FROM records" --allow-w', "`kb.py raw-query --allow-write`"),
+        ("python .kb/kb.py consolidate --apply-demotions", "`--apply-demotions`"),
+        ("python .kb/kb.py lifecycle scheduled-maintenance --json", "`kb.py lifecycle scheduled-maintenance`"),
+        ("python .kb/kb.py lifecycle --json scheduled-maintenance", "`kb.py lifecycle scheduled-maintenance`"),
+        ("python .kb/kb.py lifecycle session-end --apply-demotions --json", "`--apply-demotions`"),
+        ("python .kb/kb.py lifecycle session-end --apply-d --json", "`--apply-demotions`"),
+        ("python .kb/kb.py lifecycle session-end --apply-cold-demotions", "`kb.py lifecycle --apply-cold-demotions`"),
+    ],
+)
+def test_other_canonical_writes_are_denied(project: Path, command: str, shown: str) -> None:
+    reason = gate.decide(payload(command, project))
+
+    assert reason and "kb-wiki-vnext write gate" in reason
+    assert shown in reason.split(";", 1)[0]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'python .kb/kb.py raw-query "SELECT COUNT(*) FROM records"',
+        "python .kb/kb.py consolidate",
+        "python .kb/kb.py lifecycle session-start --json",
+        "python .kb/kb.py lifecycle session-end --domain ops --json",
+        "python .kb/kb.py lifecycle record-filed --refresh-exports --json",
+        "python .kb/kb.py lifecycle session-end --prune-snapshots --json",
+        "python .kb/kb.py ingest notes.md --domain ops --json",
+        "python .kb/kb.py wiki-sync --json",
+        "python .kb/kb.py export",
+    ],
+)
+def test_reads_derived_surfaces_and_sources_pass(project: Path, command: str) -> None:
+    assert gate.decide(payload(command, project)) is None
+
+
+def test_resolve_names_both_governed_closes(project: Path) -> None:
+    reason = gate.deny_reason("resolve", project)
+
+    assert "`resolve_candidate`" in reason and "resolution_notes" in reason
+    assert '"action": "retire"' in reason and "replacement_id" in reason
+    assert "semantic-hygiene --judgment @hygiene-judgment.json --write-proposals --json" in reason
+    assert "proposal-apply --proposal" in reason
+
+
+def test_writes_without_a_proposal_path_send_the_user_to_their_terminal(project: Path) -> None:
+    for verb in ("raw-query", "cold-demotions"):
+        reason = gate.deny_reason(verb, project)
+        assert "own terminal" in reason
+        assert "proposal-apply" not in reason
+
+
+def test_demotions_point_to_hygiene_and_to_session_end(project: Path) -> None:
+    reason = gate.deny_reason("demotions", project)
+
+    assert "`demote_candidate`" in reason
+    assert "`python .kb/kb.py lifecycle session-end --json`" in reason
 
 
 def test_the_hook_prints_a_deny_decision_for_bash_and_powershell(project: Path) -> None:
@@ -494,7 +619,7 @@ def test_session_hint_states_the_rule_while_the_gate_is_on(tmp_path: Path) -> No
         return out.getvalue()
 
     run("activation-wizard", "--mode", "short", "--choice", "kb-alone", "--json")
-    rule = "plugin hook denies direct `.kb/kb.py create|file|supersede|update`"
+    rule = "plugin hook denies direct `.kb/kb.py create|file|supersede|update|resolve|bulk-import`"
     assert rule in run("session-hint")
 
     config_path = tmp_path / ".kb-next" / "kb-next.config.json"
@@ -655,3 +780,270 @@ def test_the_gate_stays_on_the_standard_library() -> None:
     imports = set(re.findall(r"^(?:from|import) ([A-Za-z_]+)", source, re.MULTILINE))
 
     assert imports <= {"__future__", "json", "os", "re", "sys", "pathlib"}
+
+
+# ---------------------------------------------------------------------------
+# Review of PR #36 at 060cb91 (2026-10-21): bypasses and false allows
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python .kb/kb.py init --seed batch.jsonl",
+        "python .kb/kb.py init --slug p --seed=batch.jsonl",
+        "python .kb/kb.py init --see batch.jsonl",
+    ],
+)
+def test_seeded_init_is_denied(project: Path, command: str) -> None:
+    # `init --seed` bulk-imports into an existing kb.db too (connect(create=True)).
+    reason = gate.decide(payload(command, project))
+
+    assert reason and "`kb.py init --seed`" in reason
+
+
+def test_init_without_a_seed_passes(project: Path) -> None:
+    assert gate.decide(payload("python .kb/kb.py init --slug p --name P", project)) is None
+
+
+@pytest.mark.parametrize(
+    "command, where",
+    [
+        ("python -m kb resolve P --notes done", ".kb"),
+        ("python -B -mkb supersede P --replacement-id R", ".kb"),
+        ("PYTHONPATH=.kb python -m kb create --category FATO --domain ops --title T --content C", "."),
+        ("env X=1 python .kb/kb.py resolve P --notes done", "."),
+        ("env -u HOME KB=1 python3 .kb/kb.py create --category FATO --domain ops --title T --content C", "."),
+        ("nohup python .kb/kb.py bulk-import seed.jsonl", "."),
+        (r"cmd /c python .kb\kb.py resolve P --notes done", "."),
+        ('cmd.exe /c "python .kb/kb.py resolve P --notes done"', "."),
+        ("powershell -NoProfile -Command \"python .kb/kb.py resolve P --notes done\"", "."),
+        ("bash -lc 'python .kb/kb.py resolve P --notes done'", "."),
+        ("Start-Process python '.kb/kb.py resolve P --notes done'", "."),
+        ("Start-Process -FilePath python -ArgumentList '.kb/kb.py','resolve','P','--notes','done' -Wait", "."),
+        ("Start-Process python -ArgumentList '.kb/kb.py resolve P' -WindowStyle Hidden -NoNewWindow", "."),
+        ("python .kb/kb.py `\nresolve P --notes done", "."),
+        ("python .kb/kb.py `\r\n  resolve P --notes done", "."),
+        ("python .kb/kb.py \\\nresolve P --notes done", "."),
+        (r"python .KB\KB.py resolve P --notes done", "."),
+        ("python .kb/Kb.py create --category FATO --domain ops --title T --content C", "."),
+        ("Start-Process python -ArgumentList @('.kb/kb.py','resolve','P')", "."),
+        ("Start-Process python @('.kb/kb.py','resolve','P','--notes','done')", "."),
+        ('Invoke-Expression "python .kb/kb.py resolve P --notes done"', "."),
+        ("iex 'python .kb/kb.py resolve P --notes done'", "."),
+        ("& { python .kb/kb.py resolve P --notes done }", "."),
+        ("{ python .kb/kb.py resolve P --notes done; }", "."),
+    ],
+)
+def test_launch_forms_and_line_continuations_are_read(project: Path, command: str, where: str) -> None:
+    assert gate.decide(payload(command, project / where))
+
+
+@pytest.mark.parametrize(
+    "command, where",
+    [
+        ("python -m pytest tests", "."),
+        ("python -m kb search gate", ".kb"),
+        ("env X=1 python .kb/kb.py get KB-1", "."),
+        ("Start-Process python '.kb/kb.py search gate'", "."),
+        ('cmd /c "python .kb/kb.py pending --json"', "."),
+    ],
+)
+def test_launch_forms_of_reads_still_pass(project: Path, command: str, where: str) -> None:
+    assert gate.decide(payload(command, project / where)) is None
+
+
+def test_a_cd_into_a_vnext_project_is_followed(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    outside = tmp_path / "elsewhere"
+    outside.mkdir()
+    write = "python .kb/kb.py resolve P --notes done"
+
+    for command in (
+        f'cd "{vnext}"; {write}',
+        f'Set-Location -Path "{vnext}" && {write}',
+        f"pushd {vnext.as_posix()} && {write}",
+        f'cmd /c "cd /d {vnext} && {write}"',
+    ):
+        assert gate.decide(payload(command, outside)), command
+    assert gate.decide(payload(f"cd vnext && {write}", tmp_path))
+    assert gate.decide(payload(f"cd ../vnext; {write}", outside))
+
+
+def test_a_cd_out_of_a_vnext_project_is_followed(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    write = "python .kb/kb.py create --category FATO --domain ops --title T --content C"
+
+    assert gate.decide(payload(f'cd "{classic}"; {write}', vnext)) is None
+    assert gate.decide(payload(f'Set-Location "{classic}"; {write}', vnext)) is None
+    assert gate.decide(payload(f'pushd "{classic}"; popd; {write}', vnext))
+    assert gate.decide(payload(f'cd "{classic}"; cd -; {write}', vnext))
+
+
+def make_linked_worktree(main: Path, worktree: Path, name: str = "wt") -> None:
+    gitdir = main / ".git" / "worktrees" / name
+    gitdir.mkdir(parents=True)
+    (gitdir / "commondir").write_text("../..\n", encoding="utf-8")
+    (worktree / ".git").write_text(f"gitdir: {gitdir.as_posix()}\n", encoding="utf-8")
+
+
+def test_a_worktree_of_a_vnext_main_checkout_is_gated(tmp_path: Path) -> None:
+    # The classic runtime resolves a linked worktree to the main checkout's KB
+    # (shared scope), so the main checkout's activation governs the worktree.
+    main = make_project(tmp_path / "main")
+    worktree = make_project(tmp_path / "wt", vnext=False)
+    make_linked_worktree(main, worktree)
+
+    assert gate.decide(payload("python .kb/kb.py resolve P --notes done", worktree))
+
+
+def test_a_worktree_activated_alone_is_gated_and_a_classic_pair_is_not(tmp_path: Path) -> None:
+    main = make_project(tmp_path / "main", vnext=False)
+    worktree = make_project(tmp_path / "wt")
+    make_linked_worktree(main, worktree)
+    plain_main = make_project(tmp_path / "plain-main", vnext=False)
+    plain_worktree = make_project(tmp_path / "plain-wt", vnext=False)
+    make_linked_worktree(plain_main, plain_worktree, name="plain")
+
+    assert gate.decide(payload("python .kb/kb.py resolve P --notes done", worktree))
+    assert gate.decide(payload("python .kb/kb.py resolve P --notes done", plain_worktree)) is None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "python .kb/kb.py resolve --help",
+        "python .kb/kb.py supersede --help",
+        "python .kb/kb.py supersede -h",
+        "python .kb/kb.py lifecycle scheduled-maintenance --help",
+        "python .kb/kb.py bulk-import --hel",
+    ],
+)
+def test_help_invocations_pass(project: Path, command: str) -> None:
+    assert gate.decide(payload(command, project)) is None
+
+
+def test_cold_demotion_deny_names_an_operation_that_works(project: Path) -> None:
+    reason = gate.deny_reason("cold-demotions", project)
+
+    assert "skips" in reason and "--tier COLD" in reason
+    assert "run that command in their own terminal" not in reason
+
+
+# ---------------------------------------------------------------------------
+# Second review of PR #36 at 23af579 (2026-10-21): ordinary syntax still missed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'python -m "kb" resolve P --notes done',
+        "python -m 'kb' resolve P --notes done",
+        "python -m `\nkb resolve P --notes done",
+        "python -m \\\nkb resolve P --notes done",
+    ],
+)
+def test_a_quoted_or_continued_module_name_is_read(project: Path, command: str) -> None:
+    where = project / ".kb"
+    assert gate.decide(payload(command, where))
+
+    result = run_hook(payload(command, where))
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_escaped_spaces_in_paths_are_read(spaced: tuple[Path, Path]) -> None:
+    project, outside = spaced
+    bash = project.as_posix().replace(" ", "\\ ")
+    powershell = windows(project).replace(" ", "` ")
+    write = "python .kb/kb.py resolve P --notes done"
+
+    assert gate.decide(payload(f"cd {bash} && {write}", outside))
+    assert gate.decide(payload(f"python {bash}/.kb/kb.py resolve P --notes done", outside))
+    assert gate.decide(payload(f"Set-Location {powershell}; {write}", outside))
+
+
+def test_invoke_expression_moves_the_enclosing_shell(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    write = "python .kb/kb.py resolve P --notes done"
+
+    assert gate.decide(payload(f"iex 'Set-Location \"{windows(vnext)}\"'; {write}", outside))
+    assert gate.decide(payload(f"Invoke-Expression \"cd '{vnext.as_posix()}'\"; {write}", outside))
+    assert gate.decide(payload(f"iex 'Set-Location \"{windows(classic)}\"'; {write}", vnext)) is None
+    # A child shell's change stays inside the child.
+    assert gate.decide(payload(f"pwsh -Command \"Set-Location '{windows(vnext)}'\"; {write}", outside)) is None
+
+
+def test_a_missing_folder_keeps_the_last_resolved_directory(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    write = "python .kb/kb.py create --category FATO"
+
+    assert gate.decide(payload(f'cd "{vnext.as_posix()}"; cd missing; {write}', tmp_path))
+    assert gate.decide(payload(f'cd "{classic.as_posix()}"; cd missing; {write}', vnext)) is None
+
+
+def test_a_literal_pythonpath_selects_the_module_project(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    into_vnext = f'PYTHONPATH="{(vnext / ".kb").as_posix()}" python -m kb resolve P --notes done'
+    into_classic = f'PYTHONPATH="{(classic / ".kb").as_posix()}" python -m kb create --category FATO'
+
+    assert gate.decide(payload(into_vnext, outside))
+    assert gate.decide(payload(into_classic, vnext)) is None
+
+
+def test_the_deny_in_a_worktree_names_the_activated_main_checkout(tmp_path: Path) -> None:
+    main = make_project(tmp_path / "main")
+    worktree = make_project(tmp_path / "wt", vnext=False)
+    make_linked_worktree(main, worktree)
+
+    reason = gate.decide(payload("python .kb/kb.py resolve P --notes done", worktree))
+
+    assert reason and f'--project-root "{main.as_posix()}"' in reason
+    assert "python .kb-next/runtime/kb_next.py" not in reason
+
+
+DETECTOR = REPO_ROOT / "plugins" / "session-gate" / "scripts" / "detect_workspace.py"
+
+
+def test_session_gate_sees_activation_in_the_main_checkout(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("session_gate_detector_under_test", DETECTOR)
+    detector = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(detector)
+    main = make_project(tmp_path / "main")
+    worktree = make_project(tmp_path / "wt", vnext=False)
+    make_linked_worktree(main, worktree)
+    plain = make_project(tmp_path / "plain", vnext=False)
+
+    found = detector.detect(worktree)
+    result = subprocess.run([sys.executable, "-B", str(DETECTOR), str(worktree)], capture_output=True, text=True, check=True)
+
+    assert found["vnext"]["found"] is True and found["kb"]["found"] is True
+    assert Path(found["vnext"]["details"]["project_root"]) == main.resolve()
+    assert json.loads(result.stdout)["vnext"]["details"]["project_root"] == found["vnext"]["details"]["project_root"]
+    assert detector.detect(plain)["vnext"]["found"] is False
+    command = (REPO_ROOT / "plugins" / "session-gate" / "commands" / "gate-session-end.md").read_text(encoding="utf-8")
+    assert "--project-root" in command and "vnext.details.project_root" in command
+
+
+def test_an_env_launched_pythonpath_selects_the_module_project(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+
+    into_vnext = f'env -u HOME PYTHONPATH="{(vnext / ".kb").as_posix()}" python -m kb resolve P --notes done'
+    into_classic = f'nohup env PYTHONPATH="{(classic / ".kb").as_posix()}" python -m kb create --category FATO'
+
+    assert gate.decide(payload(into_vnext, outside))
+    assert gate.decide(payload(into_classic, vnext)) is None

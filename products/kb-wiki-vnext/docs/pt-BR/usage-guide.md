@@ -10,10 +10,10 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.6` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.6`,
-  KB Lifecycle `0.2.5`, container de plugin `0.2.2`, runtime incluído `0.2.2`,
-  Session Gate `0.2.8` e marketplace `0.3.13`.
+- KB/Wiki vNext `0.2.0-rc.7` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.7`,
+  KB Lifecycle `0.2.7`, container de plugin `0.2.3`, runtime incluído `0.2.3`,
+  Session Gate `0.2.9` e marketplace `0.3.14`.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
@@ -637,6 +637,26 @@ os grupos `keep_hot`, `demote_candidate`, `supersede_or_merge_candidate`,
 `resolve_candidate` e `needs_sponsor`, referenciando apenas IDs retornados na
 primeira passagem.
 
+Feche um record conforme a categoria. Uma pendência (PENDENCIA) vai para
+`resolve_candidate` com `resolution_notes`. Um FATO, DECISAO ou outro record
+que um record ATIVO existente já substitui vai para
+`supersede_or_merge_candidate` com `"action": "retire"` e `replacement_id`:
+
+```json
+{"groups": {"supersede_or_merge_candidate": [{"record_id": "KB-20260601-0a1b2c", "action": "retire", "replacement_id": "KB-20261021-3d4e5f", "rationale": "O CASE foi aposentado; o record de decisão o substitui.", "confidence": 0.9}]}, "rationale": "Aposentar os records do CASE na decisão que o aposentou.", "confidence": 0.9, "provenance": [{"record_id": "KB-20261021-3d4e5f"}], "conflicts": []}
+```
+
+Os ids acima são exemplos: use ids que a primeira passagem retornou e uma
+substituta que exista. Um `retire` aprovado roda o `supersede` clássico com
+`--replacement-id` (runtime clássico 0.2.7 ou posterior): o record passa a SUPERSEDIDO com `replacement_id` preenchido e
+nenhum record é criado, então vários records podem se aposentar num só.
+RESOLVIDO continua só para pendências. Quando nenhum record afirma ainda a
+substituição, registre-o antes com `filing-proposal`. Um record cujo sentido
+mudou recebe um `record_draft` no mesmo grupo e vira uma nova versão. As
+duas passagens veem no máximo `--limit` records ativos (HOT primeiro), e a de
+escrita pula um record fora do próprio limite; para chegar a records WARM
+antigos, acrescente o mesmo `--limit 500` às duas.
+
 A curadoria automática roda as duas passagens em todo `vnext-session-end` e na
 manutenção semanal agendada (uma sessão de agente, porque a segunda passagem
 pede julgamento), ao lado do clássico somente leitura
@@ -772,14 +792,31 @@ Riscos: este é o único comando do fluxo destinado a mutar memória canônica; 
 Gate de escrita: num projeto com `.kb-next/kb-next.config.json`, o hook
 PreToolUse do plugin (`scripts/write_gate.py`, matcher `Bash|PowerShell`)
 nega o comando de shell de um agente que roda `.kb/kb.py create`, `file`,
-`supersede` ou `update`, e a mensagem indica `filing-proposal`,
-`semantic-hygiene` e este comando. `proposal-apply` roda o CLI clássico no
-próprio subprocesso, que o hook nunca vê. Leituras e os demais comandos
-clássicos passam, projetos só clássicos não têm gate, e o `session-hint`
-acrescenta uma linha com a regra. O hook orienta agentes; não os autentica. O
-Claude Code o roda assim que instalado; o Codex o roda depois que o usuário
-confia no hook alterado. O dono do projeto pode desligá-lo com
-`{"write_gate": {"enabled": false}}` mesclado na config do vNext.
+`supersede`, `update`, `resolve` ou `bulk-import`, `init --seed`,
+`raw-query --allow-write`, `consolidate --apply-demotions`,
+`lifecycle scheduled-maintenance` ou qualquer evento de `lifecycle` com
+`--apply-demotions` ou `--apply-cold-demotions`.
+Ele segue o que o agente digita: `env`, `nohup` e atribuições de variável
+antes do interpretador, `python -m kb` a partir de `.kb/`, `cmd /c`,
+`powershell -Command`, `bash -lc`, `Start-Process`, `Invoke-Expression`,
+arrays e blocos do PowerShell, continuações de linha, nomes em qualquer caixa e
+`cd`, `Set-Location`, `pushd` e `popd` literais entre comandos. Um worktree
+Git vinculado tem gate quando ele ou o checkout principal está ativado, e
+`--help` passa. A mensagem indica o caminho governado
+(`filing-proposal`, `semantic-hygiene` e este comando), ou o terminal do
+próprio usuário para escrita SQL e demoção para COLD, que não têm caminho de
+proposta. `proposal-apply` roda o CLI clássico no próprio subprocesso, que o hook nunca
+vê. Leituras, `ingest`, eventos de `lifecycle` sem essas flags e as
+superfícies derivadas passam, projetos só clássicos não têm gate, e o
+`session-hint` acrescenta uma linha com a regra. O hook orienta agentes; não
+os autentica. O Claude Code o roda assim que instalado; o Codex só o roda
+depois que o usuário confia no hook, e um hook sem confiança não deixa rastro
+no `codex exec --json` (o Codex manda `tool_name` `Bash` com o comando cru,
+também quando roda PowerShell). Onde nenhum hook roda, o runtime clássico 0.2.7 ainda
+pula as demoções automáticas num projeto vNext. O dono do projeto pode
+desligar o hook com `{"write_gate": {"enabled": false}}` mesclado na config do
+vNext; essa chave não desliga a guarda de demoção do clássico, que depende só
+da presença de `.kb-next/kb-next.config.json`.
 
 ### `approved-filing`
 

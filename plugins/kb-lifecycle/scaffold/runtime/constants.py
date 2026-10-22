@@ -5,11 +5,19 @@ CATEGORIES = {"DECISAO", "PREMISSA", "FATO", "PENDENCIA", "APRENDIZADO"}
 STATUSES = {"ATIVO", "SUPERSEDIDO", "RESOLVIDO"}
 TIERS = {"HOT", "WARM", "COLD"}
 
+# Why lifecycle and consolidate skip automatic demotions in a vNext project.
+VNEXT_DEMOTIONS_SKIPPED = (
+    "KB/Wiki vNext project (.kb-next/kb-next.config.json): tier demotions change records only through "
+    "`semantic-hygiene --write-proposals` and an approved `proposal-apply`"
+)
+
 # Records the KB Factory template seeded before kb-lifecycle 0.2.6. They
 # describe the KB, not the project, so the derived surfaces (NOW, HOT, INDEX,
 # topics, packs, wiki candidates and wiki signals) leave them out. They stay in
 # kb.db and in search. A match needs the template title and a bootstrap
-# source, so a record the project rewrote is never hidden.
+# source, so a record the project rewrote is never hidden. The list also holds
+# the Portuguese translations found in existing KBs, as stored (no accents);
+# the template no longer seeds, so the list is closed.
 BOOTSTRAP_SEED_SOURCES = ("project-bootstrap", "kb-factory-blueprint")
 BOOTSTRAP_SEED_TITLES = (
     "KB enabled as the project's operating memory",
@@ -17,6 +25,11 @@ BOOTSTRAP_SEED_TITLES = (
     "The primary runtime is local-first",
     "Review HOT criteria after first real sessions",
     "Search before assuming reduces context drift",
+    "A KB e a memoria operacional do projeto",
+    "O runtime da KB e local-first",
+    "Revisar o criterio de HOT depois das primeiras sessoes reais",
+    "Buscar antes de supor reduz deriva de contexto",
+    "Consultar KB antes de assumir reduz drift de contexto",
 )
 
 

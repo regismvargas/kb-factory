@@ -23,8 +23,9 @@ Session Gate, and classic KB lifecycle commands cannot collide.
 4. If the user approves a record in chat, file it with one
    `approved-filing` call (see the kb-wiki-vnext skill); if a canonical KB
    update was approved as a proposal, apply it with `proposal-apply`. Do not
-   run `.kb/kb.py create`, `file`, `supersede` or `update` (the plugin's write
-   gate denies them). Both commands need `--actor` set to the person
+   run `.kb/kb.py create`, `file`, `supersede`, `update`, `resolve` or
+   `bulk-import` (the plugin's write gate denies them). Both commands need
+   `--actor` set to the person
    who approved (ask if unknown; omit it only when that person is the
    `proposal_apply.default_actor` of the vNext config) and `--actor-runtime`
    set to this runtime.
@@ -50,7 +51,8 @@ Session Gate, and classic KB lifecycle commands cannot collide.
    `semantic-hygiene` returned; it drops others) in
    `hygiene-judgment.json`: `groups` holding `demote_candidate`,
    `resolve_candidate`, `supersede_or_merge_candidate` (with a
-   `record_draft`) or `needs_sponsor` items, each with `record_id`,
+   `record_draft`, or `"action": "retire"` and `replacement_id` naming the
+   existing ATIVO record that replaces it) or `needs_sponsor` items, each with `record_id`,
    `rationale` and `confidence`, plus a top-level `rationale`, `confidence`,
    `provenance` (a list of `{"record_id": ...}`) and `conflicts`. Leave out a
    record that should stay as it is. Write the batch with
@@ -59,4 +61,5 @@ Session Gate, and classic KB lifecycle commands cannot collide.
    proposal and lists the overflow under `deferred`. Do not apply these
    proposals at session end: list their ids for the user's weekly review.
    Do not run `python .kb/kb.py lifecycle scheduled-maintenance` here; its
-   default config demotes stale HOT records without a proposal.
+   default config demotes stale HOT records without a proposal, and the
+   write gate denies it in a vNext project.

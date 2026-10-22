@@ -203,8 +203,8 @@ Everything above maps to a small, plain-Python toolkit — no magic:
   optional derived **wiki** layer and the LLM-curated-but-mechanically-governed
   proposal flow — is in the [command reference](../commands.md) and
   [concepts](../concepts.md). With KB/Wiki vNext active, the record and
-  supersede writes go through a proposal you approve (`filing-proposal`, then
-  `proposal-apply`) instead.
+  supersede writes wait for your approval instead (`approved-filing` when you
+  approve in chat, or `filing-proposal` then `proposal-apply`).
 
 One caveat worth stating plainly: `consolidate` is *mechanical* hygiene
 (exact-title dedupe + age-based tier demotion + integrity checks), **not**

@@ -132,7 +132,8 @@ your canonical knowledge base until you approve.
   you to the right init command, then verifies.
 - `/new-project-init-kb-alone` — set up a new project with the knowledge base only.
 - `/new-project-init-kb-wiki` — set up a new project with the knowledge base
-  plus a generated wiki.
+  plus a generated wiki. The wiki stays dormant until 10 records cite a
+  registered source, then publishes its first pages by itself.
 - `/new-project-verify-install` — a read-only check that the setup worked.
 
 *Bringing an existing or legacy project on board*
@@ -161,7 +162,7 @@ items), the proposal → apply flow, and `compliance-preflight` (a checklist gat
 for development work). Where the client supports hooks, the plugin prints the
 vNext startup guidance at session start, tells every Claude Code subagent not
 to write the knowledge base, and runs a write gate that denies an agent's direct
-`create`, `file`, `supersede` or `update` and points it to the proposal path.
+`create`, `file`, `supersede`, `update`, `resolve` or `bulk-import` and points it to the proposal path.
 Runs on
 Claude Code, Cowork, and Codex. Underlying CLI verbs are in
 [the command reference](../commands.md#kbwiki-vnext-runtime).

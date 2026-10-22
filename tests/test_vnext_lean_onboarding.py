@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -102,8 +103,9 @@ def test_new_kb_wiki_starts_dormant_with_scope_only(new_project: Path) -> None:
     assert [(row["category"], row["tier"], row["valid_until"]) for row in records] == [("DECISAO", "HOT", None)]
 
     vnext_now = (new_project / ".kb-next" / "memory" / "NOW.md").read_text(encoding="utf-8")
-    assert "- Wiki active: `false`" in vnext_now
-    assert "Wiki dormant until `10`" in vnext_now
+    # NOW states when the wiki starts, never a dormant state that ends on its own.
+    assert "Wiki active" not in vnext_now
+    assert "- Wiki: starts by itself once `10` active records cite a registered source (`0` when" in vnext_now
     assert "## Wiki Flow" not in vnext_now
     hint = vnext(new_project, "session-hint").stdout
     assert "approved-filing" in hint
@@ -136,6 +138,10 @@ def test_dormant_wiki_wakes_at_the_sourced_record_threshold(new_project: Path) -
     start = vnext_json(new_project, "session-start")
     assert start["wiki"]["status"] == "aligned"
     assert "wiki_drafts" in start
+    # The NOW written while dormant does not contradict session-start after the wake.
+    vnext_now = (new_project / ".kb-next" / "memory" / "NOW.md").read_text(encoding="utf-8")
+    assert "Wiki active: `false`" not in vnext_now
+    assert "`session-start` `wiki.status` gives the current state" in vnext_now
     assert "vnext-wiki-drafts" in vnext(new_project, "session-hint").stdout
     # The third filing crossed the threshold; its lifecycle sync published the first page.
     assert (new_project / ".kb" / "wiki" / "live" / "research" / "overview.md").is_file()
@@ -232,3 +238,47 @@ def test_seed_list_matches_the_classic_runtime() -> None:
         assert tuples(classic, name) == tuples(runtime, name)
     assert re.search(r'BOOTSTRAP_SEED_SOURCES = \(([^)]*)\)', classic).group(1) == \
         re.search(r'BOOTSTRAP_SEED_SOURCES = \(([^)]*)\)', runtime).group(1)
+
+
+def test_session_hint_command_sheet_runs(new_project: Path) -> None:
+    """Every command of the hint's sheet runs as printed once its <...> are filled."""
+    activate_guided(new_project, "--scope", SCOPE)
+    hint = vnext(new_project, "session-hint").stdout
+    sheet = hint[hint.index("Commands"):]
+    spans = re.findall(r"`(python [^`]+)`", sheet)
+    by_task = {line.split(":", 1)[0][2:]: line for line in sheet.splitlines() if line.startswith("- ")}
+    assert set(by_task) == {"Look up", "Register a source", "File a record the user approved in chat",
+                            "Replace a record", "Close the session"}
+    paper = new_project / "paper.md"
+    paper.write_text("Evidence.\n", encoding="utf-8")
+    values = {"<terms>": "Scope", "<file>": paper.as_posix(), "<domain>": "research", "<title>": "Finding",
+              "<content>": "Finding with evidence.", "<0-1>": "0.9", "<approver>": "sponsor",
+              "<who approved, in their words>": "User approved in chat: ok"}
+
+    def run_span(span: str, **extra: str) -> dict:
+        def value(match: re.Match) -> str:
+            placeholder = match.group(0)
+            if placeholder in extra:
+                return extra[placeholder]
+            if "|" in placeholder:
+                options = placeholder[1:-1].split("|")
+                return "FATO" if "FATO" in options else options[0]
+            return values[placeholder]
+
+        argv = shlex.split(re.sub(r"<[^<>]+>", value, span))
+        proc = subprocess.run([sys.executable, *argv[1:]], cwd=str(new_project), env=ENV,
+                              capture_output=True, text=True, encoding="utf-8")
+        assert proc.returncode == 0, f"{span}\n{proc.stderr or proc.stdout}"
+        return json.loads(proc.stdout)
+
+    lookup, ingest, filing, close = (next(s for s in spans if f" {name} " in s)
+                                     for name in ("lookup", "ingest", "approved-filing", "lifecycle"))
+    assert run_span(lookup)["results"]
+    sid = run_span(ingest)["source_id"]
+    first = run_span(filing, **{"<source-id>": sid})
+    assert first["status"] == "applied"
+    supersede = re.search(r"`(--supersedes [^`]+)`", by_task["Replace a record"]).group(1)
+    second = run_span(f"{filing} {supersede}", **{"<source-id>": sid, "<record-id>": first["canonical_record_id"],
+                                                  "<title>": "Finding, revised"})
+    assert second["status"] == "applied" and second["target_record_id"] == first["canonical_record_id"]
+    assert run_span(close)["event"] == "session-end"

@@ -44,7 +44,7 @@ tiers** are `HOT` (always surfaced at session start), `WARM` (the default), and
 `COLD` (archived). Use [`update`](#update) only for *routing metadata* (tier,
 tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
-> **Getting the CLI:** install the `v0.2.2` GitHub release wheel (see
+> **Getting the CLI:** install the `v0.2.3` GitHub release wheel (see
 > [installation.md](installation.md)), then `kb-factory init` scaffolds
 > a project's `.kb/` (and `kb-factory update` refreshes it later). After that, the
 > commands on this page run as `python .kb/kb.py <command>` from the project root.
@@ -59,9 +59,10 @@ Codex, you use plugin commands (and an auto-triggering skill) instead of typing
 the CLI. They call the classic verbs documented on this page, and the
 kb-wiki-vnext commands also call the [vNext runtime](#kbwiki-vnext-runtime). In
 a project with vNext active, the write gate denies an agent's direct `create`,
-`file`, `supersede` and `update`: the agent files new records and supersessions
-through `filing-proposal`, and HOT demotions through `semantic-hygiene`, then
-applies them with `proposal-apply` after you approve. See
+`file`, `supersede` and `update`. A new record or supersession you approve in
+chat goes through `approved-filing` in one call. Otherwise the agent prepares
+it with `filing-proposal`, and a HOT demotion with `semantic-hygiene`, then
+applies it with `proposal-apply` after you approve. See
 [agent-sessions.md](agent-sessions.md) for the workflow.
 
 The names below are logical basenames, not one literal invocation for every
@@ -359,6 +360,11 @@ maintenance that lets stale HOT records fall back:
 python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json
 ```
 
+In a project with KB/Wiki vNext active, kb-lifecycle 0.2.7 skips automatic
+HOT and COLD demotions, from config or flags, and reports
+`demotions_skipped`: demotions go through a `semantic-hygiene` proposal
+that you approve. Classic-only projects keep them.
+
 ---
 
 ## Advanced: maintenance & integrity
@@ -401,7 +407,8 @@ python .kb/kb.py consolidate [--apply-demotions]
 
 Reports exact-title duplicate groups and refreshes exports. With
 `--apply-demotions`, it also demotes HOT records whose `--review-after` date has
-elapsed (to WARM). It does **not** merge or supersede anything semantically —
+elapsed (to WARM), except in a KB/Wiki vNext project, where kb-lifecycle
+0.2.7 skips it. It does **not** merge or supersede anything semantically —
 it only flags exact-title duplicates for you to act on.
 
 ### `audit-tiers`
@@ -431,6 +438,8 @@ python .kb/kb.py prune-snapshots --keep-last-n 5 [--dry-run] [--json]
 ```
 
 Keeps the most recent N wiki snapshots per live page and removes older ones.
+From kb-lifecycle 0.2.7 a replaced live page is snapshotted at most once per
+UTC day, so a batch of filings no longer leaves one snapshot per record.
 `--dry-run` shows the plan without deleting.
 
 ---
@@ -507,23 +516,34 @@ python .kb-next/runtime/kb_next.py session-start --json
 ```
 
 `.kb/` stays canonical. The vNext runtime reads it and writes only under
-`.kb-next/`, except for an approved `proposal-apply`. The commands below change
+`.kb-next/`, except for an approved `approved-filing` or `proposal-apply` and
+the scope record of `activation-wizard --scope`. The commands below change
 everyday use; every command, with examples and risks, is in the
 [vNext usage guide](../products/kb-wiki-vnext/docs/en/usage-guide.md).
 
 | Command | What it does |
 |---|---|
+| `activation-wizard` | Activates vNext (`--mode short` or `guided`, `--choice kb-alone` or `kb-wiki`). `--scope "<text>"` files the user's scope once as a HOT `DECISAO` tagged `project-scope`, with no expiry; no scope, no record. With `kb-wiki`, a wiki that is not already on stays dormant until `--wiki-min-sourced-records` (default 10) active records cite a registered source: `session-start` reports `wiki.status` `dormant`, and the record that crosses the mark publishes the first pages. `0` runs the first wiki-sync at once; an enabled wiki is never put back to sleep. |
 | `lookup` | Ranked read-only retrieval by facet (`decisions`, `learnings`, `definitions`, `open-items`, `status`). It ranks with an FTS5 word list (BM25) fused by Reciprocal Rank Fusion. `--lists words,trigram` adds a trigram substring list for one call; `--lists words,dense` adds the optional dense list. Appends one line to `.kb-next/operations.jsonl`. |
 | `dense-index` | Builds or refreshes the optional local dense (embedding) index under `.kb-next/index/dense/`. Needs `pip install model2vec==0.10.0`; `--fetch-model` downloads the pinned model once, `--rebuild` starts over. `lookup` fuses it by default only when `retrieval.dense.enabled` is `true` in `.kb-next/kb-next.config.json`. Off by default. A cold lookup costs about 3 s more with `potion-base-32M`; `potion-multilingual-128M` takes about 11.7 s per cold lookup and is not recommended. |
-| `filing-proposal` | Turns a candidate record into a governed proposal under `.kb-next/proposals`; it does not write `.kb/`. |
+| `approved-filing` | Files one record the user approved in chat in a single call, with the record fields inline (`--category`, `--domain`, `--title`, `--content`, `--confidence`, `--approval-note`). Provenance is `--source-id` (a source registered with `kb.py ingest`) or `--record-id` (an existing record); `--supersedes` names the active record it replaces. It applies the `proposal-apply` rules plus a same-title check, takes `--actor` and `--actor-runtime` like `proposal-apply`, and writes one manifest under `.kb-next/manifests/approved-filing/` and one oplog event. A blocked call writes nothing and exits 1. |
+| `filing-proposal` | Turns a candidate record into a governed proposal under `.kb-next/proposals`; it does not write `.kb/`. Use it, then `proposal-apply`, when the approval comes later or from someone else. |
 | `proposal-apply` | Applies a reviewed proposal through `.kb/kb.py` after explicit approval, with `--approve`, `--approval-note`, `--actor` (who approves) and `--actor-runtime` (`claude-code`, `codex`, `cowork` or `human`). A project with one usual approver can set `proposal_apply.default_actor` in `.kb-next/kb-next.config.json`; `--actor` then defaults to it, and `--actor-runtime` stays required. |
-| `semantic-hygiene` | Report-only review of HOT overflow by default; a reviewed second pass with `--judgment` and `--write-proposals` writes hygiene proposals. The output carries `review_budget`: at most `semantic_curation.weekly_hygiene_proposals` open proposals per project per 7 days (default 5); the rest are listed under `deferred`. |
+| `semantic-hygiene` | Report-only review of HOT overflow by default; a reviewed second pass with `--judgment` and `--write-proposals` writes hygiene proposals: demote, resolve an open item, supersede, or `retire` a record that an existing active record already replaces (it becomes SUPERSEDIDO without a new record). The output carries `review_budget`: at most `semantic_curation.weekly_hygiene_proposals` open proposals per project per 7 days (default 5); the rest are listed under `deferred`. |
 | `subagent-hint` | Prints the SubagentStart hook JSON. Subagents never write the KB and end their report with `KB candidates`; the main agent pastes the records that bear on the subtask into the brief under `KB records`. |
 
 A ranked lookup with the trigram list added:
 
 ```bash
 python .kb-next/runtime/kb_next.py lookup --facet decisions --query "storage" --limit 5 --lists words,trigram --json
+```
+
+Filing a decision the user approved in chat (replace the source id with one
+from `kb.py ingest`, the approver id, and the note with who approved and their
+words):
+
+```bash
+python .kb-next/runtime/kb_next.py approved-filing --category DECISAO --domain architecture --title "Use SQLite for storage" --content "Local-first, single file, no external services." --confidence 0.9 --source-id replace-with-registered-source-id --approval-note "Approved in chat by the project owner" --actor replace-with-approver-id --actor-runtime claude-code --json
 ```
 
 Applying a reviewed proposal (replace both placeholder values with the reviewed
@@ -535,8 +555,13 @@ python .kb-next/runtime/kb_next.py proposal-apply --proposal replace-with-review
 
 **Write gate.** In a project with `.kb-next/kb-next.config.json`, the
 kb-wiki-vnext plugin's PreToolUse hook denies an agent shell command that runs
-`.kb/kb.py create`, `file`, `supersede` or `update`, and names
-`filing-proposal`, `semantic-hygiene` and `proposal-apply` instead. Reads and
+`.kb/kb.py create`, `file`, `supersede`, `update`, `resolve`, `bulk-import`,
+`init --seed`, `raw-query --allow-write`, `consolidate --apply-demotions`,
+`lifecycle scheduled-maintenance` or any `--apply-demotions` flag, and names
+`approved-filing` first, then `filing-proposal`, `semantic-hygiene` and
+`proposal-apply`. `--help` and the reads pass. It also sees the write after `cd`, `pushd` or
+`Set-Location`, inside `{ }` blocks, and inside a nested `bash -c`,
+`pwsh -Command` or `cmd /c`. Reads and
 the other classic commands pass, and classic-only projects are not gated. The
 hook steers agents; it does not authenticate them. Claude Code runs it as
 installed; Codex runs a plugin hook only after you trust it, so check that the

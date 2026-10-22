@@ -60,6 +60,120 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrading To 0.2.3 (Runtime 0.2.3)
+
+This release brings decision 12 of 2026-10-21 (write gate and governed
+retirement), which missed the 0.2.2 cut, and three later changes: fewer
+derived files per record with one wiki snapshot per page per day (PR #41),
+the Portuguese template seeds (PR #40) and the dormant-wiki NOW (PR #42).
+It ships with KB Lifecycle 0.2.7 and Session Gate 0.2.9. It changes no data
+and no schema.
+
+Write gate and governed retirement (decision 12 of 2026-10-21):
+
+- Codex runs the plugin's PreToolUse hook only after the user trusts it.
+  A live probe on 2026-10-21 (codex-cli 0.156.1, Windows) saw two direct
+  `kb.py create` calls write records without trust; with trust bypassed for
+  one run, the hook fired on every shell call and denied the create. Codex
+  sends `tool_name` `Bash` with the raw command, so the gate needs no
+  Codex-specific parsing. This corrects the v0.2.1 known issue: the
+  PowerShell-wrapped form it cites appears only in the `codex exec --json`
+  event stream, never in the hook payload. The missing trust is the issue.
+- The gate also denies `kb.py resolve`, `bulk-import`, `init --seed`,
+  `raw-query --allow-write`, `consolidate --apply-demotions`,
+  `lifecycle scheduled-maintenance` and any `lifecycle` event run with
+  `--apply-demotions` or `--apply-cold-demotions`. `ingest`, plain
+  `lifecycle` events, `wiki-*`, `export`, `--help` and reads stay open. It
+  reads launch forms an agent types (`env`, `python -m kb`, `cmd /c`,
+  `powershell -Command`, `bash -lc`, `Start-Process`, `Invoke-Expression`,
+  line continuations),
+  follows literal `cd`, `Set-Location`, `pushd` and `popd`, and gates a
+  linked Git worktree when it or its main checkout is activated; the
+  classic demotion guard uses the same rule.
+- `proposal-apply --target-record-id` can no longer move an approved
+  proposal to another record. For `demote_hot`, `resolve` and `retire` it
+  must repeat the proposal's target; for `supersede` it may only pick one of
+  the duplicate candidates the proposal names. Any other value blocks with
+  `invalid_target_override`. Earlier runtimes, 0.2.2 and 0.2.1 included, applied an
+  approved proposal to whatever record the flag named.
+- New hygiene action `retire`: a record that an existing ATIVO record already
+  replaces goes to `supersede_or_merge_candidate` with `"action": "retire"`
+  and `replacement_id`; `proposal-apply` runs the classic `supersede` with
+  `--replacement-id` (KB Lifecycle 0.2.7), which marks it SUPERSEDIDO without
+  creating a record. RESOLVIDO stays for open
+  items (PENDENCIA) only.
+- KB Lifecycle 0.2.7 skips automatic HOT and COLD demotions in a project with
+  `.kb-next/kb-next.config.json`, from config or flags, and reports
+  `demotions_skipped`. Classic-only projects keep their demotions.
+- Session Gate 0.2.9 no longer runs `scheduled-maintenance --apply-demotions`
+  in a vNext workspace; it runs the vNext curation step instead.
+
+Derived files and fixes:
+
+- Exports and the wiki rewrite a derived file only when its content changes
+  (the `Generated` stamp alone no longer counts), so one filing touches
+  about half the files it did. A replaced wiki page is kept in
+  `wiki/snapshots` once per page per UTC day instead of once per re-render;
+  the full history stays in the records, `audit_log`, the oplog and Git.
+- `session-hint` ends with a five-line command sheet for this project, and
+  `--help` lists the everyday commands; `--help-all` prints everything.
+- The five Portuguese template seeds found in the portfolio leave NOW, HOT
+  and INDEX like the English ones after the next export.
+- A dormant wiki's NOW says when the wiki starts and points to
+  `session-start` for the current state.
+
+1. Install the 0.2.3 vNext plugin, KB Lifecycle 0.2.7 and Session Gate 0.2.9
+   (ZIPs or marketplace entries).
+2. Where the project pins a local runtime, refresh it:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (expect `runtime_version` `0.2.3`).
+3. Refresh the classic engine, which `retire` and the demotion guard need:
+   `python .kb-next/runtime/kb_next.py upgrade-classic --json`
+   (`supersede --help` then lists `--replacement-id`). On an older engine
+   `proposal-apply` blocks a `retire` with a warning that names
+   `upgrade-classic`.
+4. Where the project tracks `.kb-next/runtime/kb_next.py` or `.kb/runtime/`,
+   commit the refreshed files. Until that commit lands, every other clone or
+   worktree of the project runs the tracked 0.2.2 runtime and engine. Then run
+   `python .kb-next/runtime/kb_next.py session-start --json` once and check
+   that `git status` lists no new change under `.kb-next/`.
+5. Codex only: trust the plugin's hooks in Codex's hook review. Codex 0.156.1
+   runs a plugin hook only after that trust, and an untrusted hook leaves no
+   trace in `codex exec --json`. Check that the PreToolUse trust is recorded:
+   `Select-String -Path "$HOME\.codex\config.toml" -Pattern 'kb-wiki-vnext@.*pre_tool_use'`
+   This release does not change the hook commands in `hooks/hooks.json`.
+   Whether a later change to them makes Codex ask for trust again is a
+   hypothesis from the 2026-10-21 probe, not verified. Persisted trust itself
+   is not yet tested; until the check below passes, treat the Codex gate as
+   unverified.
+   Acceptance, in a disposable sandbox and never in a portfolio project
+   (`$runtime` is the installed plugin runtime; the record count must not
+   change and the event stream must show the block):
+
+   ```powershell
+   $runtime = "$HOME\.codex\plugins\cache\kb-factory-tools\kb-wiki-vnext\0.2.3\runtime\kb_next.py"
+   New-Item -ItemType Directory trust-check | Set-Location
+   git init
+   python $runtime --project-root . install-classic --slug trustcheck --domains general --json
+   python $runtime --project-root . bootstrap --json
+   python $runtime --project-root . activation-wizard --mode short --choice kb-alone --json
+   Set-Content prompt.txt 'Run exactly one shell command and nothing else: python .kb/kb.py create --category FATO --domain general --title "Gate check" --content "Codex trust check" --source check --json'
+   Get-Content prompt.txt | codex exec -C . --ephemeral --json - | Select-String 'Command blocked by PreToolUse hook'
+   python -c "import sqlite3; print(sqlite3.connect('.kb/kb.db').execute('SELECT COUNT(*) FROM records').fetchone()[0])"
+   ```
+
+   One more record than after `install-classic` means the trust did not take.
+
+Rollback: reinstall the v0.2.2 plugins (kb-wiki-vnext 0.2.2, KB Lifecycle
+0.2.6, Session Gate 0.2.8) from the public v0.2.2 release and run `bootstrap`
+from the 0.2.2 runtime. Then run its `upgrade-classic` with `--template`
+pointing at the KB Lifecycle 0.2.6 scaffold folder of that release: without
+it, a plugin cache that still holds 0.2.7 is picked as the newest scaffold
+and the 0.2.7 engine comes back. Check that `python .kb/kb.py supersede
+--help` no longer lists `--replacement-id`. Nothing to undo in `.kb/`. Records retired with 0.2.3 stay
+SUPERSEDIDO, which an older classic engine reads as any superseded record;
+with the 0.2.6 engine, automatic demotions run again in vNext projects.
+
 ## Upgrading To 0.2.2 (Runtime 0.2.2)
 
 This release keeps read telemetry out of the versioned governance trail and
@@ -78,6 +192,37 @@ data and no schema.
 - `session-hint` names a runtime that exists when `.kb-next/runtime/` is
   absent and adds a `Runtime skew` line when the local runtime's version
   differs from the plugin's.
+
+Lean onboarding (PR #37), in this release:
+
+- Template seeds. The classic scaffold of KB Lifecycle 0.2.6 seeds no
+  record. A KB created earlier keeps its five template seeds in `kb.db` and in
+  search; NOW, HOT, INDEX, topics, packs, wiki candidates, wiki signals and
+  vNext wiki topics leave them out from the next refresh of those surfaces,
+  which `python .kb/kb.py export` (or any `lifecycle session-end`) runs.
+- Scope. `activation-wizard --scope "<scope in the user's words>"` files the
+  scope once as a HOT `DECISAO` tagged `project-scope`, without
+  `valid_until`. Without `--scope` no record is filed.
+- Dormant wiki. A `kb-wiki` activation with fewer than
+  `--wiki-min-sourced-records` (default 10) active records citing a
+  registered source leaves the classic wiki dormant (`signal` mode): no
+  pages, no drafts line in the hook, `wiki.status` `dormant`. The record that
+  crosses the mark publishes the first pages. An enabled classic wiki stays
+  on; to publish right away on a new activation, pass
+  `--wiki-min-sourced-records 0`.
+- One call for a record approved in chat. `approved-filing` files it with the
+  `proposal-apply` rules (provenance, confidence floor, active supersede
+  target) plus a same-title check, one manifest under
+  `.kb-next/manifests/approved-filing/` and one oplog line; a blocked call
+  writes nothing and exits 1. A supersede may change the category and clear
+  `valid_until` (`--valid-until none`); a category change needs classic
+  0.2.6 (`supersede --category`); in 0.2.2 only `approved-filing` passes it
+  (`proposal-apply` does from 0.2.3).
+- Record-level wiki confidence. A record below `min_confidence_autopublish`
+  leaves its page instead of holding the whole page back; a page is held back
+  only when no record remains, and `wiki-sync` and `wiki-check` list the
+  left-out records as `records_held_back`. After `upgrade-classic`, the next
+  `wiki-sync` may publish pages that 0.2.1 held back.
 
 1. Install the 0.2.2 plugin ZIP or marketplace entry.
 2. Where the project pins a local runtime, refresh it:

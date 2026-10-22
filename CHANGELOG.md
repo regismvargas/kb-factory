@@ -7,6 +7,78 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-22
+
+0.2.2 was cut before the write-gate and governed-close work of 2026-10-21
+merged. This release ships it, together with fewer derived files per record.
+See "Upgrading To 0.2.3" in `products/kb-wiki-vnext/docs/en/upgrade-rollback.md`
+(Portuguese: `products/kb-wiki-vnext/docs/pt-BR/upgrade-rollback.md`).
+
+### Added
+- Governed retirement. `semantic-hygiene` can propose `retire` for a record
+  that an existing active record already replaces; after approval,
+  `proposal-apply` runs the classic `supersede --replacement-id`
+  (kb-lifecycle 0.2.7), which marks the record SUPERSEDIDO without creating
+  a new one, so several records can retire into one. RESOLVIDO stays for
+  open items.
+- `kb_next.py --help` and `kb.py --help` list the commands an agent uses day
+  to day; `--help-all` prints everything. `session-hint` ends with a
+  five-line command sheet on the project's runtime path.
+
+### Changed
+- Write gate. Besides `create`, `file`, `supersede` and `update`, the
+  kb-wiki-vnext hook denies `resolve`, `bulk-import`, `init --seed`,
+  `raw-query --allow-write`, `consolidate --apply-demotions`,
+  `lifecycle scheduled-maintenance` and any `--apply-demotions` or
+  `--apply-cold-demotions` flag in a vNext project, and names the governed
+  route for each. It reads more launch forms (`env`, `python -m kb`,
+  `cmd /c`, `powershell -Command`, `bash -lc`, `Start-Process`,
+  `Invoke-Expression`, line continuations, a literal `PYTHONPATH=` or
+  `KB_FACTORY_WORKTREE_SCOPE=`) and gates a linked Git worktree when it or
+  its main checkout is activated. `--help` passes. The hook steers agents;
+  it does not authenticate them.
+- Demotions only by proposal. kb-lifecycle 0.2.7 skips automatic HOT and COLD
+  demotions in a project with KB/Wiki vNext active, from config or flags,
+  and reports `demotions_skipped`; Session Gate 0.2.9 runs the vNext curation
+  step instead of `scheduled-maintenance --apply-demotions` there.
+  Classic-only projects keep their demotions.
+- Derived files are rewritten only when their content changes (the
+  `Generated` stamp alone no longer counts), so one filing touches about half
+  the files it did, and a replaced wiki page is snapshotted at most once per
+  page per UTC day.
+- The template seeds stored in Portuguese leave NOW, HOT and INDEX like the
+  English ones.
+
+### Fixed
+- Governance: `proposal-apply --target-record-id` could apply an approved
+  proposal to a different record, in every earlier vNext runtime including
+  0.2.2. The flag now has to repeat the proposal's target (`demote_hot`,
+  `resolve`, `retire`) or pick one of the duplicate candidates the proposal
+  names (`supersede`); anything else is blocked and changes nothing.
+- A supersede proposal that changes the category (for example a premise to a
+  decision) now keeps the new category through `proposal-apply`, as
+  `approved-filing` already did.
+- A dormant wiki's vNext NOW no longer says "Wiki active: false" after the
+  wiki wakes; it says when the wiki starts and points to `session-start`.
+- Codex: the v0.2.1 known issue named two causes; only the missing hook trust
+  is real. Codex runs the plugin's PreToolUse hook only after the user trusts
+  it; the upgrade notes give the trust step and an acceptance check.
+
+### Documentation
+- Public docs describe the 0.2.3 write gate, the demotion guard and the
+  snapshot rule.
+- Public docs also brought level with 0.2.2: `docs/architecture.md` describes the
+  dormant KB + Wiki activation (no wiki-sync until 10 active records cite a
+  registered source) and the `--scope` record; `docs/commands.md` lists
+  `activation-wizard` (`--scope`, `--wiki-min-sourced-records`) and
+  `approved-filing`, with an example, and the write gate's 0.2.2 deny and
+  coverage; the README, agent-sessions, provenance, plugins and guide pages
+  name `approved-filing` for a record approved in chat next to the proposal
+  path.
+- Release lines: Python package `0.2.3`, catalog `0.3.14`, kb-lifecycle
+  `0.2.7`, kb-wiki-vnext `0.2.3`, session-gate `0.2.9`, vNext runtime `0.2.3`,
+  stand-alone product `0.2.0-rc.7`.
+
 ## [0.2.2] - 2026-10-22
 
 Measured on the first day of a new project in KB + Wiki mode: 4 of its 7
