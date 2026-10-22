@@ -412,7 +412,7 @@ def test_guided_activation_uses_deterministic_recommendation(project: Path) -> N
 
 
 def test_session_start_is_thin_and_lists_on_demand_surfaces(project: Path) -> None:
-    run_next_json(project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    run_next_json(project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
 
     result = run_next_json(project, "session-start")
 

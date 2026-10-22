@@ -272,7 +272,9 @@ def apply_project(tmp_path: Path) -> Path:
 
 
 def activate(project: Path, choice: str = "kb-wiki") -> None:
-    run_next_json(project, "activation-wizard", "--mode", "short", "--choice", choice)
+    # These tests exercise an active wiki, not the dormant start of a new one.
+    extra = ("--wiki-min-sourced-records", "0") if choice == "kb-wiki" else ()
+    run_next_json(project, "activation-wizard", "--mode", "short", "--choice", choice, *extra)
 
 
 def valid_new_filing_proposal(project: Path, tmp_path: Path, *, record_id: str = "NEW-APPLY-1") -> dict:
