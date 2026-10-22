@@ -46,7 +46,7 @@
       "tests/test_vnext_lean_onboarding.py"
     ],
     "hardened_files_differing": 14,
-    "public_only_files_edited": 28
+    "public_only_files_edited": 30
   },
   "verification_contract": [
     "claude plugin validate .",
