@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
   "record_type": "controlled-source-to-public-release",
-  "source_sha": "ffd7147367f549cf64f1650bfcc1cdcdf06f695b",
-  "baseline_public_sha": "9d8dd04ebad07e7c7f08fab8dcf723049f2ff323",
+  "source_sha": "82185a9f0adc56b6817758c7e41d78831a30e2ef",
+  "baseline_public_sha": "9e35111a4f225be8ae9b8db76bd2367f4936f38b",
   "policy_version": "2026-09-23.1",
-  "export_stage_file_count": 258,
-  "final_public_file_count": 263,
+  "export_stage_file_count": 262,
+  "final_public_file_count": 265,
   "omitted_source_files": [
     "core/templates/kb/runtime/conformance.json"
   ],
   "final_integrity_binding": {
-    "git_ref": "refs/tags/v0.2.1",
+    "git_ref": "refs/tags/v0.2.2",
     "scope": "all tracked files in the tagged public commit",
     "release_assets": "SHA256SUMS.txt"
   },
@@ -42,13 +42,11 @@
     "missing": 0,
     "extra_exported_paths": 0,
     "extra_public_only_paths": [
-      "docs/evidence.md",
-      "tests/test_kb_next_subagent_bridge.py",
-      "tests/test_vnext_curation.py",
-      "tests/test_vnext_write_gate.py"
+      "tests/test_bootstrap_seed_exclusion.py",
+      "tests/test_vnext_lean_onboarding.py"
     ],
     "hardened_files_differing": 14,
-    "public_only_files_edited": 21
+    "public_only_files_edited": 28
   },
   "verification_contract": [
     "claude plugin validate .",

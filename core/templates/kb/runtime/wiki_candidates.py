@@ -6,6 +6,7 @@ import json
 import sqlite3
 
 from .config import load_config
+from .constants import NOT_BOOTSTRAP_SEED
 from .db import connect_readonly
 from .wiki import get_wiki_config
 
@@ -22,7 +23,8 @@ def generate_wiki_candidates(conn: sqlite3.Connection, config: dict, wiki_cfg: d
     # 1. Domain volume candidates: domains with >= 3 active records -> domain_overview
     if "domain_overview" in allowed_types:
         domain_rows = conn.execute(
-            "SELECT domain, COUNT(*) AS cnt FROM records WHERE status = 'ATIVO' GROUP BY domain HAVING cnt >= 3 ORDER BY cnt DESC"
+            f"SELECT domain, COUNT(*) AS cnt FROM records WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} "
+            "GROUP BY domain HAVING cnt >= 3 ORDER BY cnt DESC"
         ).fetchall()
         for row in domain_rows:
             domain = row["domain"]
@@ -30,7 +32,8 @@ def generate_wiki_candidates(conn: sqlite3.Connection, config: dict, wiki_cfg: d
             record_ids = [
                 r["id"]
                 for r in conn.execute(
-                    "SELECT id FROM records WHERE domain = ? AND status = 'ATIVO' ORDER BY updated_at DESC",
+                    f"SELECT id FROM records WHERE domain = ? AND status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} "
+                    "ORDER BY updated_at DESC",
                     (domain,),
                 ).fetchall()
             ]
@@ -57,7 +60,7 @@ def generate_wiki_candidates(conn: sqlite3.Connection, config: dict, wiki_cfg: d
     # 2. Tag cluster candidates: tags appearing on >= 3 active records -> research_synthesis
     if "research_synthesis" in allowed_types:
         all_active = conn.execute(
-            "SELECT id, tags_json FROM records WHERE status = 'ATIVO'"
+            f"SELECT id, tags_json FROM records WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED}"
         ).fetchall()
         tag_map: dict[str, list[str]] = {}
         for rec in all_active:
@@ -91,7 +94,8 @@ def generate_wiki_candidates(conn: sqlite3.Connection, config: dict, wiki_cfg: d
     # 3. Pending decision clusters: domains with open PENDENCIA -> domain_overview with review_required
     if "domain_overview" in allowed_types:
         pending_domains = conn.execute(
-            "SELECT domain, COUNT(*) AS cnt FROM records WHERE category = 'PENDENCIA' AND status = 'ATIVO' GROUP BY domain HAVING cnt >= 1 ORDER BY cnt DESC"
+            f"SELECT domain, COUNT(*) AS cnt FROM records WHERE category = 'PENDENCIA' AND status = 'ATIVO' "
+            f"AND {NOT_BOOTSTRAP_SEED} GROUP BY domain HAVING cnt >= 1 ORDER BY cnt DESC"
         ).fetchall()
         for row in pending_domains:
             domain = row["domain"]
@@ -103,7 +107,8 @@ def generate_wiki_candidates(conn: sqlite3.Connection, config: dict, wiki_cfg: d
             record_ids = [
                 r["id"]
                 for r in conn.execute(
-                    "SELECT id FROM records WHERE domain = ? AND category = 'PENDENCIA' AND status = 'ATIVO'",
+                    f"SELECT id FROM records WHERE domain = ? AND category = 'PENDENCIA' AND status = 'ATIVO' "
+                    f"AND {NOT_BOOTSTRAP_SEED}",
                     (domain,),
                 ).fetchall()
             ]

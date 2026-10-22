@@ -512,5 +512,5 @@ def lookup_facet(root: Path, facet: str, query: str, *extra: str) -> dict:
 
 
 def last_event(root: Path) -> dict:
-    lines = (root / ".kb-next" / "operations.jsonl").read_text(encoding="utf-8").splitlines()
+    lines = (root / ".kb-next" / "telemetry" / "events.jsonl").read_text(encoding="utf-8").splitlines()
     return json.loads(lines[-1])

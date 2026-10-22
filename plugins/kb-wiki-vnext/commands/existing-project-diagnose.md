@@ -8,7 +8,7 @@ Diagnose an existing or legacy project before activating KB/Wiki vNext.
 This command does not mutate canonical `.kb/`. It identifies whether the
 workspace already has classic `.kb/`, vNext `.kb-next/`, wiki output, and a
 usable vNext runtime. If it runs `session-start`, that runtime command appends
-operational evidence to `.kb-next/operations.jsonl`.
+read telemetry to the git-ignored `.kb-next/telemetry/events.jsonl`.
 
 1. Check for `.kb/`, `.kb/kb.py`, `.kb-next/`, `.kb-next/memory/NOW.md`, and
    `.kb/wiki/live`.

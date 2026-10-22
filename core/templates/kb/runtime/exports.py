@@ -4,6 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from .config import load_config
+from .constants import NOT_BOOTSTRAP_SEED
 from .db import connect_readonly
 from .helpers import now_iso
 from .paths import ensure_dirs, memory_path
@@ -37,17 +38,20 @@ def build_export_artifacts(config: dict, conn: sqlite3.Connection) -> dict:
     hot_limit = config.get("hot_session_limit", 12)
     now_path = memory_path(config["memory"].get("now_path", "memory/NOW.md"))
     hot_rows = conn.execute(
-        "SELECT * FROM records WHERE tier = 'HOT' AND status = 'ATIVO' ORDER BY updated_at DESC LIMIT ?",
+        f"SELECT * FROM records WHERE tier = 'HOT' AND status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} "
+        "ORDER BY updated_at DESC LIMIT ?",
         (hot_limit,),
     ).fetchall()
     pending_rows = conn.execute(
-        "SELECT * FROM records WHERE category = 'PENDENCIA' AND status = 'ATIVO' ORDER BY updated_at DESC LIMIT 10"
+        f"SELECT * FROM records WHERE category = 'PENDENCIA' AND status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} "
+        "ORDER BY updated_at DESC LIMIT 10"
     ).fetchall()
     state_rows = conn.execute(
-        """
+        f"""
         SELECT *
         FROM records
         WHERE status = 'ATIVO' AND category IN ('DECISAO', 'FATO', 'APRENDIZADO')
+            AND {NOT_BOOTSTRAP_SEED}
         ORDER BY
             CASE tier WHEN 'HOT' THEN 0 WHEN 'WARM' THEN 1 ELSE 2 END,
             updated_at DESC
@@ -97,7 +101,8 @@ def build_export_artifacts(config: dict, conn: sqlite3.Connection) -> dict:
     topic_paths = {}
     for domain in domains:
         rows = conn.execute(
-            "SELECT * FROM records WHERE domain = ? AND status = 'ATIVO' ORDER BY updated_at DESC LIMIT 15",
+            f"SELECT * FROM records WHERE domain = ? AND status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} "
+            "ORDER BY updated_at DESC LIMIT 15",
             (domain,),
         ).fetchall()
         topic_lines = [f"# Topic: {domain}", ""]

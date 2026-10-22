@@ -138,6 +138,15 @@ def test_update_points_to_semantic_hygiene_not_to_an_unappliable_filing(project:
     assert '"supersede"' in supersede
 
 
+def test_the_deny_names_the_one_call_route_for_a_chat_approval(project: Path) -> None:
+    create = gate.deny_reason("create", project)
+    supersede = gate.deny_reason("supersede", project)
+    assert "approved-filing --category <CATEGORY>" in create and "--supersedes" not in create
+    assert "approved-filing --category <CATEGORY>" in supersede and "--supersedes <record id>" in supersede
+    # The proposal route stays for approvals that come later.
+    assert create.index("approved-filing") < create.index("filing-proposal --input")
+
+
 def test_the_deny_names_the_project_runtime_or_the_plugin_runtime(project: Path) -> None:
     plugin_runtime = (PLUGIN / "runtime" / "kb_next.py").as_posix()
     assert plugin_runtime in gate.deny_reason("create", project)
@@ -170,6 +179,257 @@ def test_the_target_kb_decides_not_the_session_folder(tmp_path: Path) -> None:
 
     assert gate.decide(payload(into_vnext, classic))
     assert gate.decide(payload(into_classic, vnext)) is None
+
+
+# ---------------------------------------------------------------------------
+# A directory change earlier in the same command moves the target KB
+# ---------------------------------------------------------------------------
+# 2026-10-21: a session whose cwd had no `.kb-next` ran
+# `cd "<vnext project>" && python .kb/kb.py supersede ...` and the gate let the
+# write through. In the tiar experiment 23% of agent KB commands began with a
+# `cd "<abs>" &&` prefix.
+
+
+@pytest.fixture
+def spaced(tmp_path: Path) -> tuple[Path, Path]:
+    """A vNext project under a folder with a space, and a session folder beside it without `.kb-next`."""
+    root = tmp_path / "my projects"
+    outside = root / "elsewhere"
+    outside.mkdir(parents=True)
+    return make_project(root / "proj"), outside
+
+
+def windows(path: Path) -> str:
+    """The path as a Windows shell writes it, so the backslash form runs on every CI runner."""
+    return str(path).replace("/", "\\")
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        'cd "{posix}" && python .kb/kb.py supersede ATT-KB-0002 --title "x"',
+        'cd "{posix}" && python .kb/kb.py create --category FATO --domain ops --title T --content C',
+        'cd "{posix}" && python .kb/kb.py update KB-1 --tier WARM',
+        'cd "{posix}" && python -B .kb/kb.py file --filing-type answer --category FATO',
+        'cd "{posix}"; python .kb/kb.py create --category FATO',
+        'cd "{windows}" && python .kb\\kb.py supersede KB-1 --content x',
+        "cd '{windows}'; python .kb/kb.py create --category FATO",
+        'cd -- "{posix}" && python .kb/kb.py create --category FATO',
+        'CD "{windows}" && python .kb/kb.py create --category FATO',
+        'pushd "{windows}" && python .kb/kb.py create --category FATO',
+        'pushd "{posix}" > /dev/null && python .kb/kb.py create --category FATO',
+        'pushd "{posix}" >/dev/null 2>&1 && python .kb/kb.py create --category FATO',
+        'cd "{posix}" 2>/dev/null && python .kb/kb.py create --category FATO',
+        'Push-Location "{windows}" *> $null; python .kb/kb.py create --category FATO',
+        '(cd "{posix}" && python .kb/kb.py create --category FATO)',
+        'Set-Location "{windows}"; python .kb/kb.py create --category FATO',
+        'Set-Location -Path "{windows}"; python .kb\\kb.py update KB-1 --tags x',
+        'sl "{windows}"; python .kb/kb.py create --category FATO',
+        'git status && cd "{posix}" && python .kb/kb.py create --category FATO 2>&1 | tail -5',
+        'cd "{posix}/.kb" && python kb.py create --category FATO',
+    ],
+)
+def test_a_directory_change_before_the_write_moves_the_target(spaced: tuple[Path, Path], template: str) -> None:
+    project, outside = spaced
+    command = template.format(posix=project.as_posix(), windows=windows(project))
+
+    reason = gate.decide(payload(command, outside))
+
+    assert reason and "kb-wiki-vnext write gate" in reason
+
+
+def test_a_relative_directory_change_resolves_from_where_the_shell_stands(spaced: tuple[Path, Path]) -> None:
+    project, outside = spaced
+    (project / "sub").mkdir()
+
+    assert gate.decide(payload("cd sub && python ../.kb/kb.py create --category FATO", project))
+    assert gate.decide(payload("cd ../proj && python .kb/kb.py create --category FATO", outside))
+    assert gate.decide(payload("cd .. && cd proj && python .kb/kb.py create --category FATO", outside))
+
+
+def test_a_subshell_and_popd_return_to_the_saved_directory(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    (vnext / "sub").mkdir()
+    write = "python .kb/kb.py create --category FATO"
+
+    assert gate.decide(payload(f'(cd "{classic.as_posix()}" && ls) && {write}', vnext))
+    assert gate.decide(payload(f'echo $(cd "{classic.as_posix()}" && pwd); {write}', vnext))
+    assert gate.decide(payload(f'cd "{vnext.as_posix()}" && pushd sub && popd && {write}', classic))
+    assert gate.decide(payload(f'(cd "{vnext.as_posix()}" && ls) && {write}', classic)) is None
+
+
+def test_a_directory_change_expands_the_home_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    home = tmp_path / "home"
+    make_project(home / "proj")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("USERPROFILE", str(home))
+
+    assert gate.decide(payload("cd ~/proj && python .kb/kb.py create --category FATO", outside))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Git Bash drive paths exist only on Windows")
+def test_git_bash_drive_paths_are_followed(spaced: tuple[Path, Path]) -> None:
+    project, outside = spaced
+    drive, rest = project.as_posix().split(":", 1)
+    msys = f"/{drive.lower()}{rest}"
+
+    assert gate.decide(payload(f'cd "{msys}" && python .kb/kb.py create --category FATO', outside))
+    assert gate.decide(payload(f'python "{msys}/.kb/kb.py" create --category FATO', outside))
+
+
+def test_a_directory_change_into_a_classic_only_project_is_not_gated(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    command = f'cd "{classic.as_posix()}" && python .kb/kb.py create --category FATO'
+
+    assert gate.decide(payload(command, vnext)) is None
+    assert gate.decide(payload(command, tmp_path)) is None
+
+
+@pytest.mark.parametrize("read", ["search create", "list --json", "get KB-1", "pending --json"])
+def test_reads_after_a_directory_change_pass(spaced: tuple[Path, Path], read: str) -> None:
+    project, outside = spaced
+
+    assert gate.decide(payload(f'cd "{project.as_posix()}" && python .kb/kb.py {read}', outside)) is None
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "cd && ",
+        "cd - && ",
+        'cd "$PROJECT_DIR" && ',
+        "cd ${{PROJECT_DIR}} && ",
+        "cd missing; ",
+        'pushd "{classic}" && popd && ',
+        'Push-Location "{classic}"; Pop-Location; ',
+    ],
+)
+def test_a_directory_the_gate_cannot_follow_falls_back_to_the_hook_cwd(tmp_path: Path, change: str) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    command = change.format(classic=classic.as_posix()) + "python .kb/kb.py create --category FATO"
+
+    assert gate.decide(payload(command, vnext))
+
+
+def test_the_hook_denies_a_write_behind_a_directory_change(spaced: tuple[Path, Path]) -> None:
+    project, outside = spaced
+    command = f'cd "{project.as_posix()}" && python .kb/kb.py supersede ATT-KB-0002 --title "x"'
+
+    result = run_hook(payload(command, outside))
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+# ---------------------------------------------------------------------------
+# Blocks and nested shells do not hide the write
+# ---------------------------------------------------------------------------
+# 2026-10-21 review of the directory fix: `{` and `}` did not end a command, so
+# in `Push-Location "<project>"; try { python .kb/kb.py create } finally { ... }`
+# the first word was `try` and the interpreter went unseen; bash `then`, `do`
+# and `!` hid it the same way. The text a nested `bash -c`, `pwsh -Command` or
+# `cmd /c` runs was one quoted word that the gate never parsed.
+
+BLOCKED = [
+    'Push-Location "{windows}"; try {{ python .kb/kb.py create --category FATO }} finally {{ Pop-Location }}',
+    'Push-Location "{windows}"; try{{python .kb\\kb.py create --category FATO}}finally{{Pop-Location}}',
+    'Set-Location "{windows}"; Get-ChildItem | ForEach-Object {{ python .kb/kb.py update KB-1 --tags x }}',
+    'if (Test-Path "{windows}") {{ Set-Location "{windows}"; python .kb/kb.py create --category FATO }}',
+    'cd "{posix}" && {{ python .kb/kb.py create --category FATO; }}',
+    '{{ cd "{posix}"; }} && python .kb/kb.py create --category FATO',
+    'if cd "{posix}"; then python .kb/kb.py create --category FATO; fi',
+    'for f in a; do cd "{posix}" && python .kb/kb.py supersede KB-1 --content x; done',
+    'cd "{posix}" && ! python .kb/kb.py create --category FATO',
+]
+
+NESTED = [
+    "bash -c 'cd \"{posix}\" && python .kb/kb.py create --category FATO'",
+    "bash -lc \"cd '{posix}' && python .kb/kb.py supersede KB-1 --content x\"",
+    "sh -ec \"cd '{posix}'; python .kb/kb.py create --category FATO\"",
+    "pwsh -NoProfile -Command \"Set-Location '{windows}'; python .kb/kb.py create --category FATO\"",
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -c \"Push-Location '{windows}'; "
+    "try {{ python .kb\\kb.py create --category FATO }} finally {{ Pop-Location }}\"",
+    "cmd /c 'cd /d \"{windows}\" && python .kb\\kb.py create --category FATO'",
+    'cd "{posix}" && bash -c "python .kb/kb.py create --category FATO"',
+    'cd "{posix}" && cmd /C python .kb\\kb.py create --category FATO',
+    'cd "{posix}" && pwsh -c python .kb/kb.py update KB-1 --tags x',
+    "cd \"{posix}\" && bash -c \"pwsh -Command 'python .kb/kb.py create --category FATO'\"",
+]
+
+
+@pytest.mark.parametrize("template", BLOCKED + NESTED)
+def test_a_block_or_a_nested_shell_does_not_hide_the_write(spaced: tuple[Path, Path], template: str) -> None:
+    project, outside = spaced
+    command = template.format(posix=project.as_posix(), windows=windows(project))
+
+    reason = gate.decide(payload(command, outside))
+
+    assert reason and "kb-wiki-vnext write gate" in reason
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "if true; then python .kb/kb.py create --category FATO; fi",
+        "while true; do python .kb/kb.py update KB-1 --tier WARM; break; done",
+        "bash -c 'python .kb/kb.py create --category FATO'",
+        "cmd.exe /S /C \"python .kb\\kb.py create --category FATO\"",
+    ],
+)
+def test_keywords_and_nested_shells_in_the_project_folder_are_denied(project: Path, command: str) -> None:
+    assert gate.decide(payload(command, project))
+
+
+def test_quoted_braces_stay_inside_their_word(project: Path) -> None:
+    assert gate.decide(payload("python .kb/kb.py create --category FATO --content '{\"k\": \"v\"}'", project))
+    assert gate.decide(payload("python .kb/kb.py search '{\"a\": 1}'", project)) is None
+    assert gate.decide(payload('git commit -m "wrap { python .kb/kb.py create } in a block"', project)) is None
+
+
+def test_nested_shells_keep_reads_and_classic_projects_open(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    write = "python .kb/kb.py create --category FATO"
+
+    assert gate.decide(payload('bash -c "python .kb/kb.py search create"', vnext)) is None
+    assert gate.decide(payload(f"bash -c 'cd \"{classic.as_posix()}\" && {write}'", vnext)) is None
+    assert gate.decide(payload(f"pwsh -Command \"Set-Location '{windows(classic)}'; {write}\"", vnext)) is None
+    assert gate.decide(payload(f"git commit -m \"bash -c '{write}'\"", vnext)) is None
+    assert gate.decide(payload(f"echo 'pwsh -Command {write}'", vnext)) is None
+
+
+def test_a_nested_shell_does_not_move_the_outer_shell(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    write = "python .kb/kb.py create --category FATO"
+
+    assert gate.decide(payload(f"bash -c \"cd '{classic.as_posix()}'\" && {write}", vnext))
+    assert gate.decide(payload(f"pwsh -Command \"Set-Location '{windows(vnext)}'\"; {write}", classic)) is None
+
+
+def test_a_pop_inside_finally_returns_before_the_next_command(tmp_path: Path) -> None:
+    vnext = make_project(tmp_path / "vnext")
+    classic = make_project(tmp_path / "classic", vnext=False)
+    block = 'Push-Location "{}"; try {{ ls }} finally {{ Pop-Location }}; python .kb/kb.py create --category FATO'
+
+    assert gate.decide(payload(block.format(windows(classic)), vnext))
+    assert gate.decide(payload(block.format(windows(vnext)), classic)) is None
+
+
+@pytest.mark.parametrize("template", [BLOCKED[0], NESTED[0]])
+def test_the_hook_denies_a_write_inside_a_block_or_a_nested_shell(spaced: tuple[Path, Path], template: str) -> None:
+    project, outside = spaced
+    command = template.format(posix=project.as_posix(), windows=windows(project))
+
+    result = run_hook(payload(command, outside, "PowerShell"))
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 def test_codex_argv_commands_are_read(project: Path) -> None:

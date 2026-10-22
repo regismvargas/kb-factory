@@ -13,9 +13,9 @@ Admins de workspace, leads técnicos e maintainers que instalam o pacote para ou
 - Artefato de release limpo, gerado a partir deste repositório.
 - Acesso ao cliente de destino: Codex, Claude Code, Claude Cowork ou workspace com Python.
 - Alinhamento com o dono do workspace de que `.kb/` segue canônico e `.kb-next/` é a camada vNext.
-- A identidade de release registra separadamente produto `0.2.0-rc.5`, KB
-  Lifecycle `0.2.5`, plugin `0.2.1`, runtime incluído `0.2.1`, Session Gate
-  `0.2.8` e marketplace `0.3.12`.
+- A identidade de release registra separadamente produto `0.2.0-rc.6`, KB
+  Lifecycle `0.2.5`, plugin `0.2.2`, runtime incluído `0.2.2`, Session Gate
+  `0.2.8` e marketplace `0.3.13`.
 
 ## Passos
 
@@ -23,13 +23,13 @@ Gere todos os distribuíveis KB afetados e o bundle stand-alone:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.5
+python tools\build_vnext_standalone.py --version 0.2.0-rc.6
 ```
 
 Valide antes de compartilhar:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.5-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.6-standalone.zip
 ```
 
 Distribua apenas o artefato correspondente:
@@ -82,8 +82,8 @@ Confirme que o arquivo contém `runtime/kb_next.py`; o bootstrap informa a vers�
 esperada do runtime e `source_sha256` igual a `installed_sha256`; o destinatário
 consegue invocar a superfície vNext específica do cliente, ler
 `.kb-next/memory/NOW.md` e executar o runtime instalado com
-`lookup --facet status`. As operações de início e lookup do runtime podem anexar
-`.kb-next/operations.jsonl`, mas `bootstrap` e verificação
+`lookup --facet status`. As operações de início e lookup do runtime anexam
+telemetria de leitura ao `.kb-next/telemetry/events.jsonl`, ignorado pelo Git, mas `bootstrap` e verificação
 não podem alterar `.kb/` canônica nem publicar `.kb/wiki/live`. Para Session
 Gate, confirme que a superfície de startup específica do cliente detecta `.kb-next/` antes de cair no
 `.kb/` clássico.

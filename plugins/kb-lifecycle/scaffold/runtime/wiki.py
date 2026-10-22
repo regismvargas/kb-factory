@@ -4,7 +4,7 @@ import json
 import sqlite3
 
 from .config import load_config, write_config
-from .constants import LIFECYCLE_DEFAULTS
+from .constants import LIFECYCLE_DEFAULTS, NOT_BOOTSTRAP_SEED
 from .db import connect_readonly
 from .paths import CONFIG_PATH, KB_ROOT, ensure_dirs
 
@@ -94,14 +94,17 @@ def get_wiki_config(config: dict) -> dict:
 
 def compute_wiki_hard_signals(conn: sqlite3.Connection, eligibility: dict) -> dict:
     active_count = conn.execute(
-        "SELECT COUNT(*) FROM records WHERE status = 'ATIVO'"
+        f"SELECT COUNT(*) FROM records WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED}"
     ).fetchone()[0]
     domain_rows = conn.execute(
-        "SELECT domain, COUNT(*) AS cnt FROM records WHERE status = 'ATIVO' GROUP BY domain"
+        f"SELECT domain, COUNT(*) AS cnt FROM records WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} GROUP BY domain"
     ).fetchall()
     domains_with_records = len(domain_rows)
     pending_count = conn.execute(
-        "SELECT COUNT(*) FROM records WHERE category = 'PENDENCIA' AND status = 'ATIVO'"
+        f"SELECT COUNT(*) FROM records WHERE category = 'PENDENCIA' AND status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED}"
+    ).fetchone()[0]
+    sourced_count = conn.execute(
+        f"SELECT COUNT(*) FROM records WHERE status = 'ATIVO' AND source_id IS NOT NULL AND {NOT_BOOTSTRAP_SEED}"
     ).fetchone()[0]
     min_records = eligibility.get("min_active_records", 30)
     min_domains = eligibility.get("min_domains_with_records", 2)
@@ -120,6 +123,11 @@ def compute_wiki_hard_signals(conn: sqlite3.Connection, eligibility: dict) -> di
         or signals["domains_threshold_met"]
         or signals["has_open_pendencias"]
     )
+    signals["sourced_record_count"] = sourced_count
+    min_sourced = eligibility.get("min_sourced_records")
+    if min_sourced is not None:
+        signals["min_sourced_records_threshold"] = int(min_sourced)
+        signals["sourced_records_met"] = sourced_count >= int(min_sourced)
     return signals
 
 
@@ -127,7 +135,7 @@ def compute_soft_signals(conn: sqlite3.Connection) -> dict:
     signals: dict[str, bool] = {}
     rows = conn.execute(
         "SELECT domain, COUNT(DISTINCT category) AS cat_cnt "
-        "FROM records WHERE status = 'ATIVO' GROUP BY domain"
+        f"FROM records WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} GROUP BY domain"
     ).fetchall()
     signals["cross_category_domain"] = any(r["cat_cnt"] >= 3 for r in rows)
 
@@ -143,7 +151,7 @@ def compute_soft_signals(conn: sqlite3.Connection) -> dict:
 
     all_tags: set[str] = set()
     tag_rows = conn.execute(
-        "SELECT tags_json FROM records WHERE status = 'ATIVO'"
+        f"SELECT tags_json FROM records WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED}"
     ).fetchall()
     for row in tag_rows:
         for tag in json.loads(row["tags_json"]):
@@ -173,13 +181,19 @@ def compute_wiki_state(
     `enabled: true` is the owner's explicit opt-in: the wiki is on and signals
     never veto it, whatever the mode. With `enabled: false`, `manual` (and any
     unknown mode) stays off, while `signal`/`profile` let the hard and soft
-    signals decide.
+    signals decide. `eligibility.min_sourced_records`, when set, is the only
+    signal: the wiki stays dormant until that many active records cite a
+    registered source.
     """
     if wiki_cfg.get("enabled", False):
         return _state_from_candidates(wiki_cfg, candidate_count)
     mode = wiki_cfg.get("activation_mode", "manual")
     if mode not in ("signal", "profile"):
         return "off"
+    if "sourced_records_met" in hard_signals:
+        if not hard_signals["sourced_records_met"]:
+            return "off"
+        return _state_from_candidates(wiki_cfg, candidate_count)
     if not hard_signals["any_hard_signal"]:
         return "off"
     soft_threshold = wiki_cfg.get("eligibility", {}).get("min_soft_signal_score", 1)
@@ -203,9 +217,10 @@ def resolve_wiki_state(conn: sqlite3.Connection, config: dict, candidate_provide
 
 def preview_publication(conn: sqlite3.Connection, candidates: list, wiki_cfg: dict) -> dict:
     """What a sync would publish, hold back, or skip, without writing anything."""
-    from .wiki_materialization import evaluate_hygiene_gates
+    from .wiki_materialization import plan_publication
 
     held_back: list[dict] = []
+    records_held_back: list[dict] = []
     review_required: list[str] = []
     publishable: list[str] = []
     for candidate in candidates:
@@ -214,11 +229,19 @@ def preview_publication(conn: sqlite3.Connection, candidates: list, wiki_cfg: di
             continue
         if candidate.get("status") != "heuristic_candidate":
             continue
-        gate = evaluate_hygiene_gates(conn, candidate, wiki_cfg)
-        if gate is None:
+        plan = plan_publication(conn, candidate, wiki_cfg)
+        if plan["held_back"] is None:
             publishable.append(candidate.get("candidate_id"))
+            if plan["excluded_records"]:
+                records_held_back.append(
+                    {
+                        "candidate_id": candidate.get("candidate_id"),
+                        "reason": "record_confidence_below_autopublish",
+                        "excluded_records": plan["excluded_records"],
+                    }
+                )
         else:
-            held_back.append(gate)
+            held_back.append(plan["held_back"])
     by_reason: dict[str, int] = {}
     for entry in held_back:
         by_reason[entry["reason"]] = by_reason.get(entry["reason"], 0) + 1
@@ -228,6 +251,7 @@ def preview_publication(conn: sqlite3.Connection, candidates: list, wiki_cfg: di
         "held_back_count": len(held_back),
         "held_back_by_reason": by_reason,
         "held_back": held_back,
+        "records_held_back": records_held_back,
         "review_required_count": len(review_required),
         "review_required": review_required,
     }

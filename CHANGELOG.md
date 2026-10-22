@@ -7,6 +7,63 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-22
+
+Measured on the first day of a new project in KB + Wiki mode: 4 of its 7
+records were template seeds about the KB itself, they filled NOW, HOT and the
+only wiki page, the scope was a placeholder premise that expired in 30 days,
+and filing one decision approved in chat took two commands and three JSON
+files. This release cuts that first-day overhead.
+
+### Added
+- `approved-filing` (vNext runtime): files one record the user approved in
+  chat in a single call, with the record fields inline. It applies the
+  `proposal-apply` rules (provenance from a registered source or an existing
+  record, the confidence floor, an active supersede target) plus a same-title
+  check, and writes one manifest under `.kb-next/manifests/approved-filing/`
+  and one oplog event. A blocked call writes nothing and exits 1.
+  `filing-proposal` and `proposal-apply` stay for approvals that come later
+  or from someone else.
+- `activation-wizard --scope "<text>"` files the user's scope once as a HOT
+  `DECISAO` tagged `project-scope`, with no expiry. No scope, no record.
+- `activation-wizard --wiki-min-sourced-records <n>` (default 10): a new
+  KB + Wiki stays dormant until that many active records cite a registered
+  source. `session-start` reports `wiki.status` `dormant`, the session hook
+  drops the wiki-drafts step, and the record that crosses the mark publishes
+  the first pages. `0` turns the wiki on at once; an enabled wiki is never
+  put back to sleep.
+- Classic `supersede` accepts `--category` and `--valid-until none`, so a
+  premise can become a decision and drop its expiry.
+- Classic `wiki.eligibility.min_sourced_records`: when set, the only
+  activation signal of a `signal`-mode wiki.
+
+### Changed
+- The classic scaffold (kb-lifecycle 0.2.6) seeds no record. KBs created
+  earlier keep their five template seeds in `kb.db` and in search; NOW, HOT,
+  INDEX, topics, project packs, wiki candidates and wiki signals leave them
+  out. A seed is matched by its template title and bootstrap source, so a
+  record the project rewrote stays visible.
+- Wiki confidence gate: a record below `min_confidence_autopublish` is left
+  off its page instead of holding the whole page back. Sources follow the
+  kept records, a page is held back only when no record remains, and
+  `wiki-sync` and `wiki-check` list the left-out records as
+  `records_held_back`.
+- Read telemetry leaves the governance trail: `session-start`, `lookup`,
+  `semantic-lookup` and `dense-index` append to the git-ignored
+  `.kb-next/telemetry/events.jsonl`; `.kb-next/operations.jsonl` keeps
+  mutations and decisions, written with LF line endings.
+- `session-hint` prints a runnable command and names a skew between the
+  project's runtime and the plugin.
+
+### Fixed
+- Write gate: a relative `kb.py` write after `cd`, `pushd` or `Set-Location`
+  in the same command, inside `{ }` blocks (`try`/`finally`, `if`, loops) or
+  inside a nested `bash -c`, `pwsh -Command` or `cmd /c` is now denied in a
+  vNext project. The deny names `approved-filing` first.
+- The runtime-skew version key no longer shadows the helper that sorts
+  plugin cache directories, which would have raised on a pre-release
+  directory name.
+
 ### Documentation
 - Public docs brought level with 0.2.0 and 0.2.1: the optional dense list is
   described where search is discussed; `docs/comparison.md` cites the measured

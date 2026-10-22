@@ -12,8 +12,8 @@ Session start is thin:
   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
   if no runtime resolves, fall back to classic
   `python .kb/kb.py lifecycle session-start --json`.
-- Runtime `session-start` does not write canonical `.kb/`, but appends session
-  evidence to `.kb-next/operations.jsonl`.
+- Runtime `session-start` does not write canonical `.kb/`; it appends read
+  telemetry to the git-ignored `.kb-next/telemetry/events.jsonl`.
 - Read only `.kb-next/memory/NOW.md` by default.
 - Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
   artifacts only on demand.
@@ -41,13 +41,12 @@ it. Codex has no hook that adds this for you:
   brief under `KB records` (id, title, excerpt, source), or `none found`. Leave
   it out only when the brief isolates the subagent on purpose.
 - The brief says: do not write to the KB; a shell may run the same `lookup`,
-  which changes no record and appends one line to `.kb-next/operations.jsonl`;
+  which changes no record and appends one line to `.kb-next/telemetry/events.jsonl`;
   end the report with `KB candidates` (each fact, decision or learning with
   its source, or `none`).
-- Turn each kept candidate into
-  `python <resolved-runtime-path> filing-proposal --input @candidate.json --category FATO --domain <domain> --json`
-  (`DECISAO` or `APRENDIZADO` as fits) and note why you drop the others;
-  `vnext-session-end` lists candidates left with neither.
+- File each kept candidate the user approves in chat with `approved-filing`,
+  propose the rest with `filing-proposal`, note why you drop the others;
+  `vnext-session-end` lists candidates left with none of the three.
 
 Governance boundaries:
 
@@ -57,10 +56,11 @@ Governance boundaries:
 - Do not write SQL or edit `.kb/kb.db` directly.
 - Do not publish vNext drafts to `.kb/wiki/live`; the classic runtime owns that
   directory and refreshes it on lifecycle events.
-- Canonical record changes go through a proposal (`filing-proposal`, or
-  `semantic-hygiene --write-proposals` for HOT demotion and open items) and
-  then vNext `proposal-apply`, which itself calls the classic runtime and
-  requires `--actor` (who approved; defaults to `proposal_apply.default_actor`
+- A record the user approved in chat takes one `approved-filing` call (one
+  audit file, one oplog line). Other changes go through a proposal
+  (`filing-proposal`, or `semantic-hygiene --write-proposals` for HOT demotion
+  and open items) and then `proposal-apply`. Both call the classic runtime and
+  require `--actor` (who approved; defaults to `proposal_apply.default_actor`
   when the vNext config sets it) and `--actor-runtime`. Do not run
   `.kb/kb.py create`, `file`, `supersede` or `update` yourself; the plugin's
   PreToolUse hook denies them in a vNext project once Codex trusts it.

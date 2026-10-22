@@ -18,14 +18,14 @@ Usuários de projeto que recebem o ZIP de plugin ou o bundle stand-alone de um m
 
 Escolha o pacote certo para o cliente:
 
-- Codex: `kb-wiki-vnext-plugin-0.2.1.zip`
-- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.1.zip`
-- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.1.zip`
-- Stand-alone: `kb-wiki-vnext-0.2.0-rc.5-standalone.zip`
+- Codex: `kb-wiki-vnext-plugin-0.2.2.zip`
+- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.2.zip`
+- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.2.zip`
+- Stand-alone: `kb-wiki-vnext-0.2.0-rc.6-standalone.zip`
 
 Produto, KB Lifecycle, container de plugin, runtime incluído, Session Gate e
-marketplace têm linhas de versão separadas: `0.2.0-rc.5`, `0.2.5`, `0.2.1`,
-`0.2.1`, `0.2.8` e `0.3.12`. Registre todos os valores aplicáveis durante
+marketplace têm linhas de versão separadas: `0.2.0-rc.6`, `0.2.5`, `0.2.2`,
+`0.2.2`, `0.2.8` e `0.3.13`. Registre todos os valores aplicáveis durante
 instalação ou upgrade.
 
 Em instalação por plugin, use `existing-project-activate-vnext` para resolver o
@@ -75,8 +75,8 @@ Para exemplos de runtime e padrões seguros de conversa, use o [guia de uso deta
 O runtime `session-start` deve informar o modo ativo e apontar para
 `.kb-next/memory/NOW.md`. O basename lógico é `vnext-session-start`; a
 invocação depende do cliente. `lookup`
-pode retornar zero registros em um workspace novo e anexa evidência operacional
-a `.kb-next/operations.jsonl`, mas não pode alterar `.kb/` canônica nem publicar
+pode retornar zero registros em um workspace novo e anexa telemetria de leitura
+a `.kb-next/telemetry/events.jsonl`, mas não pode alterar `.kb/` canônica nem publicar
 `.kb/wiki/live`.
 
 ## Troubleshooting / Solução De Problemas

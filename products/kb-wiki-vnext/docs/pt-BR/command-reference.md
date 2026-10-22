@@ -23,20 +23,20 @@ Session Gate segue a mesma distinção com o basename lógico
 
 | Comando | Tipo de projeto | Plataformas | Runtime ou instrução | Comportamento de mutação |
 |---|---|---|---|---|
-| `vnext-session-start` | sessão vNext geral | Codex, Claude Code, Claude Cowork | `python ./.kb-next/runtime/kb_next.py session-start --json` depois do bootstrap | sem escrita canônica; append em `.kb-next/operations.jsonl` |
+| `vnext-session-start` | sessão vNext geral | Codex, Claude Code, Claude Cowork | `python ./.kb-next/runtime/kb_next.py session-start --json` depois do bootstrap | sem escrita canônica; append de telemetria de leitura em `.kb-next/telemetry/events.jsonl`, ignorado pelo Git |
 | `vnext-session-end` | sessão vNext geral | Codex, Claude Code, Claude Cowork | resumir evidência vNext; recolher os `KB candidates` dos subagentes; rodar `python .kb/kb.py lifecycle session-end` e, com KB + Wiki, o `wiki-draft-status` do runtime; atualizar o índice denso quando `retrieval.dense.enabled` está ligado e houve mudança de records; curadoria: `hygiene-audit` e `semantic-hygiene` somente leitura, depois um lote julgado dentro do `review_budget` | o session-end clássico atualiza exports e o wiki habilitado; propostas de filing e de higiene vão só para `.kb-next/`; sem escrita canônica de registros |
 | `vnext-wiki-drafts` | sessão KB + Wiki | Codex, Claude Code, Claude Cowork | `wiki-draft-status` e, por tópico, `wiki-synthesis-plan` com julgamento do agente e `wiki-draft-review --materialize` | grava drafts, manifests e páginas em `.kb-next/wiki/`; sem escrita canônica |
-| `existing-project-diagnose` | existente/legado | Codex, Claude Code, Claude Cowork | inspecionar `.kb/`, `.kb-next/`, runtime e `NOW.md` | sem escrita canônica; anexa operações se rodar `session-start` |
+| `existing-project-diagnose` | existente/legado | Codex, Claude Code, Claude Cowork | inspecionar `.kb/`, `.kb-next/`, runtime e `NOW.md` | sem escrita canônica; anexa telemetria de leitura se rodar `session-start` |
 | `existing-project-activate-vnext` | existente/legado | Codex, Claude Code, Claude Cowork | `activation-wizard --mode short --choice kb-alone` por padrão | escreve `.kb-next/`; com `kb-wiki` também liga as chaves do wiki clássico em `.kb/kb.config.json` e sincroniza `.kb/wiki/live` |
 | `existing-project-configure-vnext` | existente/legado | Codex, Claude Code, Claude Cowork | `activation-wizard` curto ou guiado (faz merge da config existente) | escreve `.kb-next/`; `kb-wiki` liga e sincroniza o wiki clássico; `kb-alone` o mantém, exceto com `--disable-classic-wiki` |
-| `existing-project-verify-install` | existente/legado | Codex, Claude Code, Claude Cowork | `session-start` mais `lookup` determinístico | sem escrita canônica; append em `.kb-next/operations.jsonl` |
+| `existing-project-verify-install` | existente/legado | Codex, Claude Code, Claude Cowork | `session-start` mais `lookup` determinístico | sem escrita canônica; append de telemetria de leitura em `.kb-next/telemetry/events.jsonl`, ignorado pelo Git |
 | `existing-project-upgrade-vnext` | existente/legado | Codex, Claude Code, Claude Cowork | bootstrap pelo artefato substituto, `upgrade-classic`, reaplicar o modo registrado e verificar | runtimes do workspace, arquivos do motor clássico e chaves do wiki clássico; sem escrita canônica de registros |
 | `existing-project-rollback-vnext` | existente/legado | Codex, Claude Code, Claude Cowork | bootstrap pelo artefato restaurado e conferir a versão anterior | pacote/runtime do workspace mais evidência operacional; sem escrita canônica |
 | `new-project-wizard` | projeto novo | Codex, Claude Code, Claude Cowork | pedir título, slug e domínios e escolher o modo de init | cria `.kb/` (via `install-classic`) e `.kb-next/` quando ausentes |
 | `new-project-init-kb-alone` | projeto novo | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-alone` | cria `.kb/` quando ausente e configura `.kb-next/` |
-| `new-project-init-kb-wiki` | projeto novo | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-wiki` | cria `.kb/` quando ausente e `.kb-next/`; liga o wiki clássico e publica `.kb/wiki/live`; drafts vNext nunca são copiados para lá |
-| `new-project-verify-install` | projeto novo | Codex, Claude Code, Claude Cowork | `session-start` mais `lookup` determinístico | sem escrita canônica; append em `.kb-next/operations.jsonl` |
-| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detectar `.kb-next/` e `.kb/`; rotear vNext primeiro | sem escrita canônica; rota vNext faz append em `.kb-next/operations.jsonl` |
+| `new-project-init-kb-wiki` | projeto novo | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-wiki` | cria `.kb/` quando ausente e `.kb-next/`; `--scope` registra o escopo do usuário como um `DECISAO` HOT; o wiki clássico fica dormente até 10 registros ativos citarem uma fonte registrada (`--wiki-min-sourced-records`, `0` liga na hora) e então publica `.kb/wiki/live` sozinho; drafts vNext nunca são copiados para lá |
+| `new-project-verify-install` | projeto novo | Codex, Claude Code, Claude Cowork | `session-start` mais `lookup` determinístico | sem escrita canônica; append de telemetria de leitura em `.kb-next/telemetry/events.jsonl`, ignorado pelo Git |
+| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detectar `.kb-next/` e `.kb/`; rotear vNext primeiro | sem escrita canônica; rota vNext faz append de telemetria de leitura em `.kb-next/telemetry/events.jsonl` |
 | `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | detectar sistemas e resumir closeout | sem escrita canônica por padrão |
 
 Comandos apenas de runtime:
@@ -55,9 +55,10 @@ Subcomandos de runtime usados pelo agente que mudaram na 0.2.x (detalhes em
 
 | Subcomando | Propósito | Comportamento de mutação |
 |---|---|---|
-| `lookup` | busca ranqueada: lista de palavras FTS5 (BM25) fundida por Reciprocal Rank Fusion; `--lists` escolhe entre `words`, `trigram` e `dense`; o padrão é `words`, mais `dense` quando `retrieval.dense.enabled` é `true` | sem escrita canônica |
-| `dense-index` | montar ou atualizar o índice denso local opcional; `--fetch-model` baixa o modelo fixado, `--rebuild` reindexa todos os records ativos | grava só em `.kb-next/index/`, que o Git ignora; exige o extra denso; emite aviso para o `potion-multilingual-128M`, que não é recomendado |
-| `proposal-apply` | aplicar uma proposta aprovada em `.kb/`; exige `--approve`, `--approval-note`, `--actor-runtime` (`claude-code`, `codex`, `cowork` ou `human`) e um aprovador vindo de `--actor` ou de `proposal_apply.default_actor` | único caminho de escrita canônica para agentes num projeto vNext; sem aprovador sai com código 2 antes de ler a proposta |
+| `lookup` | busca ranqueada: lista de palavras FTS5 (BM25) fundida por Reciprocal Rank Fusion; `--lists` escolhe entre `words`, `trigram` e `dense`; o padrão é `words`, mais `dense` quando `retrieval.dense.enabled` é `true` | sem escrita canônica; append de telemetria de leitura em `.kb-next/telemetry/events.jsonl`, ignorado pelo Git |
+| `dense-index` | montar ou atualizar o índice denso local opcional; `--fetch-model` baixa o modelo fixado, `--rebuild` reindexa todos os records ativos | grava em `.kb-next/index/` e uma linha de telemetria em `.kb-next/telemetry/events.jsonl`, ambos ignorados pelo Git; exige o extra denso; emite aviso para o `potion-multilingual-128M`, que não é recomendado |
+| `proposal-apply` | aplicar uma proposta aprovada em `.kb/`; exige `--approve`, `--approval-note`, `--actor-runtime` (`claude-code`, `codex`, `cowork` ou `human`) e um aprovador vindo de `--actor` ou de `proposal_apply.default_actor` | um dos dois caminhos de escrita canônica para agentes num projeto vNext; sem aprovador sai com código 2 antes de ler a proposta |
+| `approved-filing` | registrar um registro que o usuário aprovou no chat: `--category`, `--domain`, `--title`, `--content`, `--confidence`, `--source-id` ou `--record-id`, `--supersedes` opcional, mais `--approval-note` e o par de aprovador do `proposal-apply` | escreve `.kb/` via `.kb/kb.py`, um manifest em `.kb-next/manifests/approved-filing/` e uma linha no oplog; uma chamada bloqueada não escreve nada e sai com código 1 |
 | `semantic-hygiene` | detectar candidatos a rebaixar, resolver e substituir; com `--judgment` e `--write-proposals`, gravar um lote julgado | grava propostas só em `.kb-next/` e só com `--write-proposals`; reporta `review_budget` (`semantic_curation.weekly_hygiene_proposals`, padrão de 5 propostas abertas por projeto a cada 7 dias), pula alvos que já têm proposta aberta e lista o excedente em `deferred` |
 
 Hooks do plugin, como registrados em `hooks/hooks.json`. O Claude Code executa
@@ -69,7 +70,7 @@ subagentes do `AGENTS.md`.
 |---|---|---|
 | `SessionStart` | `session-hint` do runtime | imprime a instrução de início do vNext em workspaces vNext |
 | `SubagentStart` | `subagent-hint` do runtime | dá a cada subagente do Claude Code a regra de não escrever e a seção `KB candidates` do relatório |
-| `PreToolUse` em chamadas de shell | `scripts/write_gate.py` | nega `.kb/kb.py create`, `file`, `supersede` e `update` num projeto vNext e aponta `filing-proposal` e `proposal-apply`; `"write_gate": {"enabled": false}` em `.kb-next/kb-next.config.json` desliga |
+| `PreToolUse` em chamadas de shell | `scripts/write_gate.py` | nega `.kb/kb.py create`, `file`, `supersede` e `update` num projeto vNext e aponta `approved-filing`, `filing-proposal` e `proposal-apply`; `"write_gate": {"enabled": false}` em `.kb-next/kb-next.config.json` desliga |
 
 `.kb/` continua sendo memória durável canônica. `.kb-next/` continua sendo
 estado governado de proposta, evidência, draft, materialização e operações.

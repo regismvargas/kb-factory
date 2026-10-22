@@ -7,7 +7,8 @@ Verify KB/Wiki vNext installation in an existing project.
 
 This command does not mutate canonical `.kb/` and is suitable after install,
 activation, upgrade, or rollback. Its `session-start` and `lookup` checks append
-operational evidence to `.kb-next/operations.jsonl`.
+read telemetry to the git-ignored `.kb-next/telemetry/events.jsonl` and leave
+`.kb-next/operations.jsonl` unchanged.
 
 1. Resolve the vNext runtime. Check these paths in order (Glob or a file
    existence check) and use the first that exists:

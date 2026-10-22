@@ -10,10 +10,10 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.5` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.5`,
-  KB Lifecycle `0.2.5`, container de plugin `0.2.1`, runtime incluído `0.2.1`,
-  Session Gate `0.2.8` e marketplace `0.3.12`.
+- KB/Wiki vNext `0.2.0-rc.6` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.6`,
+  KB Lifecycle `0.2.5`, container de plugin `0.2.2`, runtime incluído `0.2.2`,
+  Session Gate `0.2.8` e marketplace `0.3.13`.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
@@ -24,7 +24,7 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 `.kb-next/` é a camada de trabalho. Ela guarda decisões de ativação, pistas de sessão, propostas semânticas, manifests de inferência, drafts de wiki, superfícies materializadas de revisão, exports de adapters e evidência operacional. Ela existe para ajudar agentes a trabalhar com contexto fino e revisável, sem carregar todo o histórico por padrão.
 
-Comandos descritos como read-only são read-only contra o `.kb/` canônico. Comandos como `session-start` e `lookup` ainda fazem append de evidência operacional em `.kb-next/operations.jsonl`.
+Comandos descritos como read-only são read-only contra o `.kb/` canônico. `.kb-next/operations.jsonl` é a trilha de governança e é versionado com o projeto: registra mutações e decisões (ativação e sincronização clássica, propostas, `proposal-apply`, revisão e materialização da wiki, exports, instalação e upgrade do clássico). Comandos de leitura (`session-start`, `lookup`, `semantic-lookup`) e o build derivado do `dense-index` anexam seus eventos em `.kb-next/telemetry/events.jsonl`; o `semantic-lookup` continua gravando seu manifest e sua proposta de resposta em `.kb-next/`. O diretório de telemetria se ignora pelo próprio `.kb-next/telemetry/.gitignore`, que o `activation-wizard` ou o primeiro append de telemetria grava uma única vez; o `.gitignore` do projeto nunca é editado. O arquivo gira para `events.1.jsonl` ao atingir 1 MiB e mantém uma geração anterior (cerca de 2 MiB em disco enquanto a rotação funciona); uma falha na rotação ou na gravação da telemetria nunca derruba o comando de leitura. A partir do runtime 0.2.2 os dois arquivos são gravados com fim de linha LF em qualquer plataforma; as linhas gravadas por runtimes anteriores, incluindo eventos de leitura e finais CRLF, ficam na trilha como histórico.
 
 Resumo de mutações:
 
@@ -33,7 +33,7 @@ Resumo de mutações:
 | `bootstrap` | sem mudança | instala apenas `runtime/kb_next.py` |
 | `install-classic`, `upgrade-classic` | `install-classic` cria a `.kb/` ausente a partir do scaffold clássico e roda o `init` clássico; `upgrade-classic` substitui apenas `kb.py` e `runtime/*.py` | append de evidência operacional |
 | `compliance-preflight`, `source-linkage-audit`, `semantic-hygiene` padrão, `wiki-draft-status`, `session-hint`, `subagent-hint` | read-only | sem escrita |
-| `session-start`, `lookup` | read-only | append de evidência operacional |
+| `session-start`, `lookup` | read-only | append de telemetria de leitura em `.kb-next/telemetry/events.jsonl` |
 | ativação, semântica, propostas, export e wiki | read-only, exceto `activation-wizard`: `--choice kb-wiki` grava as chaves da wiki clássica em `.kb/kb.config.json` e roda o primeiro `wiki-sync` (publica `.kb/wiki/live`); `--disable-classic-wiki` desliga a wiki clássica | escreve config, manifests, propostas, drafts, exports ou evidência operacional governada |
 | `proposal-apply` aprovado | muta apenas por `.kb/kb.py` | escreve evidência de apply e operações |
 
@@ -267,6 +267,17 @@ clássica gravadas em `.kb/kb.config.json`) e `classic_wiki_sync` (resultado do
 primeiro `wiki-sync`, `skipped` com `--no-wiki-sync`), registrados em
 `.kb-next/operations.jsonl` como `classic-config-sync` e `classic-wiki-sync`.
 
+Desde o runtime 0.2.2, uma ativação `kb-wiki` cuja KB tem menos de 10
+registros ativos citando uma fonte registrada deixa a wiki clássica dormente
+(`activation_mode: signal` com `eligibility.min_sourced_records`):
+`wiki_dormant` informa o limiar e a contagem, `classic_wiki_sync` sai como
+`skipped` com `wiki_dormant`, e o registro que cruza o limiar publica as
+primeiras páginas. `--wiki-min-sourced-records <n>` define o limiar; `0` liga
+a wiki na hora. Uma wiki clássica ligada nunca volta a dormir.
+`--scope "<escopo nas palavras do usuário>"` registra o escopo uma vez como
+`DECISAO` HOT com a tag `project-scope`; uma execução posterior informa o
+registro existente.
+
 Riscos: escolher KB + Wiki sem aprovação pode implicar um fluxo de wiki mais amplo do que o projeto autorizou.
 
 ### `session-start`
@@ -279,7 +290,7 @@ Subcomando do runtime: `session-start`.
 
 Use quando: iniciar toda sessão com agente.
 
-Não use quando: você está tentando aplicar mudanças na memória canônica. Ele não escreve em `.kb/`, mas faz append da evidência de sessão em `.kb-next/operations.jsonl`.
+Não use quando: você está tentando aplicar mudanças na memória canônica. Ele não escreve em `.kb/`; faz append de uma linha de telemetria de leitura em `.kb-next/telemetry/events.jsonl`, ignorado pelo Git.
 
 Exemplo no repositório:
 
@@ -327,7 +338,14 @@ python runtime\kb_next.py session-hint
 Saída esperada: texto simples. Em workspace vNext ele aponta o agente para o
 startup vNext e apenas para `.kb-next/memory/NOW.md`; com KB + Wiki acrescenta
 o lembrete de `wiki-draft-status` para o fim da sessão. Fora de workspace vNext
-não imprime nada, e o hook clássico do kb-lifecycle governa.
+não imprime nada, e o hook clássico do kb-lifecycle governa. O comando
+`session-start` impresso usa `.kb-next/runtime/kb_next.py` quando o arquivo
+existe e, se não existe, o runtime que imprimiu o hint, com `--project-root`.
+Quando o `RUNTIME_VERSION` do runtime local difere do runtime do hint, uma
+linha `Runtime skew` nomeia as duas versões: runtime local mais antigo (comum
+em worktree cortado antes de um commit de upgrade) aponta para o main atual ou
+`existing-project-upgrade-vnext`; runtime local mais novo aponta para atualizar
+o plugin, porque `bootstrap` instalaria o runtime mais antigo por cima.
 
 Riscos: não escreve nada. O suporte a hooks depende do cliente; onde hooks
 estiverem desativados, inicie a sessão manualmente.
@@ -762,6 +780,34 @@ acrescenta uma linha com a regra. O hook orienta agentes; não os autentica. O
 Claude Code o roda assim que instalado; o Codex o roda depois que o usuário
 confia no hook alterado. O dono do projeto pode desligá-lo com
 `{"write_gate": {"enabled": false}}` mesclado na config do vNext.
+
+### `approved-filing`
+
+Propósito: registrar em uma chamada um registro que o usuário aprovou no chat.
+
+Use quando: o usuário viu no chat título, conteúdo, categoria, confiança e lastro do registro e disse sim.
+
+Não use quando: a aprovação vem depois ou de outra pessoa; escreva um `filing-proposal` e rode `proposal-apply` depois do sim.
+
+Exemplo no repositório:
+
+```powershell
+$sourceId = 'replace-with-ingested-source-id'
+$approver = 'replace-with-approver-id'
+python core\versions\kb-wiki-vnext\runtime\kb_next.py approved-filing --category DECISAO --domain operations --title "Use NOW-only startup" --content "Read only .kb-next/memory/NOW.md at session start." --confidence 0.95 --source-id $sourceId --approval-note "Owner approved in chat" --actor $approver --actor-runtime human --json
+```
+
+Exemplo stand-alone:
+
+```powershell
+$sourceId = 'replace-with-ingested-source-id'
+$approver = 'replace-with-approver-id'
+python runtime\kb_next.py approved-filing --category FATO --domain research --title "Replace with the approved title" --content "Replace with the approved content." --confidence 0.9 --source-id $sourceId --approval-note "Owner approved in chat" --actor $approver --actor-runtime human --json
+```
+
+O lastro segue a regra do `proposal-apply`: `--source-id` nomeia uma fonte registrada com `python .kb/kb.py ingest <path> --json`, `--record-id` um registro existente; os dois se repetem. A confiança precisa atingir o piso do apply (`filing_policy.confidence_bands.high`, padrão 0.8). `--supersedes <id>` substitui um registro ativo e pode trocar a categoria; `--valid-until none` limpa a data que o registro antigo carregava.
+
+Saída esperada: um manifest em `.kb-next/manifests/approved-filing/`, uma linha `approved-filing` em `.kb-next/operations.jsonl` e o registro novo em `.kb/`. Uma chamada bloqueada (lastro ausente ou desconhecido, confiança baixa, alvo de supersede desconhecido ou inativo, ou registro ativo com o mesmo título, que se substitui por supersede) imprime os avisos, não escreve nada e sai com código 1.
 
 ### `wiki-synthesis-plan`
 

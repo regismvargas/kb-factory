@@ -21,11 +21,11 @@ Platform map:
 
 | Platform | Artifact | Internal structure | Primary capabilities |
 | --- | --- | --- | --- |
-| Codex | `kb-wiki-vnext-plugin-0.2.1.zip` | `.codex-plugin`, skills, commands, and runtime `0.2.1` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
-| Claude Code | `kb-wiki-vnext-claude-plugin-0.2.1.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.2.1` | guided memory workflows and explicit commands |
-| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.2.1.zip` | Cowork plugin package, runtime `0.2.1`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
+| Codex | `kb-wiki-vnext-plugin-0.2.2.zip` | `.codex-plugin`, skills, commands, and runtime `0.2.2` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
+| Claude Code | `kb-wiki-vnext-claude-plugin-0.2.2.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.2.2` | guided memory workflows and explicit commands |
+| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.2.2.zip` | Cowork plugin package, runtime `0.2.2`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
 | Session Gate | `session-gate-*-0.2.8.zip` | plugin detector plus `gate-session-*` commands | route `.kb-next/` first, then classic `.kb/` when present |
-| Stand-alone | `kb-wiki-vnext-0.2.0-rc.5-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
+| Stand-alone | `kb-wiki-vnext-0.2.0-rc.6-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
 
 Plugin packaging installs client capabilities. Skills describe agent behavior. Commands expose callable workflows. Hooks are platform-specific convenience surfaces and are not assumed for Cowork.
 
@@ -37,12 +37,12 @@ The version lines are independent component identities, not alternatives:
 
 | Component | Version |
 |---|---|
-| Product release candidate | `0.2.0-rc.5` |
+| Product release candidate | `0.2.0-rc.6` |
 | KB Lifecycle | `0.2.5` |
-| vNext plugin container | `0.2.1` |
-| Bundled `kb_next.py` engine | `0.2.1` |
+| vNext plugin container | `0.2.2` |
+| Bundled `kb_next.py` engine | `0.2.2` |
 | Session Gate | `0.2.8` |
-| Marketplace | `0.3.12` |
+| Marketplace | `0.3.13` |
 
 The bundled engine bootstraps a stable workspace copy at
 `.kb-next/runtime/kb_next.py`. Normal sessions use the workspace copy. Upgrade
@@ -53,7 +53,9 @@ runtime as its own source returns `action: self` and does not prove a version
 transition.
 
 Operational writes under `.kb-next/` are not canonical writes. `session-start`
-and `lookup` append operations evidence; semantic and wiki commands may write
+and `lookup` append read telemetry to the git-ignored
+`.kb-next/telemetry/events.jsonl`, outside the versioned governance trail
+`.kb-next/operations.jsonl`; semantic and wiki commands may write
 manifests, proposals, drafts, or materializations. Only approved
 `proposal-apply` writes records into canonical `.kb/`, and it must do so
 through `.kb/kb.py`. Setup commands also write inside `.kb/`:

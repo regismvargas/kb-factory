@@ -6,8 +6,8 @@ allowed-tools: Read, Bash, Grep, Glob
 Verify KB/Wiki vNext installation in a new project.
 
 This command does not mutate canonical `.kb/` after initial bootstrap. Its
-`session-start` and `lookup` checks append operational evidence to
-`.kb-next/operations.jsonl`.
+`session-start` and `lookup` checks append read telemetry to the git-ignored
+`.kb-next/telemetry/events.jsonl` and leave `.kb-next/operations.jsonl` unchanged.
 
 1. Confirm `.kb/`, `.kb/kb.py`, `.kb-next/`, and `.kb-next/memory/NOW.md`
    exist.
