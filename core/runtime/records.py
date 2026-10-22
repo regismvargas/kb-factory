@@ -503,6 +503,7 @@ def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> Non
     new_data = {
         **old,
         "id": args.new_id or f"{old['id']}-S{uuid.uuid4().hex[:4]}",
+        "category": getattr(args, "category", None) or old["category"],
         "title": args.title or old["title"],
         "content": args.content or old["content"],
         "status": "ATIVO",
@@ -515,7 +516,9 @@ def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> Non
         "tier_changed_at": now_iso(),
         "tier_reason": args.tier_reason or old.get("tier_reason"),
         "review_after": args.review_after or old.get("review_after"),
-        "valid_until": args.valid_until or old.get("valid_until"),
+        "valid_until": (
+            None if (args.valid_until or "").lower() == "none" else args.valid_until or old.get("valid_until")
+        ),
         "confidence": args.confidence if args.confidence is not None else old.get("confidence"),
         "replacement_id": None,
         "supersedes_id": old["id"],

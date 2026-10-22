@@ -7,8 +7,9 @@ Start a new project with KB/Wiki vNext.
 
 Use this command for a fresh workspace that needs both the classic `.kb/`
 and vNext activation. Do not fabricate project scope: ask the user for the
-project title, slug (lowercase, `a-z0-9-`) and initial domains if they are
-missing. The slug becomes the record ID prefix (`<SLUG>-KB-...`), which keeps
+project title, slug (lowercase, `a-z0-9-`), initial domains and the scope in
+one line if they are missing. The scope goes to `activation-wizard --scope`
+as the user wrote it. The slug becomes the record ID prefix (`<SLUG>-KB-...`), which keeps
 IDs unambiguous when KBs are merged later.
 
 1. Choose the activation command. The default is KB alone; use KB + Wiki only

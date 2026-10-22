@@ -2,7 +2,7 @@
 
 Cross-tool distribution package for KB Factory memory lifecycle and derived wiki workflows.
 
-Release-candidate version: `0.2.5`.
+Release-candidate version: `0.2.6`.
 
 ## Purpose
 

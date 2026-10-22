@@ -28,8 +28,8 @@ record a guided activation decision. Keep `.kb/` canonical.
    in a shell run:
    `python .kb-next/runtime/kb_next.py session-start --json`
    If `python` is not on PATH, retry with `py` or `python3`. This does not write
-   canonical `.kb/`, but it appends session evidence to
-   `.kb-next/operations.jsonl`.
+   canonical `.kb/`; it appends one read-telemetry line to the git-ignored
+   `.kb-next/telemetry/events.jsonl`.
 5. Inspect `.kb-next/kb-next.config.json` and
    `.kb-next/decisions/activation-decision.json` if present.
 6. If the user supplied guided answers, run:

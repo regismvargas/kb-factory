@@ -157,7 +157,7 @@ def test_ac1_new_project_kb_wiki_publishes_without_manual_step(tmp_path: Path) -
     assert vnext_json(PLUGIN_RUNTIME, project, "bootstrap")["action"] == "created"
     workspace_runtime = project / ".kb-next" / "runtime" / "kb_next.py"
     activation = vnext_json(
-        workspace_runtime, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki"
+        workspace_runtime, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0"
     )
     assert activation["classic_config_sync"]["action"] in {"updated", "unchanged"}
     assert activation["classic_wiki_sync"]["action"] == "synced"
@@ -226,7 +226,7 @@ def test_ac2_activation_syncs_classic_config_and_records_it(tmp_path: Path) -> N
     }
     (project / ".kb-next" / "kb-next.config.json").write_text(json.dumps(previous_vnext), encoding="utf-8")
 
-    result = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    result = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
 
     after = load_config(project)
     changed = ["wiki.enabled"] + [f"lifecycle.events.{event}.run_wiki_sync" for event in WIKI_SYNC_EVENTS]
@@ -249,7 +249,7 @@ def test_ac2_activation_syncs_classic_config_and_records_it(tmp_path: Path) -> N
     assert sync_op["details"]["action"] == "updated"
     assert {"path": "wiki.enabled", "from": False, "to": True} in sync_op["details"]["changes"]
 
-    again = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    again = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
     assert again["classic_config_sync"]["action"] == "unchanged"
 
 
@@ -573,22 +573,30 @@ def test_ac6_k2_regression(tmp_path: Path) -> None:
     assert status == "classic_wiki_off"
 
     # The upgrade path: re-apply the recorded kb-wiki decision.
-    result = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    result = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
     assert result["classic_config_sync"]["action"] == "updated"
     assert result["classic_wiki_sync"]["action"] == "synced"
-    assert result["classic_wiki_sync"]["written_count"] == 4
+    # Since 0.2.2 a record below 0.8 leaves its page, not the page with it:
+    # paquistao and product publish without their one low-confidence record.
+    assert result["classic_wiki_sync"]["written_count"] == 6
 
     after = kb_json(project, "wiki-check")
     assert after["wiki_state"] == "active"
     publication = after["publication"]
-    assert publication["publishable_count"] == 4
-    assert publication["held_back_by_reason"] == {
-        "confidence_below_autopublish": 2,
-        "insufficient_sources_research_synthesis": 18,
-    }
+    assert publication["publishable_count"] == 6
+    assert publication["held_back_by_reason"] == {"insufficient_sources_research_synthesis": 18}
+    assert sorted(
+        (entry["candidate_id"], [item["record_id"] for item in entry["excluded_records"]])
+        for entry in publication["records_held_back"]
+    ) == [
+        ("wc-paquistao-domain_overview-8a7222", ["K2-3SIGMA-ALTERRA-KB-0001"]),
+        ("wc-product-domain_overview-a87921", ["K2-3SIGMA-ALTERRA-KB-0035"]),
+    ]
     assert sorted(live_pages(project)) == [
         "metodo/overview.md",
         "operations/overview.md",
+        "paquistao/overview.md",
+        "product/overview.md",
         "proposta/overview.md",
         f"sources/{K2_SOURCE_ID}.md",
     ]
@@ -615,8 +623,9 @@ def test_reads_never_modify_kb_db(tmp_path: Path) -> None:
     project = tmp_path / "reads"
     project.mkdir()
     copy_template(project)
-    kb(project, "init", "--slug", "reads", "--seed", "seed/initial_records.jsonl")
-    record_id = kb_json(project, "list")[0]["id"]
+    kb(project, "init", "--slug", "reads")
+    record_id = kb_json(project, "create", "--category", "FATO", "--domain", "operations", "--title", "KB fact",
+                        "--content", "A record to read.", "--no-auto-lifecycle")["id"]
     digest = sha256(project / ".kb" / "kb.db")
     for args in (
         ("list",), ("get", record_id), ("search", "KB"), ("stats",), ("pending",), ("wiki-check",),
@@ -631,13 +640,23 @@ def test_init_flags_render_config_seed_and_id_prefix(tmp_path: Path) -> None:
     project = tmp_path / "init"
     project.mkdir()
     copy_template(project)
-    no_slug = kb(project, "init", "--seed", "seed/initial_records.jsonl", check=False)
+    # The scaffold seeds no record since kb-lifecycle 0.2.6; a project seed
+    # file still renders the template placeholders.
+    (project / ".kb" / "seed" / "project_seed.jsonl").write_text(
+        "".join(
+            json.dumps({"id": f"{{{{PROJECT_NAME}}}}-KB-000{n}", "category": "FATO", "domain": "ops",
+                        "title": f"Seeded {n}", "content": "c", "created_at": "{{ISO_TIMESTAMP}}"}) + "\n"
+            for n in range(1, 6)
+        ),
+        encoding="utf-8",
+    )
+    no_slug = kb(project, "init", "--seed", "seed/project_seed.jsonl", check=False)
     assert no_slug.returncode != 0
     assert "unresolved placeholders" in no_slug.stderr
     assert kb(project, "init", "--slug", "Bad Slug", check=False).returncode != 0
 
     kb(project, "init", "--name", "Gauss Labs", "--slug", "gauss-labs", "--domains", "quant,ops",
-       "--seed", "seed/initial_records.jsonl")
+       "--seed", "seed/project_seed.jsonl")
     config = load_config(project)
     assert config["project"]["name"] == "Gauss Labs"
     assert config["project"]["slug"] == "gauss-labs"
@@ -728,7 +747,7 @@ def test_wiki_draft_status_tracks_the_draft_lifecycle(tmp_path: Path) -> None:
         kb_json(project, "create", "--category", "FATO", "--domain", "strategy",
                 "--title", f"S{index}", "--content", f"strategy {index}", "--confidence", "0.9",
                 "--no-auto-lifecycle")
-    vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
 
     def state() -> str:
         status = vnext_json(MASTER_RUNTIME, project, "wiki-draft-status")
@@ -833,7 +852,7 @@ def test_reactivation_preserves_curated_now_and_the_recorded_decision(tmp_path: 
     """Re-running the wizard (upgrades, portfolio rollouts) must not replace a
     curated NOW.md with the template or reset the decision's date and rationale."""
     project = _existing_project(tmp_path)
-    first = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki",
+    first = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0",
                        "--rationale", "Owner chose KB + Wiki for the research program.")
     assert first["now"]["action"] == "created"
     assert first["decision"] == "recorded"
@@ -841,7 +860,7 @@ def test_reactivation_preserves_curated_now_and_the_recorded_decision(tmp_path: 
     decision_file = project / ".kb-next" / "decisions" / "activation-decision.json"
     recorded = json.loads(decision_file.read_text(encoding="utf-8"))
 
-    again = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    again = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
     assert again["now"]["action"] == "regenerated"  # a generated template is safe to refresh
     kept = json.loads(decision_file.read_text(encoding="utf-8"))
     assert again["decision"] == "reconfirmed"
@@ -851,7 +870,7 @@ def test_reactivation_preserves_curated_now_and_the_recorded_decision(tmp_path: 
 
     curated = "# NOW - research program\n\nStatus written by the team; not a template.\n"
     now.write_text(curated, encoding="utf-8")
-    third = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki")
+    third = vnext_json(MASTER_RUNTIME, project, "activation-wizard", "--mode", "short", "--choice", "kb-wiki", "--wiki-min-sourced-records", "0")
     assert third["now"]["action"] == "preserved"
     assert now.read_text(encoding="utf-8") == curated
     last_op = read_operations(project)[-1]

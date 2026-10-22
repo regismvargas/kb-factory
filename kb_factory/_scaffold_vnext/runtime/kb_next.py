@@ -26,10 +26,20 @@ from uuid import uuid4
 CONFIG_REL = Path(".kb-next") / "kb-next.config.json"
 DECISION_REL = Path(".kb-next") / "decisions" / "activation-decision.json"
 OPERATIONS_REL = Path(".kb-next") / "operations.jsonl"
+# G-05: the versioned oplog keeps mutations and decisions only. Read events
+# (session-start, lookup, semantic-lookup) and derived dense-index builds go to
+# a local telemetry file that ignores itself and rotates once it reaches
+# TELEMETRY_MAX_BYTES, keeping one previous generation (about 2 MiB on disk).
+TELEMETRY_REL = Path(".kb-next") / "telemetry" / "events.jsonl"
+TELEMETRY_ROTATED_NAME = "events.1.jsonl"
+TELEMETRY_MAX_BYTES = 1024 * 1024
+TELEMETRY_EVENTS = frozenset({"session-start", "lookup", "semantic-lookup", "dense_index"})
+TELEMETRY_GITIGNORE = "# Local read telemetry from kb_next.py: rotated, never committed.\n*\n"
 NOW_REL = Path(".kb-next") / "memory" / "NOW.md"
 LLM_MANIFESTS_REL = Path(".kb-next") / "manifests" / "llm"
 WIKI_REVIEW_MANIFESTS_REL = Path(".kb-next") / "manifests" / "wiki-draft-review"
 PROPOSAL_APPLY_MANIFESTS_REL = Path(".kb-next") / "manifests" / "proposal-apply"
+APPROVED_FILING_MANIFESTS_REL = Path(".kb-next") / "manifests" / "approved-filing"
 PROPOSALS_REL = Path(".kb-next") / "proposals"
 WIKI_DRAFTS_REL = Path(".kb-next") / "wiki" / "drafts"
 WIKI_MACHINE_REL = Path(".kb-next") / "wiki" / "machine"
@@ -38,7 +48,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.2.1"
+RUNTIME_VERSION = "0.2.2"
 # Classic lifecycle events that keep an enabled classic wiki current. Mirrors
 # WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
 CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
@@ -56,6 +66,30 @@ ACTOR_HINT = (
 # Domains with at least this many active records get a wiki topic, matching the
 # classic domain_overview candidate threshold.
 WIKI_TOPIC_MIN_RECORDS = 3
+# A KB + Wiki activation keeps the wiki dormant until this many active records
+# cite a registered source: below it, NOW, HOT and the topic files already show
+# every record, so wiki pages would repeat them. `--wiki-min-sourced-records 0`
+# turns the wiki on at once.
+WIKI_DORMANT_MIN_SOURCED_RECORDS = 10
+PROJECT_SCOPE_TAG = "project-scope"
+RECORD_CATEGORIES = ("DECISAO", "PREMISSA", "FATO", "PENDENCIA", "APRENDIZADO")
+# Template seeds of kb-lifecycle < 0.2.6, the same list as the classic
+# runtime/constants.py. Derived surfaces leave them out; kb.db keeps them.
+BOOTSTRAP_SEED_SOURCES = ("project-bootstrap", "kb-factory-blueprint")
+BOOTSTRAP_SEED_TITLES = (
+    "KB enabled as the project's operating memory",
+    "Initial project scope remains valid until first KB review",
+    "The primary runtime is local-first",
+    "Review HOT criteria after first real sessions",
+    "Search before assuming reduces context drift",
+)
+NOT_BOOTSTRAP_SEED = (
+    "NOT (COALESCE(source, '') IN ("
+    + ", ".join("'" + value.replace("'", "''") + "'" for value in BOOTSTRAP_SEED_SOURCES)
+    + ") AND title IN ("
+    + ", ".join("'" + value.replace("'", "''") + "'" for value in BOOTSTRAP_SEED_TITLES)
+    + "))"
+)
 OBSIDIAN_DESIGN_NOTES_REL = (
     Path("state")
     / "runs"
@@ -344,6 +378,10 @@ def decision_path(root: Path) -> Path:
 
 def operations_path(root: Path) -> Path:
     return root / OPERATIONS_REL
+
+
+def telemetry_path(root: Path) -> Path:
+    return root / TELEMETRY_REL
 
 
 def now_path(root: Path) -> Path:
@@ -694,16 +732,55 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
             temporary.unlink()
 
 
-def append_operation(root: Path, event: str, details: dict[str, Any]) -> None:
-    op_path = operations_path(root)
-    op_path.parent.mkdir(parents=True, exist_ok=True)
+def append_event_line(path: Path, event: str, details: dict[str, Any]) -> None:
     payload = {
         "event": event,
         "happened_at": now_iso(),
         "details": details,
     }
-    with op_path.open("a", encoding="utf-8") as handle:
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def append_operation(root: Path, event: str, details: dict[str, Any]) -> None:
+    """Append to the versioned governance trail: mutations and decisions only."""
+    if event in TELEMETRY_EVENTS:
+        raise ValueError(f"{event} is read telemetry; record it with append_telemetry")
+    op_path = operations_path(root)
+    op_path.parent.mkdir(parents=True, exist_ok=True)
+    append_event_line(op_path, event, details)
+
+
+def ensure_telemetry_ignore(root: Path) -> bool:
+    """Write .kb-next/telemetry/.gitignore once; never touch the project's own .gitignore."""
+    ignore = telemetry_path(root).parent / ".gitignore"
+    if ignore.is_file():
+        return False
+    ignore.parent.mkdir(parents=True, exist_ok=True)
+    ignore.write_bytes(TELEMETRY_GITIGNORE.encode("utf-8"))
+    return True
+
+
+def append_telemetry(root: Path, event: str, details: dict[str, Any]) -> None:
+    """Append to the local telemetry file, best effort.
+
+    A read command never fails because its telemetry could not be written. On
+    Windows the rotation fails while another session holds the file open; the
+    append then goes to the current file and a later append rotates it.
+    """
+    if event not in TELEMETRY_EVENTS:
+        raise ValueError(f"{event} belongs in the governance trail; record it with append_operation")
+    path = telemetry_path(root)
+    try:
+        ensure_telemetry_ignore(root)
+        if path.is_file() and path.stat().st_size >= TELEMETRY_MAX_BYTES:
+            try:
+                os.replace(path, path.with_name(TELEMETRY_ROTATED_NAME))
+            except OSError:
+                pass
+        append_event_line(path, event, details)
+    except OSError:
+        pass
 
 
 def classic_wiki_enabled(root: Path) -> bool | None:
@@ -716,6 +793,58 @@ def classic_wiki_enabled(root: Path) -> bool | None:
         return None
     wiki = config.get("wiki") if isinstance(config, dict) else None
     return bool(wiki.get("enabled", False)) if isinstance(wiki, dict) else False
+
+
+def classic_wiki_sourced_threshold(root: Path) -> int | None:
+    """`wiki.eligibility.min_sourced_records` of a classic wiki that waits for it, else None.
+
+    Only a wiki that is not enabled outright and runs in `signal` mode waits:
+    the classic runtime then publishes once that many active records cite a
+    registered source.
+    """
+    path = classic_config_path(root)
+    if not path.is_file():
+        return None
+    try:
+        config = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return None
+    wiki = config.get("wiki") if isinstance(config, dict) else None
+    if not isinstance(wiki, dict) or wiki.get("enabled") or wiki.get("activation_mode") != "signal":
+        return None
+    value = (wiki.get("eligibility") or {}).get("min_sourced_records")
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def sourced_record_count(root: Path) -> int:
+    """Active records, template seeds aside, that cite a registered source."""
+    try:
+        conn = open_classic_kb_readonly(root)
+    except FileNotFoundError:
+        return 0
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM records WHERE status = 'ATIVO' AND source_id IS NOT NULL "
+            f"AND {NOT_BOOTSTRAP_SEED}"
+        ).fetchone()
+        return int(row["n"])
+    except sqlite3.Error:
+        return 0
+    finally:
+        conn.close()
+
+
+def wiki_dormancy(root: Path, config: dict[str, Any]) -> dict[str, int] | None:
+    """`{min_sourced_records, sourced_records}` while a KB + Wiki workspace waits, else None."""
+    if not (config.get("wiki") or {}).get("enabled"):
+        return None
+    threshold = classic_wiki_sourced_threshold(root)
+    if threshold is None:
+        return None
+    count = sourced_record_count(root)
+    if count >= threshold:
+        return None
+    return {"min_sourced_records": threshold, "sourced_records": count}
 
 
 NOW_GENERATED_MARKER = "<!-- kb-next:generated-now -->"
@@ -755,7 +884,8 @@ def write_now(root: Path, config: dict[str, Any]) -> dict[str, Any]:
         }
     existed = path.is_file()
     mode = config["activation"]["sponsor_decision"]
-    wiki_enabled = config["wiki"]["enabled"]
+    dormant = wiki_dormancy(root, config)
+    wiki_enabled = config["wiki"]["enabled"] and dormant is None
     classic_wiki = classic_wiki_enabled(root)
     classic_label = "absent" if classic_wiki is None else str(classic_wiki).lower()
     lines = [
@@ -767,6 +897,13 @@ def write_now(root: Path, config: dict[str, Any]) -> dict[str, Any]:
         f"- Classic KB: `{config['classic_kb']['root']}` (`read_only`)",
         f"- Wiki active: `{str(wiki_enabled).lower()}`",
         f"- Classic wiki enabled (`.kb/kb.config.json`): `{classic_label}`",
+    ]
+    if dormant is not None:
+        lines.append(
+            f"- Wiki dormant until `{dormant['min_sourced_records']}` active records cite a registered source "
+            f"(now `{dormant['sourced_records']}`); it then publishes by itself and `session-start` reports it."
+        )
+    lines += [
         "",
         "## Required Default Read",
         "- Read this `NOW.md` only.",
@@ -862,11 +999,46 @@ def apply_classic_wiki_enabled(config: dict[str, Any], enabled: bool) -> list[di
     return changes
 
 
-def sync_classic_wiki_config(root: Path, mode: str, *, disable_classic_wiki: bool) -> dict[str, Any]:
+def apply_classic_wiki_dormant(config: dict[str, Any], threshold: int) -> list[dict[str, Any]]:
+    """A classic wiki that publishes by itself once `threshold` active records cite a source.
+
+    `enabled` stays false and `activation_mode` becomes `signal` with
+    `eligibility.min_sourced_records`; the lifecycle sync flags go on, so the
+    record that crosses the threshold publishes the first pages.
+    """
+    wiki = config.get("wiki") if isinstance(config.get("wiki"), dict) else {}
+    before_enabled = wiki.get("enabled")
+    changes = [change for change in apply_classic_wiki_enabled(config, True) if change["path"] != "wiki.enabled"]
+    wiki = config["wiki"]
+    wiki["enabled"] = False
+    if before_enabled is not False:
+        changes.insert(0, {"path": "wiki.enabled", "from": before_enabled, "to": False})
+    if wiki.get("activation_mode") != "signal":
+        changes.append({"path": "wiki.activation_mode", "from": wiki.get("activation_mode"), "to": "signal"})
+        wiki["activation_mode"] = "signal"
+    eligibility = wiki.get("eligibility") if isinstance(wiki.get("eligibility"), dict) else {}
+    if eligibility.get("min_sourced_records") != threshold:
+        changes.append(
+            {
+                "path": "wiki.eligibility.min_sourced_records",
+                "from": eligibility.get("min_sourced_records"),
+                "to": threshold,
+            }
+        )
+        eligibility["min_sourced_records"] = threshold
+    wiki["eligibility"] = eligibility
+    return changes
+
+
+def sync_classic_wiki_config(
+    root: Path, mode: str, *, disable_classic_wiki: bool, min_sourced_records: int | None = None
+) -> dict[str, Any]:
     """Align the classic config that publishes `.kb/wiki/live` with the decision.
 
-    `kb_wiki` enables the classic wiki and its lifecycle sync; `kb_alone` never
-    turns an enabled classic wiki off unless explicitly asked to.
+    `kb_wiki` enables the classic wiki and its lifecycle sync, or with
+    `min_sourced_records` leaves it dormant until that many records cite a
+    source; `kb_alone` never turns an enabled classic wiki off unless
+    explicitly asked to.
     """
     path = classic_config_path(root)
     display = str(path)
@@ -878,7 +1050,9 @@ def sync_classic_wiki_config(root: Path, mode: str, *, disable_classic_wiki: boo
         raise ValueError(f"classic config is not a JSON object: {path}")
     before = hashlib.sha256(raw).hexdigest()
     currently_enabled = bool((config.get("wiki") or {}).get("enabled", False)) if isinstance(config.get("wiki"), dict) else False
-    if mode == "kb_wiki":
+    if mode == "kb_wiki" and min_sourced_records:
+        changes = apply_classic_wiki_dormant(config, min_sourced_records)
+    elif mode == "kb_wiki":
         changes = apply_classic_wiki_enabled(config, True)
     elif currently_enabled and not disable_classic_wiki:
         return {
@@ -901,6 +1075,57 @@ def sync_classic_wiki_config(root: Path, mode: str, *, disable_classic_wiki: boo
         "sha256_before": before,
         "sha256_after": sha256_path(path),
     }
+
+
+def file_project_scope(root: Path, scope: str) -> dict[str, Any]:
+    """Record the user's scope answer as a HOT DECISAO, once per project.
+
+    The wizard is where the user states the scope, so the answer is filed as
+    given. An active scope record is reported and left alone: a later change
+    is a supersede through `approved-filing` or a proposal.
+    """
+    try:
+        conn = open_classic_kb_readonly(root)
+    except FileNotFoundError:
+        return {"action": "skipped", "reason": "classic_kb_missing"}
+    try:
+        existing = conn.execute(
+            "SELECT id FROM records WHERE status = 'ATIVO' AND tags_json LIKE ? ORDER BY created_at DESC LIMIT 1",
+            (f'%"{PROJECT_SCOPE_TAG}"%',),
+        ).fetchone()
+    finally:
+        conn.close()
+    if existing is not None:
+        return {"action": "exists", "record_id": existing["id"]}
+    domains = [str(item) for item in (load_classic_config(root).get("domains") or [])]
+    domain = "product" if "product" in domains or not domains else domains[0]
+    title = f"Scope: {scope}"
+    cmd = [
+        sys.executable,
+        str(classic_kb_script(root)),
+        "create",
+        "--category",
+        "DECISAO",
+        "--domain",
+        domain,
+        "--title",
+        title if len(title) <= 160 else title[:157] + "...",
+        "--content",
+        scope,
+        "--tier",
+        "HOT",
+        "--tier-reason",
+        "Project scope stated by the user at activation",
+        "--confidence",
+        "0.95",
+        "--source",
+        "activation-wizard: user scope answer",
+        "--tags",
+        PROJECT_SCOPE_TAG,
+        "--json",
+    ]
+    result = run_canonical_command(root, cmd)
+    return {"action": "created", "record_id": result.get("id"), "domain": domain}
 
 
 def run_classic_wiki_sync(root: Path) -> dict[str, Any]:
@@ -972,11 +1197,25 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
     decision, decision_action = reconcile_decision(root, decision, explicit_rationale=bool(args.rationale))
     config = merge_config(existing, build_config(root, decision))
     changed_keys = changed_key_paths(existing, config)
+    scope = (getattr(args, "scope", None) or "").strip()
+    if getattr(args, "scope", None) is not None and not scope:
+        raise ValueError("--scope must not be blank; omit it when the user gave no scope")
+    # A new KB + Wiki waits for sourced records; an enabled classic wiki stays on.
+    wiki_threshold: int | None = None
+    sourced_records: int | None = None
+    if decision_mode == "kb_wiki":
+        requested = getattr(args, "wiki_min_sourced_records", WIKI_DORMANT_MIN_SOURCED_RECORDS)
+        if requested < 0:
+            raise ValueError("--wiki-min-sourced-records must be 0 or more")
+        sourced_records = sourced_record_count(root)
+        if requested > 0 and sourced_records < requested and classic_wiki_enabled(root) is not True:
+            wiki_threshold = requested
     # Classic first: a malformed classic config aborts before any vNext write.
     classic_sync = sync_classic_wiki_config(
         root,
         decision_mode,
         disable_classic_wiki=bool(getattr(args, "disable_classic_wiki", False)),
+        min_sourced_records=wiki_threshold,
     )
     kb_next_root(root).mkdir(parents=True, exist_ok=True)
     write_json(config_path(root), config)
@@ -984,11 +1223,22 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
     append_operation(root, "classic-config-sync", {"sponsor_decision": decision_mode, **classic_sync})
     wiki_sync: dict[str, Any] | None = None
     if decision_mode == "kb_wiki":
-        if getattr(args, "no_wiki_sync", False):
+        if wiki_threshold is not None:
+            wiki_sync = {
+                "action": "skipped",
+                "reason": "wiki_dormant",
+                "min_sourced_records": wiki_threshold,
+                "sourced_records": sourced_records,
+            }
+        elif getattr(args, "no_wiki_sync", False):
             wiki_sync = {"action": "skipped", "reason": "no_wiki_sync_flag"}
         else:
             wiki_sync = run_classic_wiki_sync(root)
         append_operation(root, "classic-wiki-sync", wiki_sync)
+    scope_result: dict[str, Any] | None = None
+    if scope:
+        scope_result = file_project_scope(root, scope)
+        append_operation(root, "project-scope", scope_result)
     now_result = write_now(root, config)
     append_operation(
         root,
@@ -1007,8 +1257,14 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
             },
             "classic_config_sync": classic_sync.get("action"),
             "classic_wiki_sync": (wiki_sync or {}).get("action"),
+            "wiki_min_sourced_records": wiki_threshold,
+            "project_scope": (scope_result or {}).get("action"),
         },
     )
+    try:
+        ensure_telemetry_ignore(root)
+    except OSError:
+        pass  # the first telemetry append writes it instead
     result = {
         "event": "activation-wizard",
         "activation": decision,
@@ -1020,10 +1276,13 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
         },
         "classic_config_sync": classic_sync,
         "classic_wiki_sync": wiki_sync,
+        "wiki_dormant": wiki_dormancy(root, config),
+        "project_scope": scope_result,
         "paths": {
             "config": str(config_path(root)),
             "decision": str(decision_path(root)),
             "operations": str(operations_path(root)),
+            "telemetry": str(telemetry_path(root)),
             "now": str(now_path(root)),
             "classic_config": str(classic_config_path(root)),
         },
@@ -1039,6 +1298,14 @@ def cmd_activation_wizard(args: argparse.Namespace) -> int:
         ]
         if wiki_sync is not None:
             lines.append(f"Classic wiki sync: {wiki_sync.get('action')}")
+        if result["wiki_dormant"]:
+            dormant = result["wiki_dormant"]
+            lines.append(
+                f"Wiki dormant until {dormant['min_sourced_records']} active records cite a registered source "
+                f"(now {dormant['sourced_records']})"
+            )
+        if scope_result is not None:
+            lines.append(f"Project scope: {scope_result.get('action')} {scope_result.get('record_id') or ''}".rstrip())
         if classic_sync.get("warning"):
             lines.append(f"Warning: {classic_sync['warning']}")
         emit("\n".join(lines), False)
@@ -1050,7 +1317,12 @@ def wiki_alignment(root: Path, config: dict[str, Any]) -> dict[str, Any]:
     classic_enabled = classic_wiki_enabled(root)
     status = "aligned"
     hint = None
-    if vnext_enabled and classic_enabled is False:
+    dormant = wiki_dormancy(root, config) if vnext_enabled else None
+    if dormant is not None:
+        status = "dormant"
+    elif vnext_enabled and classic_enabled is False and classic_wiki_sourced_threshold(root) is not None:
+        status = "aligned"  # the classic wiki publishes by signal now that the threshold is met
+    elif vnext_enabled and classic_enabled is False:
         status = "classic_wiki_off"
         hint = (
             "KB + Wiki is active but the classic wiki is off; rerun "
@@ -1061,18 +1333,22 @@ def wiki_alignment(root: Path, config: dict[str, Any]) -> dict[str, Any]:
         hint = "classic wiki is enabled independently of the vNext kb_alone decision"
     elif classic_enabled is None:
         status = "classic_config_missing"
-    return {
+    result = {
         "vnext_wiki_enabled": vnext_enabled,
         "classic_wiki_enabled": classic_enabled,
         "status": status,
         "hint": hint,
     }
+    if dormant is not None:
+        result["dormant"] = dormant
+    return result
 
 
 def cmd_session_start(args: argparse.Namespace) -> int:
     root = project_root(args)
     config = load_config_or_fail(root)
-    wiki_enabled = bool(config["wiki"]["enabled"])
+    # A dormant wiki has no pages and no drafts yet: start like KB alone.
+    wiki_enabled = bool(config["wiki"]["enabled"]) and wiki_dormancy(root, config) is None
     classic_root = classic_kb_root(root)
     paths = {
         "now": str(now_path(root)),
@@ -1103,7 +1379,7 @@ def cmd_session_start(args: argparse.Namespace) -> int:
         status = build_wiki_draft_status(root, config)
         result["wiki_drafts"] = status["counts"]
         result["actions_run"].append("wiki_draft_status")
-    append_operation(
+    append_telemetry(
         root,
         "session-start",
         {
@@ -3408,7 +3684,7 @@ def cmd_lookup(args: argparse.Namespace) -> int:
         "retrieval": retrieval,
         "results": [row_to_lookup_result(row) for row in rows],
     }
-    append_operation(
+    append_telemetry(
         root,
         "lookup",
         {
@@ -3458,7 +3734,7 @@ def cmd_dense_index(args: argparse.Namespace) -> int:
         "warnings": [advisory] if advisory else [],
         **stats,
     }
-    append_operation(
+    append_telemetry(
         root,
         "dense_index",
         {key: result[key] for key in ("index", "model", "records", "passages", "embedded_records", "reused_records", "removed_records")},
@@ -3610,7 +3886,7 @@ def cmd_semantic_lookup(args: argparse.Namespace) -> int:
         "proposal_id": proposal_id,
         "paths": {"manifest": str(manifest_path), "proposal": str(proposal_path)},
     }
-    append_operation(
+    append_telemetry(
         root,
         "semantic-lookup",
         {
@@ -4878,6 +5154,144 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
     return finalize_proposal_apply(root, apply_manifest, json_mode=args.json)
 
 
+def approved_filing_manifest_path(root: Path, filing_id: str) -> Path:
+    return root / APPROVED_FILING_MANIFESTS_REL / f"{filing_id}.json"
+
+
+def same_title_records(root: Path, title: str, exclude_id: str | None) -> list[str]:
+    """Active records whose title matches `title` (case and spacing aside)."""
+    try:
+        conn = open_classic_kb_readonly(root)
+    except FileNotFoundError:
+        return []
+    try:
+        rows = conn.execute(
+            "SELECT id FROM records WHERE status = 'ATIVO' AND lower(trim(title)) = lower(trim(?)) ORDER BY id",
+            (title,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [row["id"] for row in rows if row["id"] != exclude_id]
+
+
+def cmd_approved_filing(args: argparse.Namespace) -> int:
+    """File one record the user approved in chat: one call, one audit file, one oplog line.
+
+    The same rules as filing-proposal plus proposal-apply hold: provenance
+    names registered sources or existing records, confidence meets the apply
+    floor, a supersede target exists and is active. Without an LLM judgment to
+    declare duplicates, an active record with the same title blocks a new
+    record; supersede that record instead. A blocked call writes nothing and
+    exits 1.
+    """
+    root = project_root(args)
+    actor, actor_source = resolve_apply_actor(root, args)
+    load_config_or_fail(root)
+    filing_id = make_id("approved-filing")
+    min_confidence = proposal_apply_min_confidence(root)
+    action = "supersede" if args.supersedes else "new"
+    provenance = [{"source_id": sid} for sid in args.source_id or []] + [
+        {"record_id": rid} for rid in args.record_id or []
+    ]
+    record_draft: dict[str, Any] = {
+        "category": args.category,
+        "domain": args.domain,
+        "title": args.title,
+        "content": args.content,
+        "tier": args.tier,
+        "tags": args.tags,
+        "tier_reason": args.tier_reason,
+        "review_after": args.review_after,
+        "valid_until": None if action == "new" and (args.valid_until or "").lower() == "none" else args.valid_until,
+        "confidence": args.confidence,
+        "source_id": (args.source_id or [None])[0],
+        "supersedes_id": args.supersedes,
+        "source": f"kb-wiki-vnext approved filing {filing_id}",
+    }
+    record_draft, warnings = validate_record_draft(record_draft)
+    if not args.approval_note or not args.approval_note.strip():
+        warnings.append("missing_approval_note")
+    if args.confidence < min_confidence:
+        warnings.append(f"low_confidence:{args.confidence}")
+    warnings.extend(provenance_problems(root, provenance))
+    if action == "supersede":
+        target = fetch_records_by_ids(root, [args.supersedes]).get(args.supersedes)
+        if target is None:
+            warnings.append(f"unknown_supersede_target:{args.supersedes}")
+        elif target["status"] != "ATIVO":
+            warnings.append(f"inactive_supersede_target:{args.supersedes}")
+        elif target["category"] == args.category:
+            record_draft.pop("category")  # the classic supersede keeps it; older engines lack --category
+    duplicates = same_title_records(root, args.title, args.supersedes)
+    if duplicates:
+        warnings.append("duplicate_title:" + ",".join(duplicates))
+    warnings = dedupe_strings(warnings)
+    result: dict[str, Any] = {
+        "event": "approved-filing",
+        "generated_at": now_iso(),
+        "filing_id": filing_id,
+        "status": "blocked",
+        "action": action,
+        "actor": actor,
+        "actor_source": actor_source,
+        "warnings": warnings,
+    }
+    if warnings:
+        emit(result, args.json)
+        return 1
+    if action == "supersede":
+        cmd = canonical_supersede_command(root, filing_id, args.supersedes, record_draft)
+        if record_draft.get("category"):
+            cmd[-1:-1] = ["--category", str(record_draft["category"])]
+    else:
+        cmd = canonical_create_command(root, filing_id, record_draft)
+    canonical_result = run_canonical_command(root, cmd)
+    record_id = canonical_result.get("id")
+    manifest = {
+        "filing_id": filing_id,
+        "manifest_type": "approved_filing",
+        "created_at": result["generated_at"],
+        "completed_at": now_iso(),
+        "actor": actor,
+        "actor_source": actor_source,
+        "approval": {"approved": True, "approval_note": args.approval_note},
+        "action": action,
+        "record_draft": record_draft,
+        "provenance": provenance,
+        "confidence": args.confidence,
+        "min_confidence": min_confidence,
+        "target_record_id": args.supersedes,
+        "canonical_command": cmd,
+        "canonical_record_id": record_id,
+        "status": "applied",
+    }
+    manifest_path = approved_filing_manifest_path(root, filing_id)
+    write_json(manifest_path, manifest)
+    append_operation(
+        root,
+        "approved-filing",
+        {
+            "filing_id": filing_id,
+            "status": "applied",
+            "action": action,
+            "actor": actor,
+            "actor_source": actor_source,
+            "canonical_record_id": record_id,
+            "target_record_id": args.supersedes,
+        },
+    )
+    result.update(
+        {
+            "status": "applied",
+            "canonical_record_id": record_id,
+            "target_record_id": args.supersedes,
+            "paths": {"manifest": str(manifest_path)},
+        }
+    )
+    emit(result, args.json)
+    return 0
+
+
 def resolve_project_path(root: Path, value: str) -> Path:
     path = Path(value)
     if path.is_absolute():
@@ -5565,7 +5979,8 @@ def wiki_topics(root: Path) -> list[dict[str, Any]]:
     try:
         rows = conn.execute(
             "SELECT domain, COUNT(*) AS n, MAX(updated_at) AS last_updated FROM records "
-            "WHERE status = 'ATIVO' GROUP BY domain HAVING COUNT(*) >= ? ORDER BY n DESC, domain",
+            f"WHERE status = 'ATIVO' AND {NOT_BOOTSTRAP_SEED} "
+            "GROUP BY domain HAVING COUNT(*) >= ? ORDER BY n DESC, domain",
             (WIKI_TOPIC_MIN_RECORDS,),
         ).fetchall()
     finally:
@@ -5586,6 +6001,9 @@ def build_wiki_draft_status(root: Path, config: dict[str, Any]) -> dict[str, Any
     counts = {"topics": 0, "needs_synthesis": 0, "needs_review": 0, "stale": 0, "current": 0}
     if not config["wiki"]["enabled"]:
         return {"wiki_enabled": False, "topics": [], "counts": counts}
+    dormant = wiki_dormancy(root, config)
+    if dormant is not None:
+        return {"wiki_enabled": True, "wiki_dormant": dormant, "topics": [], "counts": counts}
     reviews = _load_json_dir(wiki_review_manifests_root(root))
     topics: list[dict[str, Any]] = []
     for topic in wiki_topics(root):
@@ -5654,11 +6072,17 @@ def cmd_wiki_draft_status(args: argparse.Namespace) -> int:
     }
     if not status["wiki_enabled"]:
         result["note"] = "KB + Wiki is not active; run activation-wizard --choice kb-wiki to enable wiki drafts."
+    elif status.get("wiki_dormant"):
+        dormant = status["wiki_dormant"]
+        result["note"] = (
+            f"The wiki is dormant until {dormant['min_sourced_records']} active records cite a registered "
+            f"source (now {dormant['sourced_records']}); there is nothing to draft."
+        )
     if args.json:
         emit(result, True)
         return 0
     lines = ["KB/Wiki vNext wiki draft status", ""]
-    if not status["wiki_enabled"]:
+    if result.get("note"):
         lines.append(result["note"])
     for topic in status["topics"]:
         lines.append(f"- {topic['topic']} ({topic['active_records']} records): {topic['state']}")
@@ -5873,23 +6297,28 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
     try:
         root = project_root(args)
         config = load_config_or_fail(root)
-        wiki_on = bool((config.get("wiki") or {}).get("enabled"))
+        wiki_on = bool((config.get("wiki") or {}).get("enabled")) and wiki_dormancy(root, config) is None
         gate = config.get("write_gate")
         gate_on = not (isinstance(gate, dict) and gate.get("enabled") is False)
+        runtime = runtime_command(root)
+        skew = runtime_skew_line(root)
     except Exception:
         return 0
     lines = [
         "KB/Wiki vNext workspace detected.",
-        "Run the vnext-session-start command (shell: `python .kb-next/runtime/kb_next.py session-start --json`) "
+        f"Run the vnext-session-start command (shell: `{runtime} session-start --json`) "
         "and read only `.kb-next/memory/NOW.md` by default.",
         "Classic `.kb/` stays canonical: use `lookup --facet ... [--domain ...]` or `python .kb/kb.py search` "
         "for targeted reads; classic NOW/HOT/INDEX are on demand, not a default preload.",
     ]
+    if skew:
+        lines.append(skew)
     if gate_on:
         lines.append(
-            "Canonical records change through a proposal (`filing-proposal`, or `semantic-hygiene --write-proposals` "
-            "for HOT demotion and open items) and `proposal-apply` after the user approves; the kb-wiki-vnext "
-            "plugin hook denies direct `.kb/kb.py create|file|supersede|update`."
+            "Canonical records change only after the user approves: a record the user approved in chat takes one "
+            "`approved-filing` call; otherwise write a proposal (`filing-proposal`, or `semantic-hygiene "
+            "--write-proposals` for HOT demotion and open items) and run `proposal-apply` after the yes. The "
+            "kb-wiki-vnext plugin hook denies direct `.kb/kb.py create|file|supersede|update`."
         )
     if wiki_on:
         lines.append(
@@ -5900,13 +6329,53 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
     return 0
 
 
-def subagent_lookup_command(root: Path) -> str:
-    """The read-only lookup a subagent can run: the local runtime when bootstrapped, else this file."""
+def runtime_command(root: Path) -> str:
+    """`python <runtime>` for this workspace: the local runtime when bootstrapped, else this file."""
     if (kb_next_root(root) / "runtime" / "kb_next.py").is_file():
         runtime = ".kb-next/runtime/kb_next.py"
     else:
         runtime = f'"{Path(__file__).resolve().as_posix()}" --project-root "{root.as_posix()}"'
-    return f'python {runtime} lookup --facet status --query "<words>" --json'
+    return f"python {runtime}"
+
+
+def _runtime_version_key(version: str | None) -> tuple[int, ...] | None:
+    if version is None or not re.fullmatch(r"\d+(\.\d+)*", version):
+        return None
+    return tuple(int(part) for part in version.split("."))
+
+
+def runtime_skew_line(root: Path) -> str | None:
+    """One line when the project's local runtime and this file carry different versions.
+
+    A worktree cut before an upgrade commit vendors an older runtime than the
+    user-scope plugin; `bootstrap` overwrites whatever is there, so a local
+    runtime newer than the plugin needs a plugin update instead.
+    """
+    local = kb_next_root(root) / "runtime" / "kb_next.py"
+    if not local.is_file():
+        return None
+    try:
+        local_version = _read_runtime_version(local)
+    except ValueError:
+        local_version = None
+    if local_version == RUNTIME_VERSION:
+        return None
+    local_key, plugin_key = _runtime_version_key(local_version), _runtime_version_key(RUNTIME_VERSION)
+    versions = (
+        f"Runtime skew: `.kb-next/runtime/kb_next.py` is {local_version or 'unknown'}, "
+        f"the kb-wiki-vnext plugin is {RUNTIME_VERSION}."
+    )
+    if local_key and plugin_key and local_key > plugin_key:
+        return f"{versions} Update the plugin and restart the client; do not bootstrap from it."
+    return (
+        f"{versions} Start the session from current main or run the existing-project-upgrade-vnext command; "
+        "proposals filed by an older runtime can fail `proposal-apply` on main."
+    )
+
+
+def subagent_lookup_command(root: Path) -> str:
+    """The read-only lookup a subagent can run: the local runtime when bootstrapped, else this file."""
+    return f'{runtime_command(root)} lookup --facet status --query "<words>" --json'
 
 
 def cmd_subagent_hint(args: argparse.Namespace) -> int:
@@ -5932,7 +6401,7 @@ def cmd_subagent_hint(args: argparse.Namespace) -> int:
     if has_db:
         lines.append(
             f"- If your brief allows shell commands, you can read it with `{lookup}` (at most six words). "
-            "This does not change `.kb/`; it appends one line to `.kb-next/operations.jsonl`."
+            "This does not change `.kb/`; it only appends one log line under `.kb-next/`."
         )
     lines.extend(
         [
@@ -5952,7 +6421,7 @@ class RuntimeArgumentParser(argparse.ArgumentParser):
     """Subparsers inherit this class, so a bad proposal-apply --actor names the fix."""
 
     def error(self, message: str) -> NoReturn:
-        if self.prog.endswith(" proposal-apply") and "--actor" in message:
+        if self.prog.endswith((" proposal-apply", " approved-filing")) and "--actor" in message:
             message = f"{message}\n{ACTOR_HINT}"
         super().error(message)
 
@@ -5977,6 +6446,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="With kb-wiki, skip the initial classic wiki-sync",
     )
+    wizard.add_argument(
+        "--wiki-min-sourced-records",
+        type=int,
+        default=WIKI_DORMANT_MIN_SOURCED_RECORDS,
+        help=(
+            "With kb-wiki, keep a new wiki dormant until this many active records cite a registered source "
+            f"(default {WIKI_DORMANT_MIN_SOURCED_RECORDS}; 0 turns it on at once)"
+        ),
+    )
+    wizard.add_argument("--scope", help="The project scope in the user's words; filed once as a HOT DECISAO")
     wizard.add_argument("--json", action="store_true")
     wizard.set_defaults(func=cmd_activation_wizard)
 
@@ -6109,6 +6588,31 @@ def build_parser() -> argparse.ArgumentParser:
     add_actor_arguments(proposal_apply, required=False)
     proposal_apply.add_argument("--json", action="store_true")
     proposal_apply.set_defaults(func=cmd_proposal_apply, apply_parser=proposal_apply)
+
+    approved = sub.add_parser(
+        "approved-filing",
+        help="File one record the user approved in chat: one call, one audit file (no proposal files)",
+    )
+    approved.add_argument("--category", required=True, choices=sorted(RECORD_CATEGORIES))
+    approved.add_argument("--domain", required=True)
+    approved.add_argument("--title", required=True)
+    approved.add_argument("--content", required=True)
+    approved.add_argument("--confidence", type=float, required=True)
+    approved.add_argument(
+        "--source-id", action="append", help="Registered source (from `kb.py ingest`) backing the record; repeatable"
+    )
+    approved.add_argument("--record-id", action="append", help="Existing record backing this one; repeatable")
+    approved.add_argument("--supersedes", help="Active record this one replaces")
+    approved.add_argument("--tier", default="WARM", choices=["HOT", "WARM", "COLD"])
+    approved.add_argument("--tags", help="Comma-separated tags")
+    approved.add_argument("--tier-reason")
+    approved.add_argument("--review-after")
+    approved.add_argument("--valid-until", help="Date, or `none` to clear a superseded record's date")
+    approved.add_argument("--approval-note", required=True, help="Who approved, where, and in their words")
+    # --actor defaults to proposal_apply.default_actor; --actor-runtime is required.
+    add_actor_arguments(approved, required=False)
+    approved.add_argument("--json", action="store_true")
+    approved.set_defaults(func=cmd_approved_filing, apply_parser=approved)
 
     wiki_plan = sub.add_parser("wiki-synthesis-plan")
     wiki_plan.add_argument("--topic", required=True)

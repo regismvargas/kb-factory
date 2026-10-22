@@ -63,6 +63,40 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrade Para 0.2.2 (Runtime 0.2.2)
+
+Esta versão tira a telemetria de leitura da trilha de governança versionada e
+corrige o comando `session-start` que o `session-hint` imprime. Não muda dados
+nem schema.
+
+- `session-start`, `lookup`, `semantic-lookup` e `dense-index` anexam seus
+  eventos em `.kb-next/telemetry/events.jsonl` em vez de
+  `.kb-next/operations.jsonl`, então uma sessão deixa de alterar arquivo
+  versionado. O diretório de telemetria se ignora pelo próprio `.gitignore`,
+  gravado uma única vez pelo `activation-wizard` ou pelo primeiro append de
+  telemetria; o `.gitignore` do projeto não é editado. O arquivo gira para
+  `events.1.jsonl` ao atingir 1 MiB.
+- Os dois arquivos são gravados com fim de linha LF também no Windows. As
+  linhas existentes em `.kb-next/operations.jsonl` não são reescritas: eventos
+  de leitura e linhas CRLF de runtimes anteriores ficam como histórico.
+- O `session-hint` indica um runtime que existe quando `.kb-next/runtime/` está
+  ausente e acrescenta uma linha `Runtime skew` quando a versão do runtime
+  local difere da do plugin.
+
+1. Instale o ZIP do plugin 0.2.2 ou a entrada do marketplace.
+2. Onde o projeto fixa um runtime local, atualize-o:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (espere `runtime_version` `0.2.2`).
+3. Onde o projeto versiona `.kb-next/runtime/kb_next.py`, faça commit do
+   runtime atualizado junto com as linhas do oplog que sessões da 0.2.1
+   deixaram sem commit. Depois rode
+   `python .kb-next/runtime/kb_next.py session-start --json` uma vez e confira
+   que o `git status` não lista mudança nova em `.kb-next/`.
+
+Rollback: reinstale o plugin 0.2.1 da release pública v0.2.1 e rode `bootstrap`
+a partir do runtime dele. Nada a desfazer em `.kb/`; os eventos de leitura voltam para
+`.kb-next/operations.jsonl`, e `.kb-next/telemetry/` pode ser apagado.
+
 ## Upgrade Para 0.2.1 (Runtime 0.2.1)
 
 Esta versão acrescenta a ponte de memória para subagentes, o gate de escrita e
@@ -281,9 +315,9 @@ exceto se um maintainer restaurar explicitamente um backup do workspace.
 O upgrade é aceitável quando o bootstrap informa a versão esperada e hashes de
 origem/instalado iguais, `vnext-session-start` ou o runtime `session-start`
 passa e
-`.kb-next/memory/NOW.md` permanece legível. Os comandos de sessão e preflight
-podem anexar evidência operacional a `.kb-next/operations.jsonl`; eles não podem
-alterar a `.kb/` canônica. Compare o hash de `.kb/kb.db` antes e depois dos
+`.kb-next/memory/NOW.md` permanece legível. Os comandos de sessão anexam
+telemetria de leitura ao `.kb-next/telemetry/events.jsonl`, ignorado pelo Git, e o
+preflight não escreve nada; eles não podem alterar a `.kb/` canônica. Compare o hash de `.kb/kb.db` antes e depois dos
 checks.
 
 ## Troubleshooting / Solução De Problemas

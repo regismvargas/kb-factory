@@ -7,7 +7,9 @@ Initialize a new project in KB-alone vNext mode.
 
 Use this for new projects that need durable KB memory and vNext thin session
 startup without activating wiki workflows. Ask the user for the project title,
-slug and initial domains if they are missing; never invent them.
+slug, initial domains and the scope in one line if they are missing; never
+invent them. The scope becomes the first record; leave it out if the user
+gives none.
 
 1. Resolve a runtime you can RUN. Check these paths in order (Glob or a file
    existence check) and use the first that exists:
@@ -23,15 +25,17 @@ slug and initial domains if they are missing; never invent them.
    do not ask the user to hand-place the runtime.
 2. If `.kb/kb.py` is absent, install and initialize the classic KB:
    `python <resolved-runtime-path> --project-root . install-classic --name "<Project Title>" --slug <project-slug> --domains <a,b,c> --json`
-   It copies the classic scaffold, renders the placeholders, prefixes record
-   IDs with the slug and imports the seed. If it reports that no classic
+   It copies the classic scaffold, renders the placeholders and prefixes
+   record IDs with the slug; the scaffold seeds no record. If it reports that no classic
    template was found, stop and ask the user to install
    `kb-lifecycle@kb-factory-tools` (or pass `--template <dir>`).
 3. Install the runtime into the workspace:
    `python <resolved-runtime-path> --project-root . bootstrap --json`
    This writes `.kb-next/runtime/kb_next.py`.
 4. Activate from the workspace runtime:
-   `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-alone --json`
+   `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-alone --scope "<scope in the user's words>" --json`
+   `--scope` files the scope once as a HOT `DECISAO`; omit it when the user
+   gave none.
 5. Invoke the `vnext-session-start` plugin command when the client exposes it;
    in a shell run
    `python .kb-next/runtime/kb_next.py session-start --json`

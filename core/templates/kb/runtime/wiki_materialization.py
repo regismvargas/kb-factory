@@ -387,59 +387,110 @@ def _relative_stored_path(target_md: Path) -> str:
         return str(target_md)
 
 
-def evaluate_hygiene_gates(
-    conn, candidate: dict, wiki_cfg: dict
-) -> dict | None:
-    """Return a held-back descriptor, or None if the candidate clears all gates.
+def plan_publication(conn, candidate: dict, wiki_cfg: dict) -> dict:
+    """Decide what of a candidate page gets published, without writing anything.
 
-    Gates applied (all advisory-to-sync only; no DB mutation):
-      1. confidence publish gate: any page whose computed confidence is below
-         `semantic.min_confidence_autopublish` is held back.
+    Returns ``{"candidate", "held_back", "excluded_records"}``:
+      - ``candidate``: the page to publish, a copy whose supporting records
+        are those at or above `semantic.min_confidence_autopublish` and whose
+        sources are the sources of those records; None when held back.
+      - ``held_back``: a descriptor when the whole page is kept back, else None.
+      - ``excluded_records``: records left out for low confidence, with their
+        confidence, so curation can see them.
+
+    Gates (advisory to sync only; no DB mutation):
+      1. record confidence: a record below `min_confidence_autopublish` is left
+         out of the page; the page is held back only when no record remains.
+         A record without confidence stays, since no signal is not a low one.
       2. two-source minimum for research_synthesis: a research_synthesis page
-         whose supporting_sources has fewer than
-         `semantic.min_sources_research_synthesis` distinct entries is held back.
+         whose kept records cite fewer than
+         `semantic.min_sources_research_synthesis` distinct sources is held back.
 
     Snapshot candidates (target_slug starts with "snapshots/") are never gated
-    here — snapshot capture is handled separately by capture_snapshot().
+    here; capture_snapshot() handles them.
     """
     if candidate.get("target_slug", "").startswith("snapshots/"):
-        return None
+        return {"candidate": candidate, "held_back": None, "excluded_records": []}
     semantic = wiki_cfg.get("semantic", {}) or {}
     supporting_records = list(candidate.get("supporting_record_ids", []))
-    supporting_sources = list(candidate.get("supporting_sources", []))
-    confidence = compute_page_confidence(conn, supporting_records)
-    distinct_sources = len({sid for sid in supporting_sources if sid})
+    published = candidate
+    excluded: list[dict] = []
 
     min_conf = semantic.get("min_confidence_autopublish")
-    if (
-        min_conf is not None
-        and confidence is not None
-        and confidence < float(min_conf)
-    ):
-        return {
-            "candidate_id": candidate.get("candidate_id"),
-            "target_slug": candidate.get("target_slug"),
-            "page_type": candidate.get("page_type"),
-            "reason": "confidence_below_autopublish",
-            "computed_confidence": confidence,
-            "threshold": float(min_conf),
-            "source_count": distinct_sources,
+    if min_conf is not None and supporting_records:
+        placeholders = ",".join("?" for _ in supporting_records)
+        low = {
+            row["id"]: float(row["confidence"])
+            for row in conn.execute(
+                f"SELECT id, confidence FROM records WHERE id IN ({placeholders}) "
+                "AND confidence IS NOT NULL AND confidence < ?",
+                [*supporting_records, float(min_conf)],
+            ).fetchall()
         }
+        if low:
+            excluded = [
+                {"record_id": rid, "confidence": low[rid]} for rid in supporting_records if rid in low
+            ]
+            kept = [rid for rid in supporting_records if rid not in low]
+            if not kept:
+                return {
+                    "candidate": None,
+                    "held_back": {
+                        "candidate_id": candidate.get("candidate_id"),
+                        "target_slug": candidate.get("target_slug"),
+                        "page_type": candidate.get("page_type"),
+                        "reason": "confidence_below_autopublish",
+                        "computed_confidence": compute_page_confidence(conn, supporting_records),
+                        "threshold": float(min_conf),
+                        "source_count": len({sid for sid in candidate.get("supporting_sources", []) if sid}),
+                        "excluded_records": excluded,
+                    },
+                    "excluded_records": excluded,
+                }
+            published = dict(candidate, supporting_record_ids=kept)
+            if candidate.get("page_type") != "source_page":
+                placeholders = ",".join("?" for _ in kept)
+                kept_sources = {
+                    row["source_id"]
+                    for row in conn.execute(
+                        f"SELECT DISTINCT source_id FROM records WHERE id IN ({placeholders}) "
+                        "AND source_id IS NOT NULL",
+                        kept,
+                    ).fetchall()
+                }
+                published["supporting_sources"] = [
+                    sid for sid in candidate.get("supporting_sources", []) if sid in kept_sources
+                ]
 
-    if candidate.get("page_type") == "research_synthesis":
+    if published.get("page_type") == "research_synthesis":
+        distinct_sources = len({sid for sid in published.get("supporting_sources", []) if sid})
         min_sources = semantic.get("min_sources_research_synthesis")
         if min_sources is not None and distinct_sources < int(min_sources):
             return {
-                "candidate_id": candidate.get("candidate_id"),
-                "target_slug": candidate.get("target_slug"),
-                "page_type": candidate.get("page_type"),
-                "reason": "insufficient_sources_research_synthesis",
-                "computed_confidence": confidence,
-                "threshold": int(min_sources),
-                "source_count": distinct_sources,
+                "candidate": None,
+                "held_back": {
+                    "candidate_id": candidate.get("candidate_id"),
+                    "target_slug": candidate.get("target_slug"),
+                    "page_type": candidate.get("page_type"),
+                    "reason": "insufficient_sources_research_synthesis",
+                    "computed_confidence": compute_page_confidence(
+                        conn, list(published.get("supporting_record_ids", []))
+                    ),
+                    "threshold": int(min_sources),
+                    "source_count": distinct_sources,
+                    "excluded_records": excluded,
+                },
+                "excluded_records": excluded,
             }
 
-    return None
+    return {"candidate": published, "held_back": None, "excluded_records": excluded}
+
+
+def evaluate_hygiene_gates(
+    conn, candidate: dict, wiki_cfg: dict
+) -> dict | None:
+    """The held-back descriptor of `plan_publication`, or None when the page publishes."""
+    return plan_publication(conn, candidate, wiki_cfg)["held_back"]
 
 
 def compute_page_confidence(conn, supporting_records: list[str]) -> float | None:
@@ -770,6 +821,7 @@ def _skipped_sync(reason: str) -> dict:
         "snapshots_created": [],
         "stale": {"staled_count": 0, "staled_page_ids": []},
         "held_back": [],
+        "records_held_back": [],
     }
 
 
@@ -807,6 +859,7 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
     persisted: list[dict] = []
     snapshots_created: list[dict] = []
     held_back: list[dict] = []
+    records_held_back: list[dict] = []
     now = now_iso()
     for candidate in syncable:
         target = wiki_root / candidate["target_slug"]
@@ -816,10 +869,20 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
             continue
         if target_md.exists() and not is_managed_wiki_file(target_md):
             continue
-        gate = evaluate_hygiene_gates(conn, candidate, wiki_cfg)
-        if gate is not None:
-            held_back.append(gate)
+        plan = plan_publication(conn, candidate, wiki_cfg)
+        if plan["held_back"] is not None:
+            held_back.append(plan["held_back"])
             continue
+        if plan["excluded_records"]:
+            records_held_back.append(
+                {
+                    "candidate_id": candidate["candidate_id"],
+                    "target_slug": candidate["target_slug"],
+                    "reason": "record_confidence_below_autopublish",
+                    "excluded_records": plan["excluded_records"],
+                }
+            )
+        candidate = plan["candidate"]
         content = build_wiki_page(candidate, conn, now_iso=lambda: now)
         # Pre-write snapshot capture: if this is a live page whose content is
         # about to change AND a prior file exists on disk, preserve the old
@@ -876,6 +939,7 @@ def sync_wiki(domain: str | None = None, force: bool = False, *, candidate_provi
         "snapshots_created": snapshots_created,
         "stale": stale,
         "held_back": held_back,
+        "records_held_back": records_held_back,
     }
 
 
@@ -895,6 +959,13 @@ def render_wiki_sync_text(result: dict) -> str:
                 f"confidence={entry.get('computed_confidence')}, "
                 f"sources={entry.get('source_count')})"
             )
+    records_held_back = result.get("records_held_back") or []
+    if records_held_back:
+        count = sum(len(entry.get("excluded_records") or []) for entry in records_held_back)
+        lines.append(f"  records left out (confidence below autopublish): {count}")
+        for entry in records_held_back:
+            ids = ", ".join(item.get("record_id", "") for item in entry.get("excluded_records") or [])
+            lines.append(f"    - {entry.get('candidate_id')}: {ids}")
     reconcile = result.get("reconcile") or {}
     if reconcile.get("orphaned_count"):
         lines.append(f"  reconcile orphaned: {reconcile['orphaned_count']}")

@@ -11,17 +11,20 @@ Session Gate, and classic KB lifecycle commands cannot collide.
 1. Summarize vNext manifests, proposals, package checks, tests, or pilot
    evidence touched in the session.
 2. If subagents ran in the session, collect the `KB candidates` sections of
-   their reports. Each candidate needs a `filing-proposal` from this session
-   or a noted reason to drop it. List the ones with neither and offer to
-   prepare the proposals now (resolve the runtime as in step 6) with
+   their reports. Each candidate needs an `approved-filing` or a
+   `filing-proposal` from this session, or a noted reason to drop it. List
+   the ones with none and offer to file the ones the user approves now with
+   `approved-filing` (step 4), or to prepare proposals (resolve the runtime as
+   in step 6) with
    `python <resolved-runtime-path> filing-proposal --input @candidate.json --category FATO --domain <domain> --json`
    (`DECISAO` or `APRENDIZADO` as fits; `candidate.json` holds `title`,
    `content` and `source`). Preparing a proposal writes only `.kb-next/`.
 3. Do not write durable memory unless the user approved canonical KB changes.
-4. If a canonical KB update is approved, apply its proposal with
-   `proposal-apply`; do not run `.kb/kb.py create`, `file`, `supersede` or
-   `update` (the plugin's write gate denies them). `proposal-apply` needs
-   `--actor` set to the person
+4. If the user approves a record in chat, file it with one
+   `approved-filing` call (see the kb-wiki-vnext skill); if a canonical KB
+   update was approved as a proposal, apply it with `proposal-apply`. Do not
+   run `.kb/kb.py create`, `file`, `supersede` or `update` (the plugin's write
+   gate denies them). Both commands need `--actor` set to the person
    who approved (ask if unknown; omit it only when that person is the
    `proposal_apply.default_actor` of the vNext config) and `--actor-runtime`
    set to this runtime.
@@ -29,7 +32,7 @@ Session Gate, and classic KB lifecycle commands cannot collide.
    It refreshes exports and, when the classic wiki is enabled, syncs
    `.kb/wiki/live`. Report `wiki_sync.written_count` and any `held_back`
    pages.
-6. If KB + Wiki is active, resolve the vNext runtime (`.kb-next/runtime/kb_next.py`,
+6. If KB + Wiki is active and not dormant (`session-start` `wiki.status`), resolve the vNext runtime (`.kb-next/runtime/kb_next.py`,
    then `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py`) and run
    `python <resolved-runtime-path> wiki-draft-status --json`. When any topic
    is `needs_synthesis`, `needs_review` or `stale`, offer to run the

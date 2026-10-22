@@ -37,7 +37,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirm product package:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.5-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.6-standalone.zip
 ```
 
 For runtime examples and safe conversation prompts, see the [detailed usage guide](usage-guide.md).
@@ -47,9 +47,9 @@ For runtime examples and safe conversation prompts, see the [detailed usage guid
 A healthy workspace can run the plugin `vnext-session-start` command or the
 runtime `session-start`, read `.kb-next/memory/NOW.md`, and complete `lookup`
 or default `semantic-hygiene` without changing `.kb/kb.db`. `lookup` and
-`session-start` append operations evidence; default `semantic-hygiene` does
-not. Session Gate installs should expose `gate-session-start` and route
-`.kb-next/` before classic `.kb/`.
+`session-start` append read telemetry to `.kb-next/telemetry/events.jsonl`;
+default `semantic-hygiene` writes nothing. Session Gate installs should expose
+`gate-session-start` and route `.kb-next/` before classic `.kb/`.
 
 ## Troubleshooting
 
@@ -66,6 +66,10 @@ restored artifact instead of the current workspace runtime. If
 `semantic-hygiene` reports issues, treat them as review findings unless a
 separate approved work package authorizes proposal creation. If a command
 changed canonical memory unexpectedly, stop and compare the workspace backup.
+If Git shows `.kb-next/operations.jsonl` changed after every session, the
+workspace runtime predates 0.2.2, which moved read events to the git-ignored
+`.kb-next/telemetry/events.jsonl`; refresh it with `bootstrap` from the 0.2.2
+runtime and commit `.kb-next/runtime/kb_next.py` where the project tracks it.
 
 ## Related
 

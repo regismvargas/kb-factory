@@ -29,7 +29,9 @@ release gates.
    when external LLM judgment is available; add `--domain` to scope either.
    If `session-start` reports `wiki.status` = `classic_wiki_off`, recommend
    re-running `activation-wizard --choice kb-wiki`; if it reports pending
-   `wiki_drafts`, point to the `vnext-wiki-drafts` command.
+   `wiki_drafts`, point to the `vnext-wiki-drafts` command. `dormant` means a
+   new KB + Wiki waits for `wiki.dormant.min_sourced_records` records that
+   cite a source; work as in KB alone, nothing to do for the wiki.
 5. Widen a `lookup` query with the words a record might use instead.
    `lookup` ORs the words of a query, matches words of three or more letters
    as prefixes, and ranks records that match more words first. Keep the
@@ -61,15 +63,17 @@ KB. The main agent stays its only writer.
    worth keeping, one line each with its source (file and line, command, URL
    or person), or `none`.
 3. A subagent with a shell may run the same `lookup` itself. It does not
-   change `.kb/`; it appends one line to `.kb-next/operations.jsonl`. No other
+   change `.kb/`; it appends one line to `.kb-next/telemetry/events.jsonl`. No other
    KB command runs in a subagent: not `filing-proposal`, not `proposal-apply`,
    not a `.kb/kb.py` command that changes records.
-4. When the report comes back, turn each candidate you keep into a proposal,
-   with `candidate.json` holding `title`, `content` and `source`:
+4. When the report comes back, show the user the candidates you keep. File
+   the ones the user approves in chat with `approved-filing` (Boundaries
+   below); turn the rest into proposals, with `candidate.json` holding
+   `title`, `content` and `source`:
    `python <resolved-runtime-path> filing-proposal --input @candidate.json --category FATO --domain <domain> --json`
    (`DECISAO` for a decision, `APRENDIZADO` for a learning). Note a reason for
    each candidate you drop. `vnext-session-end` lists candidates left with
-   neither.
+   none of the three.
 5. In Claude Code the plugin's `SubagentStart` hook (runtime `subagent-hint`)
    shows rules 2 and 3 and the lookup command to every subagent in a vNext
    workspace. It is a backstop, not a substitute: subagents follow it less
@@ -83,19 +87,31 @@ KB. The main agent stays its only writer.
 - Treat `.kb/` records as canonical durable memory.
 - Treat `.kb-next/` as proposal, manifest, draft, materialization, package, and
   operations evidence.
-- `session-start` and `lookup` do not write canonical `.kb/`, but they append
-  operational evidence to `.kb-next/operations.jsonl`.
+- `session-start` and `lookup` do not write canonical `.kb/`; they append read
+  telemetry to the git-ignored `.kb-next/telemetry/events.jsonl`.
 - Do not write SQL or edit `.kb/kb.db` directly.
 - Do not publish vNext wiki drafts to `.kb/wiki/live`; the classic runtime
   generates that directory from records.
 - New projects get their classic `.kb/` from `install-classic`, never from a
   hand-copied template.
-- Change canonical records only through a proposal and then `proposal-apply`
-  after the approver says yes. Do not run `.kb/kb.py create`, `file`,
-  `supersede` or `update` yourself. In Claude Code the plugin's PreToolUse
-  hook denies them in a vNext project and names the proposal commands (Codex
-  runs the same hook once it is trusted); the rule holds where the hook does
-  not run. A new record or a content change starts with
+- Change canonical records only after the approver says yes. Do not run
+  `.kb/kb.py create`, `file`, `supersede` or `update` yourself. In Claude Code
+  the plugin's PreToolUse hook denies them in a vNext project and names the
+  vNext commands (Codex runs the same hook once it is trusted); the rule holds
+  where the hook does not run.
+- When the user approves a record in chat (title, content, category,
+  confidence and backing shown first), file it in one call:
+  `python <resolved-runtime-path> approved-filing --category DECISAO --domain <domain> --title "<title>" --content "<content>" --confidence 0.9 --source-id <SRC id> --approval-note "<who approved, where, their words>" --actor-runtime claude-code --json`
+  (`FATO`, `PREMISSA`, `PENDENCIA` or `APRENDIZADO` as fits; the confidence
+  you showed the user, at least 0.8; `--record-id <id>` instead of or
+  besides `--source-id` when an existing
+  record backs it; `--supersedes <id>` to replace a record, which may change
+  its category; `--valid-until none` clears a superseded date). It writes one
+  file under `.kb-next/manifests/approved-filing/` and one oplog line, and
+  exits 1 without writing anything when provenance, confidence, the
+  supersede target or an active record with the same title blocks it.
+- Otherwise, for an approval that comes later or from someone else, write a
+  proposal. A new record or a content change starts with
   `python <resolved-runtime-path> filing-proposal --input @candidate.json --category <CATEGORY> --domain <domain> --judgment @judgment.json --json`
   (`judgment.json` holds `action` `new` or `supersede`, a `record_draft` with
   `category`, `domain`, `title` and `content`, plus `supersedes_id` for a
@@ -110,8 +126,8 @@ KB. The main agent stays its only writer.
   as the next rule says). A metadata-only edit
   (tags, confidence, review dates) has no proposal path: give the user the
   command to run in their own terminal.
-- `proposal-apply` requires `--actor <id>` and `--actor-runtime
-  <claude-code|codex|cowork|human>`. `--actor` is the person who approved the
+- `proposal-apply` and `approved-filing` require `--actor <id>` and
+  `--actor-runtime <claude-code|codex|cowork|human>`. `--actor` is the person who approved the
   proposal; ask when it is unknown and never invent or reuse one from docs.
   When `.kb-next/kb-next.config.json` sets `proposal_apply.default_actor`,
   omit `--actor` for an approval by that person: the runtime records the
@@ -162,8 +178,8 @@ Detection runs by itself; corrections are proposals the user approves.
 - Simple operational use is exempt unless it is part of a development round.
 - Verify LLM manifests, proposal hashes, draft hashes, confidence, provenance,
   stale/conflict warnings, and derived-authority markers.
-- Verify each proposal-apply manifest and its `operations.jsonl` entry name
-  the approving actor.
+- Verify each proposal-apply and approved-filing manifest and its
+  `operations.jsonl` entry name the approving actor.
 - Verify hygiene proposals preserve the grouped outputs `keep_hot`,
   `demote_candidate`, `supersede_or_merge_candidate`, `resolve_candidate`, and
   `needs_sponsor`; only approved `demote_hot` and `resolve` may apply.

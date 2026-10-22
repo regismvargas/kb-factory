@@ -18,7 +18,8 @@ vNext, Session Gate, and classic KB lifecycle commands cannot collide.
 2. If a runtime was resolved and shell access is available, run:
    `python <resolved-runtime-path> session-start --json`
    (if `python` is not on PATH, retry with `py` or `python3`).
-   This does not write canonical `.kb/`, but it appends session evidence to
+   This does not write canonical `.kb/`; it appends one read-telemetry line to
+   the git-ignored `.kb-next/telemetry/events.jsonl`, not to the versioned
    `.kb-next/operations.jsonl`.
 3. If no runtime was resolved but `.kb-next/memory/NOW.md` exists, use the
    data-only fallback: read `.kb-next/memory/NOW.md` directly and treat it as

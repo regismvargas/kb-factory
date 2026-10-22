@@ -36,7 +36,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirmar pacote de produto:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.5-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.6-standalone.zip
 ```
 
 Para exemplos de runtime e prompts seguros de conversa, veja o [guia de uso detalhado](usage-guide.md).
@@ -46,7 +46,8 @@ Para exemplos de runtime e prompts seguros de conversa, veja o [guia de uso deta
 Um workspace saudável roda a superfície de startup do cliente ou o
 `session-start` do runtime, lê `.kb-next/memory/NOW.md` e conclui `lookup` ou
 `semantic-hygiene` padrão sem mudar `.kb/kb.db`. `lookup` e `session-start`
-anexam evidência operacional; `semantic-hygiene` padrão não escreve. O Session
+anexam telemetria de leitura a `.kb-next/telemetry/events.jsonl`; `semantic-hygiene`
+padrão não escreve. O Session
 Gate deve rotear `.kb-next/` antes do `.kb/` clássico.
 
 ## Troubleshooting / Solução De Problemas
@@ -63,7 +64,12 @@ Se o bootstrap retornar `action: self` durante upgrade ou rollback, resolva o
 artefato substituto ou restaurado, não o runtime atual do workspace. Se
 `semantic-hygiene` reportar problemas, trate como findings de revisão até
 existir autorização separada para criar propostas. Se algum comando alterar
-memória canônica inesperadamente, pare e compare o backup.
+memória canônica inesperadamente, pare e compare o backup. Se o Git mostrar
+`.kb-next/operations.jsonl` alterado depois de cada sessão, o runtime do
+workspace é anterior à 0.2.2, que levou os eventos de leitura para
+`.kb-next/telemetry/events.jsonl`, ignorado pelo Git; atualize-o com
+`bootstrap` a partir do runtime 0.2.2 e faça commit de
+`.kb-next/runtime/kb_next.py` onde o projeto o versiona.
 
 ## Related / Relacionados
 
