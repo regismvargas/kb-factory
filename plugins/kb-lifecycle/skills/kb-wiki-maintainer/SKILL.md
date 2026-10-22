@@ -107,6 +107,24 @@ These surfaces are always available during the conversation but are not preloade
 5. Forgetting means demotion in retrieval priority, not deleting audit history.
 6. If an answer or analysis is worth keeping, file it back into the KB or wiki instead of leaving it in chat history.
 
+## KB/Wiki vNext Projects
+
+In a project with `.kb-next/kb-next.config.json`, records change only through
+a proposal the user approves, so the record writes in the workflows below do
+not run there. A new record or a content change starts with
+`python .kb-next/runtime/kb_next.py filing-proposal --input @candidate.json --category FATO --domain operations --judgment @judgment.json --json`
+(use one of the domains in `.kb/kb.config.json`).
+A HOT demotion, a resolved open item or a retired record starts with
+`python .kb-next/runtime/kb_next.py semantic-hygiene --json`. After the user
+approves, `python .kb-next/runtime/kb_next.py proposal-apply --proposal filing-20261021T120000Z-0a1b2c3d --approve --approval-note "Approved by the user in chat" --actor-runtime claude-code --json`
+applies it, with the proposal id the earlier command returned
+(`--actor-runtime codex` or `cowork` in those clients). The
+kb-wiki-vnext plugin's write gate denies direct `create`, `file`, `supersede`,
+`update`, `resolve`, `bulk-import`, `init --seed`, `raw-query --allow-write` and demotions
+(`lifecycle scheduled-maintenance`, `--apply-demotions`), and the classic
+runtime skips automatic demotions there from 0.2.6. `ingest` and
+`lifecycle session-end` stay direct. The kb-wiki-vnext skill has the details.
+
 ## Workflows
 
 ### Ingest
@@ -338,6 +356,8 @@ If shell access is available:
    `python .kb/kb.py hygiene-audit --json` before any maintenance action.
 3. If the project needs a stronger retention pass, run
    `python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json`.
+   In a KB/Wiki vNext project, write `semantic-hygiene` proposals instead
+   (see KB/Wiki vNext Projects above).
 
 If shell access is not available:
 

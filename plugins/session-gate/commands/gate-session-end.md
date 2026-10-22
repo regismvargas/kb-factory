@@ -69,14 +69,36 @@ Run the canonical KB surface:
 1. `python .kb/kb.py lifecycle session-end --json`
 
 If that output recommends maintenance and the user asked for a full maintenance
-pass, then run:
+pass, the next steps depend on vNext.
+
+Classic-only workspace (`vnext.found == false`):
 
 2. `python .kb/kb.py hygiene-audit --json`
 3. `python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json`
 
-Treat `hygiene-audit` as read-only. If the workspace also has `.kb-next/` and
-the closeout concerns HOT overflow, route semantic cleanup into vNext
-`semantic-hygiene` proposals instead of automatic LLM-only demotion.
+Treat `hygiene-audit` as read-only.
+
+vNext workspace (`vnext.found == true`): demotions, resolved open items and
+retired records are proposals the user approves. Do not run
+`lifecycle scheduled-maintenance` or any `--apply-demotions` flag; the
+kb-wiki-vnext write gate denies them, and classic runtime 0.2.7 skips their
+demotions in a vNext project. Instead, run the curation step of
+the plugin's `vnext-session-end` command:
+
+2. `python .kb/kb.py hygiene-audit --json`
+3. `python <resolved-runtime-path> --project-root <vnext.details.project_root> semantic-hygiene --json`,
+   with the runtime resolved as `gate-session-start` does: the detector's
+   `vnext.details.runtime_ref`, else an installed client-plugin path matching
+   `**/kb-wiki-vnext/runtime/kb_next.py`, else
+   `core/versions/kb-wiki-vnext/runtime/kb_next.py` in the authoring monorepo.
+   `vnext.details.project_root` is the folder that holds the vNext config:
+   this workspace, or the main checkout of a linked worktree activated only
+   there (`vnext.details.activation` is `main_checkout`). Report the
+   candidates per group and `review_budget`. When `room` is above zero,
+   classify at most `room` candidates in `hygiene-judgment.json` and write
+   them with
+   `python <resolved-runtime-path> --project-root <vnext.details.project_root> semantic-hygiene --judgment @hygiene-judgment.json --write-proposals --json`.
+   Do not apply them at session end; list their ids for the user's review.
 
 If shell execution is unavailable, report the exact KB commands that remain
 deferred.

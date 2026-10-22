@@ -86,7 +86,9 @@ This wrapper should remain a thin adapter around:
   `.kb-next/runtime/kb_next.py`, bundled/installed plugin
   `runtime/kb_next.py`, then the authoring-monorepo
   `core/versions/kb-wiki-vnext/runtime/kb_next.py`; run
-  `python <resolved-runtime-path> session-start --json`
+  `python <resolved-runtime-path> --project-root <vnext.details.project_root> session-start --json`
+  (the detector's `project_root` is the main checkout when a linked
+  worktree is activated only there)
 - `python .kb/kb.py lifecycle session-start --json`
 - `python .kb/kb.py lifecycle session-end --json`
 

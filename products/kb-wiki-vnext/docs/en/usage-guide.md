@@ -10,10 +10,10 @@ Project users, admins, and maintainers who need more than install instructions: 
 
 ## Prerequisites
 
-- KB/Wiki vNext `0.2.0-rc.6` installed through a plugin ZIP or the stand-alone bundle.
-- Component identity recorded by the maintainer: product `0.2.0-rc.6`, KB
-  Lifecycle `0.2.5`, plugin container `0.2.2`, bundled runtime `0.2.2`, Session
-  Gate `0.2.8`, and marketplace `0.3.13`.
+- KB/Wiki vNext `0.2.0-rc.7` installed through a plugin ZIP or the stand-alone bundle.
+- Component identity recorded by the maintainer: product `0.2.0-rc.7`, KB
+  Lifecycle `0.2.7`, plugin container `0.2.3`, bundled runtime `0.2.3`, Session
+  Gate `0.2.9`, and marketplace `0.3.14`.
 - A workspace with `.kb/` available as canonical memory.
 - Python available as `python`.
 - Agreement that `.kb-next/` is operational memory, proposal evidence, and draft materialization, not the canonical source of truth.
@@ -637,6 +637,25 @@ This default invocation is report-only. A reviewed second pass may add
 `resolve_candidate`, and `needs_sponsor`, and reference only record IDs returned
 by the first pass.
 
+Close a record by its category. An open item (PENDENCIA) goes to
+`resolve_candidate` with `resolution_notes`. A FATO, DECISAO or other record
+that an existing ATIVO record already replaces goes to
+`supersede_or_merge_candidate` with `"action": "retire"` and `replacement_id`:
+
+```json
+{"groups": {"supersede_or_merge_candidate": [{"record_id": "KB-20260601-0a1b2c", "action": "retire", "replacement_id": "KB-20261021-3d4e5f", "rationale": "CASE was retired; the decision record replaces it.", "confidence": 0.9}]}, "rationale": "Retire CASE records into the retirement decision.", "confidence": 0.9, "provenance": [{"record_id": "KB-20261021-3d4e5f"}], "conflicts": []}
+```
+
+The ids above are placeholders: use ids that the first pass returned and a
+replacement that exists. An approved `retire` runs the classic `supersede`
+with `--replacement-id` (classic runtime 0.2.7 or later): the record becomes SUPERSEDIDO with `replacement_id` set and no record
+is created, so several records can retire into one. RESOLVIDO stays for open
+items. When no record states the replacement yet, file it first with
+`filing-proposal`. A record whose meaning changed gets a `record_draft` in the
+same group and becomes a new version. Both passes see at most `--limit`
+active records (HOT first), and the write pass skips a record outside its own
+limit; to reach older WARM records, add the same `--limit 500` to both.
+
 Automatic curation runs both passes at every `vnext-session-end` and in the
 weekly maintenance run (an agent session, since the second pass needs
 judgment), next to the read-only classic `python .kb/kb.py hygiene-audit --json`.
@@ -769,15 +788,31 @@ Risks: this is the only command in the workflow intended to mutate canonical mem
 
 Write gate: in a project with `.kb-next/kb-next.config.json`, the plugin's
 PreToolUse hook (`scripts/write_gate.py`, matcher `Bash|PowerShell`) denies an
-agent shell command that runs `.kb/kb.py create`, `file`, `supersede` or
-`update`, and its message names `filing-proposal`, `semantic-hygiene` and this
-command. `proposal-apply` runs the classic CLI in its own subprocess, which
-the hook never sees. Reads and the other classic commands pass, classic-only
-projects are not gated, and `session-hint` adds one line stating the rule. The
-hook steers agents; it does not authenticate them. Claude Code runs it as
-installed; Codex runs it after the user trusts the changed hook. A project
-owner can turn it off with `{"write_gate": {"enabled": false}}` merged into
-the vNext config.
+agent shell command that runs `.kb/kb.py create`, `file`, `supersede`,
+`update`, `resolve` or `bulk-import`, `init --seed`, `raw-query --allow-write`,
+`consolidate --apply-demotions`, `lifecycle scheduled-maintenance`, or any
+`lifecycle` event with `--apply-demotions` or `--apply-cold-demotions`.
+It follows what an agent types: `env`, `nohup` and variable assignments
+before the interpreter, `python -m kb` from `.kb/`, `cmd /c`,
+`powershell -Command`, `bash -lc`, `Start-Process`, `Invoke-Expression`,
+PowerShell arrays and blocks, line continuations, names in any case, and
+literal `cd`, `Set-Location`, `pushd` and `popd` between commands. A linked
+Git worktree is gated when it or its main checkout is activated, and
+`--help` passes. Its
+message names the governed route (`filing-proposal`, `semantic-hygiene` and
+this command), or the user's own terminal for SQL writes and COLD demotions,
+which have no proposal path. `proposal-apply`
+runs the classic CLI in its own subprocess, which the hook never sees. Reads,
+`ingest`, plain `lifecycle` events and the derived surfaces pass,
+classic-only projects are not gated, and `session-hint` adds one line stating
+the rule. The hook steers agents; it does not authenticate them. Claude Code
+runs it as installed; Codex runs it only after the user trusts the hook, and
+an untrusted hook leaves no trace in `codex exec --json` (Codex sends
+`tool_name` `Bash` with the raw command, also when it runs PowerShell). Where no hook runs,
+classic runtime 0.2.7 still skips automatic demotions in a vNext project. A
+project owner can turn the hook off with `{"write_gate": {"enabled": false}}`
+merged into the vNext config; that key does not turn the classic demotion
+guard off, which follows only the presence of `.kb-next/kb-next.config.json`.
 
 ### `approved-filing`
 

@@ -63,9 +63,12 @@ KB. The main agent stays its only writer.
    worth keeping, one line each with its source (file and line, command, URL
    or person), or `none`.
 3. A subagent with a shell may run the same `lookup` itself. It does not
-   change `.kb/`; it appends one line to `.kb-next/telemetry/events.jsonl`. No other
-   KB command runs in a subagent: not `filing-proposal`, not `proposal-apply`,
-   not a `.kb/kb.py` command that changes records.
+   change `.kb/`; it appends one line to the git-ignored
+   `.kb-next/telemetry/events.jsonl` (a project runtime older than 0.2.2
+   writes that line to `.kb-next/operations.jsonl` until the project
+   re-runs `bootstrap`). No other KB command runs in a subagent: not
+   `filing-proposal`, not `proposal-apply`, not a `.kb/kb.py` command that
+   changes records.
 4. When the report comes back, show the user the candidates you keep. File
    the ones the user approves in chat with `approved-filing` (Boundaries
    below); turn the rest into proposals, with `candidate.json` holding
@@ -87,18 +90,23 @@ KB. The main agent stays its only writer.
 - Treat `.kb/` records as canonical durable memory.
 - Treat `.kb-next/` as proposal, manifest, draft, materialization, package, and
   operations evidence.
-- `session-start` and `lookup` do not write canonical `.kb/`; they append read
-  telemetry to the git-ignored `.kb-next/telemetry/events.jsonl`.
+- `session-start` and `lookup` do not write canonical `.kb/`; from runtime
+  0.2.2 they append read telemetry to the git-ignored
+  `.kb-next/telemetry/events.jsonl` (older project runtimes append it to
+  `.kb-next/operations.jsonl`).
 - Do not write SQL or edit `.kb/kb.db` directly.
 - Do not publish vNext wiki drafts to `.kb/wiki/live`; the classic runtime
   generates that directory from records.
 - New projects get their classic `.kb/` from `install-classic`, never from a
   hand-copied template.
 - Change canonical records only after the approver says yes. Do not run
-  `.kb/kb.py create`, `file`, `supersede` or `update` yourself. In Claude Code
-  the plugin's PreToolUse hook denies them in a vNext project and names the
-  vNext commands (Codex runs the same hook once it is trusted); the rule holds
-  where the hook does not run.
+  `.kb/kb.py create`, `file`, `supersede`, `update`, `resolve` or
+  `bulk-import`, `init --seed`, `raw-query --allow-write`,
+  `lifecycle scheduled-maintenance` or any `--apply-demotions` flag yourself.
+  In Claude Code the plugin's PreToolUse hook denies them in a vNext project
+  and names the vNext commands. Codex runs the same hook only after the user
+  trusts it, and a hook that did not run leaves no trace in
+  `codex exec --json`. The rule holds where the hook does not run.
 - When the user approves a record in chat (title, content, category,
   confidence and backing shown first), file it in one call:
   `python <resolved-runtime-path> approved-filing --category DECISAO --domain <domain> --title "<title>" --content "<content>" --confidence 0.9 --source-id <SRC id> --approval-note "<who approved, where, their words>" --actor-runtime claude-code --json`
@@ -119,8 +127,8 @@ KB. The main agent stays its only writer.
   `{"record_id": "<existing id>"}` or `{"source_id": "<SRC id>"}`). A file
   path or URL is not provenance: register a file first with
   `python .kb/kb.py ingest <path> --json` and cite its `source_id`. A HOT
-  demotion or a resolved open item starts with `semantic-hygiene` (see
-  Curation below). Then
+  demotion, a resolved open item or a retired record starts with
+  `semantic-hygiene` (see Curation below). Then
   `python <resolved-runtime-path> proposal-apply --proposal <proposal_id> --approve --approval-note "<who approved and why>" --actor-runtime claude-code --json`
   applies it (`--actor-runtime codex` or `cowork` in those clients, `--actor`
   as the next rule says). A metadata-only edit
@@ -155,8 +163,21 @@ Detection runs by itself; corrections are proposals the user approves.
    Per project the runtime keeps at most
    `semantic_curation.weekly_hygiene_proposals` (default 5) valid hygiene
    proposals open over 7 days, skips a target that already has one and lists
-   the rest under `deferred`.
-3. Never apply in the detection step. In the weekly review, show each open
+   the rest under `deferred`. Both passes see at most `--limit` active
+   records (default 50, HOT first), and the write pass skips a record outside
+   its own limit; when the record to classify is not among them, add the same
+   `--limit 500` to both commands.
+3. Close by category. An open item (PENDENCIA) goes to `resolve_candidate`
+   with `resolution_notes`. A FATO, DECISAO or other record that an existing
+   ATIVO record already replaces (newer information, a kept duplicate, the
+   decision that retired it) goes to `supersede_or_merge_candidate` with
+   `"action": "retire"` and `replacement_id` naming that record; applied, it
+   becomes SUPERSEDIDO with `replacement_id` set and no new record is
+   created (classic runtime 0.2.6 or later). A record whose meaning changed
+   gets a `record_draft` in the same group and becomes a new version. When
+   no record states the replacement yet, file it first with
+   `filing-proposal`, then retire the old records into it.
+4. Never apply in the detection step. In the weekly review, show each open
    proposal (target, action, rationale) and apply only the ones the user
    approves with
    `python <resolved-runtime-path> proposal-apply --proposal <proposal_id> --approve --approval-note "<who approved and why>" --actor-runtime claude-code --json`,
@@ -164,12 +185,13 @@ Detection runs by itself; corrections are proposals the user approves.
    `--actor <id>` unless `proposal_apply.default_actor` names the approver.
    A proposal leaves the queue when it is applied, when its target changed by
    other means, or after 7 days; detection may then propose it again.
-4. The weekly maintenance run is an agent session (a scheduled Claude Code or
+5. The weekly maintenance run is an agent session (a scheduled Claude Code or
    Codex task in the project), because step 2 needs judgment; a plain
    scheduler can only run step 1. In a vNext project it uses
    `python .kb/kb.py lifecycle session-end --json` for exports and the wiki,
    not `lifecycle scheduled-maintenance`, whose default config demotes stale
-   HOT records without a proposal.
+   HOT records without a proposal (classic runtime 0.2.6 and later skip
+   that demotion in a vNext project; the write gate denies the command).
 
 ## Review Checklist
 
@@ -182,7 +204,8 @@ Detection runs by itself; corrections are proposals the user approves.
   `operations.jsonl` entry name the approving actor.
 - Verify hygiene proposals preserve the grouped outputs `keep_hot`,
   `demote_candidate`, `supersede_or_merge_candidate`, `resolve_candidate`, and
-  `needs_sponsor`; only approved `demote_hot` and `resolve` may apply.
+  `needs_sponsor`; only approved `demote_hot`, `resolve`, `retire` and
+  `supersede` may apply.
 - Confirm packaging names include `vnext` and do not collide with classic
   package names or generic command basenames.
 - Record evidence in run artifacts before claiming release compliance.

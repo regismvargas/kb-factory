@@ -73,6 +73,45 @@ def _resolve_reference(root: Path, *relative_candidates: str) -> str | None:
     return None
 
 
+def _main_worktree_root(project: Path) -> Path | None:
+    """The main checkout when `project` is a linked Git worktree, read as the classic runtime reads it."""
+    try:
+        dotgit = project / ".git"
+        if not dotgit.is_file():
+            return None
+        text = dotgit.read_text(encoding="utf-8-sig", errors="replace").strip()
+        if not text.lower().startswith("gitdir:"):
+            return None
+        gitdir = Path(text.split(":", 1)[1].strip())
+        if not gitdir.is_absolute():
+            gitdir = project / gitdir
+        common = Path((gitdir / "commondir").read_text(encoding="utf-8-sig", errors="replace").strip())
+        if not common.is_absolute():
+            common = gitdir / common
+        common = common.resolve()
+        if common.name != ".git" or not common.is_dir():
+            return None
+        return common.parent
+    except (OSError, ValueError):
+        return None
+
+
+def vnext_project_root(root: Path) -> Path | None:
+    """The folder whose `.kb-next/` governs this workspace.
+
+    The workspace itself when it has `.kb-next/`; otherwise, for a linked Git
+    worktree, its main checkout when that holds `.kb-next/kb-next.config.json`.
+    The kb-wiki-vnext write gate and the classic runtime's demotion guard use
+    the same rule, so all three agree on a worktree activated only in main.
+    """
+    if (root / ".kb-next").is_dir():
+        return root
+    main = _main_worktree_root(root)
+    if main is not None and (main / ".kb-next" / "kb-next.config.json").is_file():
+        return main
+    return None
+
+
 def detect(root: Path) -> dict:
     result = {
         "vnext": {"found": False, "details": {}},
@@ -80,16 +119,21 @@ def detect(root: Path) -> dict:
         "summary": [],
     }
 
-    vnext_root = root / ".kb-next"
-    if vnext_root.is_dir():
+    project_root = vnext_project_root(root)
+    if project_root is not None:
+        vnext_root = project_root / ".kb-next"
         result["vnext"]["found"] = True
         details = result["vnext"]["details"]
         details["vnext_root"] = str(vnext_root.resolve())
+        # Runtime commands take `--project-root <project_root>`, which differs
+        # from the workspace in a worktree activated only in its main checkout.
+        details["project_root"] = str(project_root.resolve())
+        details["activation"] = "workspace" if project_root == root else "main_checkout"
         details["config_json"] = (vnext_root / "kb-next.config.json").is_file()
         details["now_md"] = (vnext_root / "memory" / "NOW.md").is_file()
         details["operations_jsonl"] = (vnext_root / "operations.jsonl").is_file()
         details["runtime_ref"] = _resolve_reference(
-            root,
+            project_root,
             ".kb-next/runtime/kb_next.py",
             "core/versions/kb-wiki-vnext/runtime/kb_next.py",
             "runtime/kb_next.py",
@@ -97,7 +141,11 @@ def detect(root: Path) -> dict:
         details["session_command_ref"] = _resolve_reference(
             root, "plugins/kb-wiki-vnext/commands/vnext-session-start.md"
         )
-        result["summary"].append("KB/Wiki vNext detected (.kb-next/ present)")
+        result["summary"].append(
+            "KB/Wiki vNext detected (.kb-next/ present)"
+            if project_root == root
+            else f"KB/Wiki vNext detected in the main checkout {project_root.resolve()}"
+        )
 
     kb_root = root / ".kb"
     if kb_root.is_dir():

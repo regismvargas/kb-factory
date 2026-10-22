@@ -1,6 +1,6 @@
 {
   "name": "session-gate",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Thin cross-client session-boundary wrapper for KB-lifecycle and KB/Wiki vNext. Detects which canonical surfaces apply and routes startup and closeout without duplicating durable memory.",
   "author": {
     "name": "KB Factory"

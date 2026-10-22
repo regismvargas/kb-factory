@@ -494,12 +494,58 @@ def cmd_update(args: argparse.Namespace, *, emit) -> None:
     cmd_get(argparse.Namespace(record_id=args.record_id, json=args.json), emit=emit)
 
 
+SUPERSEDE_VERSION_FLAGS = (
+    ("--new-id", "new_id"),
+    ("--category", "category"),
+    ("--title", "title"),
+    ("--content", "content"),
+    ("--tier", "tier"),
+    ("--tier-reason", "tier_reason"),
+    ("--review-after", "review_after"),
+    ("--valid-until", "valid_until"),
+    ("--source", "source"),
+    ("--tags", "tags"),
+    ("--confidence", "confidence"),
+    ("--source-id", "source_id"),
+)
+
+
 def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> None:
     conn = connect()
     old_row = conn.execute("SELECT * FROM records WHERE id = ?", (args.record_id,)).fetchone()
     if old_row is None:
         raise SystemExit(f"Record not found: {args.record_id}")
     old = row_to_dict(old_row)
+    replacement_id = getattr(args, "replacement_id", None)
+    if replacement_id:
+        # Retire into an existing record: several records may point at one
+        # replacement (newer information, a kept duplicate, the decision that
+        # retired them). No row is created, so the replacement's own
+        # supersedes_id stays as it is and the lineage reads through
+        # replacement_id.
+        given = [flag for flag, dest in SUPERSEDE_VERSION_FLAGS if getattr(args, dest, None) is not None]
+        if given:
+            raise SystemExit(f"--replacement-id names an existing record; drop {', '.join(given)}.")
+        if old["status"] != "ATIVO":
+            raise SystemExit(f"Only an ATIVO record can be superseded: {old['id']} is {old['status']}.")
+        if replacement_id == old["id"]:
+            raise SystemExit("A record cannot replace itself.")
+        replacement = conn.execute("SELECT status FROM records WHERE id = ?", (replacement_id,)).fetchone()
+        if replacement is None:
+            raise SystemExit(f"Replacement record not found: {replacement_id}")
+        if replacement["status"] != "ATIVO":
+            raise SystemExit(f"The replacement must be ATIVO: {replacement_id} is {replacement['status']}.")
+        changed_at = now_iso()
+        conn.execute(
+            "UPDATE records SET status = 'SUPERSEDIDO', replacement_id = ?, updated_at = ?, status_changed_at = ? WHERE id = ?",
+            (replacement_id, changed_at, changed_at, old["id"]),
+        )
+        upsert_fts(conn, old["id"])
+        log_action(conn, old["id"], "superseded", {"replacement_id": replacement_id, "existing_replacement": True})
+        conn.commit()
+        _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
+        cmd_get(argparse.Namespace(record_id=old["id"], json=args.json), emit=emit)
+        return
     new_data = {
         **old,
         "id": args.new_id or f"{old['id']}-S{uuid.uuid4().hex[:4]}",

@@ -13,13 +13,42 @@ __all__ = [
     "build_export_artifacts",
     "cmd_export",
     "refresh_exports",
+    "write_if_changed",
     "write_text",
 ]
+
+
+GENERATED_LINE_PREFIX = "- Generated: `"
 
 
 def write_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+
+def _without_stamp(text: str) -> list:
+    """The file's lines without its header `Generated` stamp (the first line
+    of that shape); a later line of the same shape is content and is kept."""
+    lines = text.rstrip().splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith(GENERATED_LINE_PREFIX):
+            return lines[:index] + lines[index + 1:]
+    return lines
+
+
+def write_if_changed(path: Path, content: str) -> bool:
+    """Write `content` unless the file already says the same apart from its
+    `Generated` stamp; the file and its stamp then stay as they were, so a
+    refresh that changes nothing leaves no Git diff. Returns True on a write."""
+    if path.is_file():
+        try:
+            current = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            current = None
+        if current is not None and _without_stamp(current) == _without_stamp(content):
+            return False
+    write_text(path, content)
+    return True
 
 
 def _record_line(row, prefix="- ") -> str:
@@ -151,13 +180,15 @@ def refresh_exports() -> dict:
     ensure_dirs(config)
     conn = connect_readonly()
     artifacts = build_export_artifacts(config, conn)
-    write_text(Path(artifacts["paths"]["now"]), artifacts["documents"]["now"])
-    write_text(Path(artifacts["paths"]["index"]), artifacts["documents"]["index"])
-    write_text(Path(artifacts["paths"]["hot"]), artifacts["documents"]["hot"])
+    write_if_changed(Path(artifacts["paths"]["now"]), artifacts["documents"]["now"])
+    write_if_changed(Path(artifacts["paths"]["index"]), artifacts["documents"]["index"])
+    write_if_changed(Path(artifacts["paths"]["hot"]), artifacts["documents"]["hot"])
     for domain, payload in artifacts["documents"]["topic_payloads"].items():
-        write_text(Path(artifacts["topic_paths"][domain]), payload)
-    write_text(Path(artifacts["paths"]["cowork_pack"]), artifacts["documents"]["project_pack"])
-    write_text(Path(artifacts["paths"]["claude_ai_pack"]), artifacts["documents"]["project_pack"])
+        write_if_changed(Path(artifacts["topic_paths"][domain]), payload)
+    # Both packs stay: each target directory is configurable and may be
+    # uploaded or synced on its own.
+    write_if_changed(Path(artifacts["paths"]["cowork_pack"]), artifacts["documents"]["project_pack"])
+    write_if_changed(Path(artifacts["paths"]["claude_ai_pack"]), artifacts["documents"]["project_pack"])
     return {
         "generated_at": artifacts["generated_at"],
         "paths": artifacts["paths"],

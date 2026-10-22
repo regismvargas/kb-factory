@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 
 LIFECYCLE_EVENTS = [
@@ -124,6 +125,11 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     supersede.add_argument("--tags")
     supersede.add_argument("--confidence", type=float)
     supersede.add_argument("--source-id", dest="source_id")
+    supersede.add_argument(
+        "--replacement-id",
+        dest="replacement_id",
+        help="Mark the record SUPERSEDIDO by this existing ATIVO record instead of creating a new version",
+    )
     supersede.add_argument("--no-auto-lifecycle", dest="no_auto_lifecycle", action="store_true")
     supersede.add_argument("--json", action="store_true")
     supersede.set_defaults(func=command_handlers["supersede"])
@@ -312,4 +318,55 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     lifecycle.add_argument("--json", action="store_true")
     lifecycle.set_defaults(func=command_handlers["lifecycle"])
 
+    add_help_tiers(parser, sub.choices, AGENT_COMMANDS, AGENT_HELP_NOTE)
     return parser
+
+
+# `--help` lists the commands an agent uses day to day; `--help-all` prints
+# the full help with every command. Subcommands and their help are unchanged.
+AGENT_COMMANDS = {
+    "search": "full-text search of active records: search \"<terms>\" --json",
+    "get": "one record by id: get <record-id> --json",
+    "pending": "open PENDENCIA items",
+    "ingest": "register a source file: ingest <file> --domain <domain> --json",
+    "create": "file a record (classic-only project)",
+    "supersede": "replace a record (classic-only project)",
+    "resolve": "close a PENDENCIA (classic-only project)",
+    "lifecycle": "session-start | session-end refresh: lifecycle session-end --json",
+}
+AGENT_HELP_NOTE = (
+    "In a KB/Wiki vNext project create, supersede and resolve are denied: "
+    "file through kb_next.py approved-filing or proposal-apply."
+)
+
+
+class _HelpAllAction(argparse.Action):
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings, dest=dest, default=default, nargs=0, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        sys.stdout.write(parser.format_help_all())
+        parser.exit()
+
+
+def add_help_tiers(parser: argparse.ArgumentParser, commands: dict, agent: dict, note: str) -> None:
+    """Make `--help` short (the agent commands) and add `--help-all` (everything, tiers named)."""
+    parser.add_argument("--help-all", action=_HelpAllAction, help="show every command, agent and maintenance")
+    full_help = parser.format_help
+    width = max(len(name) for name in agent)
+    agent_lines = [f"  {name.ljust(width)}  {text}" for name, text in agent.items()]
+
+    def short_help() -> str:
+        lines = [f"usage: {parser.prog} [-h] [--help-all] <command> ...", "", parser.description or "", "",
+                 "Agent commands:", *agent_lines, "", note,
+                 f"All {len(commands)} commands: {parser.prog} --help-all. "
+                 f"One command's flags: {parser.prog} <command> --help."]
+        return "\n".join(lines) + "\n"
+
+    def help_all() -> str:
+        maintenance = [name for name in commands if name not in agent]
+        return "\n".join([full_help().rstrip(), "", "Agent commands:", *agent_lines, "",
+                          "Maintenance commands: " + ", ".join(maintenance)]) + "\n"
+
+    parser.format_help = short_help
+    parser.format_help_all = help_all

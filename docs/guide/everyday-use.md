@@ -23,7 +23,8 @@ in a collapsible block below — but lead with the conversation.
 
 Those blocks show the classic commands. If your project has KB/Wiki vNext
 active, the kb-wiki-vnext plugin's write gate denies an agent's direct `create`,
-`file`, `supersede` and `update`. New records and supersessions go through a
+`file`, `supersede` and `update`. A new record or supersession you approve in
+chat goes through one `approved-filing` call. Otherwise it goes through a
 `filing-proposal`, and a HOT demotion through `semantic-hygiene`; the agent
 shows you the proposal and applies it with `proposal-apply` once you approve.
 Other `update` edits, such as a retag, have no proposal path. Classic-only
@@ -341,7 +342,9 @@ This runs the close-out and refreshes the derived export surfaces. For a light
 health check before closing, the agent may run read-only
 `python .kb/kb.py hygiene-audit --json`; for a stronger retention pass that lets
 stale HOT records fall back, `python .kb/kb.py lifecycle scheduled-maintenance
---apply-demotions --json`. None of these merge or delete anything by meaning —
+--apply-demotions --json` (in a KB/Wiki vNext project kb-lifecycle 0.2.7 skips
+those demotions and the agent proposes them through `semantic-hygiene`
+instead). None of these merge or delete anything by meaning —
 they're mechanical hygiene. See [the lifecycle command](../commands.md#lifecycle).
 
 </details>

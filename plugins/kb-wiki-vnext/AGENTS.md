@@ -12,8 +12,10 @@ Session start is thin:
   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
   if no runtime resolves, fall back to classic
   `python .kb/kb.py lifecycle session-start --json`.
-- Runtime `session-start` does not write canonical `.kb/`; it appends read
-  telemetry to the git-ignored `.kb-next/telemetry/events.jsonl`.
+- Runtime `session-start` does not write canonical `.kb/`; from runtime 0.2.2
+  it appends read telemetry to the git-ignored
+  `.kb-next/telemetry/events.jsonl` (older project runtimes append it to
+  `.kb-next/operations.jsonl`).
 - Read only `.kb-next/memory/NOW.md` by default.
 - Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
   artifacts only on demand.
@@ -41,7 +43,8 @@ it. Codex has no hook that adds this for you:
   brief under `KB records` (id, title, excerpt, source), or `none found`. Leave
   it out only when the brief isolates the subagent on purpose.
 - The brief says: do not write to the KB; a shell may run the same `lookup`,
-  which changes no record and appends one line to `.kb-next/telemetry/events.jsonl`;
+  which changes no record and appends one line under `.kb-next/` (to
+  `telemetry/events.jsonl` from runtime 0.2.2, to `operations.jsonl` before);
   end the report with `KB candidates` (each fact, decision or learning with
   its source, or `none`).
 - File each kept candidate the user approves in chat with `approved-filing`,
@@ -58,12 +61,16 @@ Governance boundaries:
   directory and refreshes it on lifecycle events.
 - A record the user approved in chat takes one `approved-filing` call (one
   audit file, one oplog line). Other changes go through a proposal
-  (`filing-proposal`, or `semantic-hygiene --write-proposals` for HOT demotion
-  and open items) and then `proposal-apply`. Both call the classic runtime and
-  require `--actor` (who approved; defaults to `proposal_apply.default_actor`
-  when the vNext config sets it) and `--actor-runtime`. Do not run
-  `.kb/kb.py create`, `file`, `supersede` or `update` yourself; the plugin's
-  PreToolUse hook denies them in a vNext project once Codex trusts it.
+  (`filing-proposal`, or `semantic-hygiene --write-proposals` for HOT demotion,
+  open items and `retire` of a record that an existing one replaces) and then
+  `proposal-apply`. Both call the classic runtime and require `--actor` (who
+  approved; defaults to `proposal_apply.default_actor` when the vNext config
+  sets it) and `--actor-runtime`. Do not run `.kb/kb.py create`, `file`,
+  `supersede`, `update`, `resolve` or `bulk-import`, `init --seed`,
+  `raw-query --allow-write`, `lifecycle scheduled-maintenance` or any
+  `--apply-demotions` flag yourself. In Codex the plugin's PreToolUse hook
+  denies them only after the user trusts it; an untrusted hook does not run,
+  and `codex exec --json` shows no sign of it.
 - HOT overflow governance must start read-only. Use
   `python .kb/kb.py hygiene-audit --json` for mechanical health and
   `semantic-hygiene --write-proposals` only for

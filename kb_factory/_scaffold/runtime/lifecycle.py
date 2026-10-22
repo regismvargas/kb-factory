@@ -3,10 +3,10 @@ from __future__ import annotations
 import sqlite3
 
 from .config import load_config
-from .constants import LIFECYCLE_DEFAULTS
+from .constants import LIFECYCLE_DEFAULTS, VNEXT_DEMOTIONS_SKIPPED
 from .db import connect, connect_readonly
 from .filing_policy import build_filing_suggestions, get_filing_policy
-from .paths import KB_ROOT, KB_ROOT_INFO, ensure_dirs, memory_path
+from .paths import KB_ROOT, KB_ROOT_INFO, ensure_dirs, memory_path, vnext_active
 
 # Actions that only read the KB. A run made solely of these (a plain
 # session-start) leaves kb.db byte-identical: no oplog row is written.
@@ -97,6 +97,14 @@ def build_lifecycle_result(
     if getattr(args, "prune_snapshots", False):
         event_cfg["prune_snapshots"] = True
 
+    # Config and flags alike: in a vNext project a demotion is a proposal.
+    skipped_demotions = []
+    if vnext_active():
+        for flag in ("apply_demotions", "apply_cold_demotions"):
+            if event_cfg.get(flag):
+                event_cfg[flag] = False
+                skipped_demotions.append(flag)
+
     mutating = any(event_cfg.get(flag) for flag in DB_MUTATING_FLAGS)
     conn = connect() if mutating else connect_readonly()
     counts = build_lifecycle_counts(conn)
@@ -115,6 +123,8 @@ def build_lifecycle_result(
         "filing_suggestions": build_filing_suggestions(filing_policy, counts),
         "actions_run": [],
     }
+    if skipped_demotions:
+        result["demotions_skipped"] = {"actions": skipped_demotions, "reason": VNEXT_DEMOTIONS_SKIPPED}
 
     if event_cfg.get("run_audit"):
         result["audit"] = build_audit_tiers_result(conn, config)
@@ -178,6 +188,8 @@ def render_lifecycle_text(result: dict) -> str:
     lines.append(f"Actions run: {', '.join(result['actions_run']) or 'none'}")
     if result.get("demoted_records"):
         lines.append(f"Demoted HOT records: {len(result['demoted_records'])}")
+    if result.get("demotions_skipped"):
+        lines.append(f"Demotions skipped: {result['demotions_skipped']['reason']}")
     lines.extend(
         [
             "",

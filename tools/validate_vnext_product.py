@@ -10,15 +10,15 @@ from pathlib import Path, PurePosixPath
 
 
 PRODUCT_DIR = Path("products/kb-wiki-vnext")
-PRODUCT_VERSION = "0.2.0-rc.6"
+PRODUCT_VERSION = "0.2.0-rc.7"
 REQUIRED_COMPONENT_VERSIONS = {
     "product": PRODUCT_VERSION,
-    "python": "0.2.2",
-    "marketplace": "0.3.13",
-    "kb_lifecycle": "0.2.6",
-    "kb_wiki_vnext": "0.2.2",
-    "session_gate": "0.2.8",
-    "runtime": "0.2.2",
+    "python": "0.2.3",
+    "marketplace": "0.3.14",
+    "kb_lifecycle": "0.2.7",
+    "kb_wiki_vnext": "0.2.3",
+    "session_gate": "0.2.9",
+    "runtime": "0.2.3",
 }
 REQUIRED_DOCS = [
     "user-manual.md",
