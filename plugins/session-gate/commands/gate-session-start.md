@@ -13,6 +13,12 @@ KB/Wiki vNext or KB-lifecycle.
 Use this explicit command instead of a generic `/session-start` alias so
 Session Gate, vNext, and classic KB lifecycle commands cannot collide.
 
+When the kb-wiki-vnext SessionStart hook text (it says it replaces
+`session-start`) is in this session, the vNext startup is done: read
+`.kb-next/memory/NOW.md` only when that text asks for it, present the Step 4
+briefing from that text and stop. The steps below are for sessions without
+it.
+
 ## Step 1: Detect workspace capabilities
 
 Run the detector first:

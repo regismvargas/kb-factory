@@ -145,8 +145,10 @@ def test_plugin_registers_the_subagent_hook() -> None:
 
 def documented_runtime_commands() -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
+    gate = REPO / "plugins" / "session-gate"
     paths = [PLUGIN / "AGENTS.md", PLUGIN / "README.md", *sorted((PLUGIN / "skills").rglob("SKILL.md")),
-             *sorted((PLUGIN / "commands").glob("*.md"))]
+             *sorted((PLUGIN / "commands").glob("*.md")), gate / "README.md",
+             *sorted((gate / "skills").rglob("SKILL.md")), *sorted((gate / "commands").glob("*.md"))]
     for path in paths:
         text = path.read_text(encoding="utf-8")
         for span in re.findall(r"`(python [^`]+)`", text):
@@ -159,6 +161,7 @@ def documented_runtime_commands() -> list[tuple[str, str]]:
 def test_documented_runtime_commands_are_complete() -> None:
     commands = documented_runtime_commands()
     assert any(" filing-proposal " in c for _, c in commands)
+    assert any(label.startswith("plugins/session-gate/") and " wiki-draft-status " in c for label, c in commands)
     vnext_parser = parser()
     with pytest.raises(SystemExit):  # the check itself rejects a missing required flag
         vnext_parser.parse_args(["lookup", "--query", "x", "--json"])

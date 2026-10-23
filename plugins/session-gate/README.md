@@ -3,7 +3,7 @@
 Thin session-boundary wrapper for Codex, Claude Code, and Claude Cowork
 workspaces that may use KB/Wiki vNext, KB-lifecycle, or both.
 
-Release-candidate version: `0.2.9`.
+Release-candidate version: `0.2.10`.
 
 ## Purpose
 
@@ -20,7 +20,12 @@ routes startup and closeout back to them.
 3. Trigger in Cowork is probabilistic, not guaranteed.
 4. Compliance is instructional. Enforcement remains mechanical only where the
    canonical systems already provide it.
-5. Distributed plugin/slash command files have explicit names (`gate-session-start` and
+5. In a vNext workspace where the kb-wiki-vnext SessionStart hook text says
+   it replaces `session-start`, the startup runs nothing and reads
+   `.kb-next/memory/NOW.md` only when that text asks for it, and the closeout
+   is the `vnext-session-end` close; curation runs in the weekly maintenance
+   run, not at session end.
+6. Distributed plugin/slash command files have explicit names (`gate-session-start` and
    `gate-session-end`) rather than generic `session-start` / `session-end`
    aliases.
 
@@ -34,9 +39,9 @@ routes startup and closeout back to them.
 
 ## Distribution
 
-- Codex: `dist/agent-packages/session-gate-plugin-0.2.9.zip`
-- Claude Code: `dist/agent-packages/session-gate-claude-plugin-0.2.9.zip`
-- Claude Cowork: `dist/agent-packages/session-gate-cowork-plugin-0.2.9.zip`
+- Codex: `dist/agent-packages/session-gate-plugin-0.2.10.zip`
+- Claude Code: `dist/agent-packages/session-gate-claude-plugin-0.2.10.zip`
+- Claude Cowork: `dist/agent-packages/session-gate-cowork-plugin-0.2.10.zip`
 
 The Codex CLI manages plugins from the command line (checked on codex-cli
 0.156.1). Add the public marketplace once, then install the plugin:

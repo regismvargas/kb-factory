@@ -60,6 +60,75 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrading To 0.2.4 (Runtime 0.2.4)
+
+This release shortens every session's start and close and keeps source
+snapshot bytes under any line-ending setting. It ships with KB Lifecycle
+0.2.8 and Session Gate 0.2.10. It changes no data and no schema. The classic
+write boundary (E3.4) is not in this release.
+
+Lean session boundaries:
+
+- With the SessionStart hook, `session-hint` is the session start: it carries
+  the activation mode, the classic KB root, the classic NOW header with its
+  `Generated` time, the wiki state, the on-demand reads and the command
+  sheet. The agent reads `.kb-next/memory/NOW.md` only when the hint says the
+  team wrote it. Clients without the hook (Codex before hook trust, Cowork)
+  keep `vnext-session-start` or `gate-session-start`.
+- `vnext-session-end` and `gate-session-end` file what the user approved,
+  then run `python .kb/kb.py lifecycle session-end --json` once, then
+  `wiki-draft-status` when KB + Wiki is active and not dormant: one call with
+  KB alone, two with an active wiki. Curation runs in the weekly maintenance
+  run; a full maintenance pass the user asks for at close still writes
+  proposals only.
+- `session-hint` adds a `Curation overdue` line when the newest read-only
+  `semantic-hygiene` check is more than 7 days old. A runtime older than
+  0.2.4 records no check, so the line shows until the project runtime is
+  bootstrapped and the next weekly run passes.
+
+Source snapshots keep their bytes:
+
+- The template's `.kb/.gitattributes` holds `sources/** -text`, so Git no
+  longer converts snapshot line endings, whatever the repository's
+  `text=auto`, `eol=lf` or `core.autocrlf`. The KB's SHA-256 of each source
+  stays valid on every clone.
+
+1. Install the 0.2.4 vNext plugin, KB Lifecycle 0.2.8 and Session Gate 0.2.10
+   (ZIPs or marketplace entries), and restart the client.
+2. Where the project pins a local runtime, refresh it:
+   `python <new-source-runtime> --project-root . bootstrap --json`
+   (expect `runtime_version` `0.2.4`).
+3. Add the source rule: `python .kb-next/runtime/kb_next.py upgrade-classic --json`
+   (expect `gitattributes_updated` `true` once). The classic engine files do
+   not change in this release.
+4. Store the snapshot bytes the KB hashed. First make sure
+   `git status -- .kb/sources` is empty: commit or set aside any change you
+   made there yourself, so the next step stages nothing but line endings.
+   Git's stat cache hides the change the rule makes, so run
+   `git add --renormalize -- .kb/sources`. Before committing, check that
+   `git diff --cached --ignore-cr-at-eol -- .kb/sources` prints nothing: the
+   staged snapshots then differ from Git's copy only in line endings. If it
+   prints anything, stop, run `git restore --staged -- .kb/sources` and review
+   those files. Otherwise commit `.kb/.gitattributes` with the staged
+   snapshots and any refreshed runtime files.
+5. Check the hashes: `python .kb/kb.py source-verify --json`. The rule
+   prevents new conversions; it does not repair a snapshot that a checkout
+   already converted. For a remaining `hash_mismatch` on a text snapshot, keep
+   a copy of the file, convert it to the other line ending (CRLF to LF or LF
+   to CRLF) and run `source-verify` again. When the mismatch is gone, those
+   are the bytes the KB recorded at ingest: commit them. When it stays, put
+   the copy back. The cause is then undetermined (the snapshot may have mixed
+   line endings, or its content changed): compare it with the original file
+   or a backup before you touch the record.
+6. Run `python .kb-next/runtime/kb_next.py session-start --json` once and
+   check that `git status` lists no new change under `.kb-next/`.
+
+Rollback: reinstall the v0.2.3 plugins (kb-wiki-vnext 0.2.3, KB Lifecycle
+0.2.7, Session Gate 0.2.9) from the public v0.2.3 release and run `bootstrap`
+from the 0.2.3 runtime. The session commands go back to the longer start and
+close. `.kb/.gitattributes` can stay: removing it lets Git convert snapshot
+line endings again. Nothing else to undo in `.kb/`.
+
 ## Upgrading To 0.2.3 (Runtime 0.2.3)
 
 This release brings decision 12 of 2026-10-21 (write gate and governed

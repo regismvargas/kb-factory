@@ -16,7 +16,7 @@ import sys
 import unicodedata
 import urllib.request
 from array import array
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, NoReturn
 from urllib.parse import quote
@@ -27,13 +27,23 @@ CONFIG_REL = Path(".kb-next") / "kb-next.config.json"
 DECISION_REL = Path(".kb-next") / "decisions" / "activation-decision.json"
 OPERATIONS_REL = Path(".kb-next") / "operations.jsonl"
 # G-05: the versioned oplog keeps mutations and decisions only. Read events
-# (session-start, lookup, semantic-lookup) and derived dense-index builds go to
+# (session-start, lookup, semantic-lookup, the read-only semantic-hygiene
+# check) and derived dense-index builds go to
 # a local telemetry file that ignores itself and rotates once it reaches
 # TELEMETRY_MAX_BYTES, keeping one previous generation (about 2 MiB on disk).
 TELEMETRY_REL = Path(".kb-next") / "telemetry" / "events.jsonl"
 TELEMETRY_ROTATED_NAME = "events.1.jsonl"
 TELEMETRY_MAX_BYTES = 1024 * 1024
-TELEMETRY_EVENTS = frozenset({"session-start", "lookup", "semantic-lookup", "dense_index"})
+# A read-only semantic-hygiene pass leaves this line; the session hint reads the
+# newest one (or an oplog write pass) and flags curation older than
+# CURATION_STALE_DAYS. A clean weekly run writes no proposal, so proposals
+# alone cannot date the last curation.
+CURATION_CHECK_EVENT = "semantic-hygiene-check"
+CURATION_STALE_DAYS = 7
+# The date of the last check also lives outside the rotating log, so two
+# rotations in a busy week cannot erase it.
+CURATION_CHECK_STATE_NAME = "curation-check.json"
+TELEMETRY_EVENTS = frozenset({"session-start", "lookup", "semantic-lookup", "dense_index", CURATION_CHECK_EVENT})
 TELEMETRY_GITIGNORE = "# Local read telemetry from kb_next.py: rotated, never committed.\n*\n"
 NOW_REL = Path(".kb-next") / "memory" / "NOW.md"
 LLM_MANIFESTS_REL = Path(".kb-next") / "manifests" / "llm"
@@ -48,7 +58,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.2.3"
+RUNTIME_VERSION = "0.2.4"
 # Classic lifecycle events that keep an enabled classic wiki current. Mirrors
 # WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
 CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
@@ -178,9 +188,9 @@ HYGIENE_GROUP_KEYS = [
     "resolve_candidate",
     "needs_sponsor",
 ]
-# Automatic curation (2026-10-20): detection runs at every session end and in
-# the weekly maintenance run, and at most this many valid hygiene proposals stay
-# open per project and review window. Five per project keeps the nine projects
+# Automatic curation (2026-10-20; out of the session end since 2026-10-22):
+# detection runs in the weekly maintenance run, and at most this many valid
+# hygiene proposals stay open per project and review window. Five per project keeps the nine projects
 # that held candidates on 2026-10-20 at 45 decisions a week, which fits the
 # 15-minute weekly review only at about 20 s per decision (assumed, not measured).
 HYGIENE_WEEKLY_DEFAULT = 5
@@ -765,6 +775,18 @@ def ensure_telemetry_ignore(root: Path) -> bool:
     ignore.parent.mkdir(parents=True, exist_ok=True)
     ignore.write_bytes(TELEMETRY_GITIGNORE.encode("utf-8"))
     return True
+
+
+def record_curation_check(root: Path, details: dict[str, Any]) -> None:
+    """Keep the date of the last read-only hygiene check beside the telemetry, best effort."""
+    path = telemetry_path(root).with_name(CURATION_CHECK_STATE_NAME)
+    payload = {"event": CURATION_CHECK_EVENT, "happened_at": now_iso(), "details": details}
+    try:
+        ensure_telemetry_ignore(root)
+        with path.open("w", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    except OSError:
+        pass
 
 
 def append_telemetry(root: Path, event: str, details: dict[str, Any]) -> None:
@@ -4485,6 +4507,10 @@ def cmd_semantic_hygiene(args: argparse.Namespace) -> int:
             ["groups", "rationale", "confidence", "risk", "provenance", "conflicts"],
         ),
     }
+    if not args.write_proposals:
+        check = {"scope": args.scope, "record_count": len(records), "room": result["review_budget"]["room"]}
+        append_telemetry(root, "semantic-hygiene-check", check)
+        record_curation_check(root, check)
     emit(result, args.json)
     return 0
 
@@ -6354,11 +6380,54 @@ def cmd_install_classic(args: argparse.Namespace) -> int:
     return 0
 
 
+SOURCE_ATTRIBUTES_RULE = "sources/** -text"
+
+
+def check_source_attributes_path(kb_root: Path) -> None:
+    """Refuse a `.kb/.gitattributes` that is a link or not a regular file, before anything changes.
+
+    Git does not follow a linked `.gitattributes` in the working tree, so
+    editing its target would report a rule that never applies.
+    """
+    path = kb_root / ".gitattributes"
+    if path_is_link_or_junction(path) or (path.exists() and not path.is_file()):
+        raise RuntimeError(f"{path} must be a regular file for the source rule; replace it and rerun")
+
+
+def ensure_source_attributes(kb_root: Path, template: Path | None = None) -> bool:
+    """Make `.kb/.gitattributes` keep source snapshots byte for byte; True when it changed.
+
+    The KB stores each source's SHA-256 at ingest. A repository-wide
+    `text=auto` or `core.autocrlf` would otherwise convert line endings on
+    commit or checkout and break that check. A missing file comes from the
+    template. In an existing file the rule must be the last one, since a later
+    line for the same paths wins; otherwise it is appended.
+    """
+    check_source_attributes_path(kb_root)
+    path = kb_root / ".gitattributes"
+    if not path.exists():
+        source = template / ".gitattributes" if template is not None else None
+        if source is not None and source.is_file() and not path_is_link_or_junction(source):
+            shutil.copy2(source, path)
+        else:
+            with path.open("w", encoding="utf-8", newline="\n") as handle:
+                handle.write(SOURCE_ATTRIBUTES_RULE + "\n")
+        return True
+    text = path.read_text(encoding="utf-8", errors="replace")
+    rules = [line.split() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    if rules and rules[-1] == SOURCE_ATTRIBUTES_RULE.split():
+        return False
+    with path.open("a", encoding="utf-8", newline="\n") as handle:
+        handle.write(("" if text.endswith("\n") or not text else "\n") + SOURCE_ATTRIBUTES_RULE + "\n")
+    return True
+
+
 def cmd_upgrade_classic(args: argparse.Namespace) -> int:
     """Refresh only the classic engine (`kb.py` + `runtime/*.py`).
 
     Data (`kb.db`, `memory/`, `sources/`, `wiki/`, `exports/`, `seed/`) and the
-    project config are never touched. A missing `.kb/.gitignore` is added.
+    project config are never touched. A missing `.kb/.gitignore` is added, and
+    `.kb/.gitattributes` gets the rule that keeps source bytes unconverted.
     """
     root = project_root(args)
     target = root / ".kb"
@@ -6372,6 +6441,7 @@ def cmd_upgrade_classic(args: argparse.Namespace) -> int:
         )
     if template.resolve() == target.resolve():
         raise RuntimeError("the template resolves to the project's own .kb/; nothing to upgrade")
+    check_source_attributes_path(target)
     engine = [Path("kb.py")] + sorted(
         path.relative_to(template) for path in (template / "runtime").glob("*.py")
     )
@@ -6396,13 +6466,15 @@ def cmd_upgrade_classic(args: argparse.Namespace) -> int:
     if not (target / ".gitignore").exists() and (template / ".gitignore").is_file():
         shutil.copy2(template / ".gitignore", target / ".gitignore")
         gitignore_added = True
+    gitattributes_updated = ensure_source_attributes(target, template)
     result = {
         "event": "upgrade-classic",
-        "action": "updated" if changed or gitignore_added else "unchanged",
+        "action": "updated" if changed or gitignore_added or gitattributes_updated else "unchanged",
         "kb_root": str(target),
         "template": {"kind": kind, "path": str(template)},
         "changed_files": changed,
         "gitignore_added": gitignore_added,
+        "gitattributes_updated": gitattributes_updated,
         "kb_py_sha256": sha256_path(target / "kb.py"),
     }
     append_operation(
@@ -6412,6 +6484,7 @@ def cmd_upgrade_classic(args: argparse.Namespace) -> int:
             "template_kind": kind,
             "changed_files": changed,
             "gitignore_added": gitignore_added,
+            "gitattributes_updated": gitattributes_updated,
             "kb_py_sha256": result["kb_py_sha256"],
         },
     )
@@ -6422,28 +6495,32 @@ def cmd_upgrade_classic(args: argparse.Namespace) -> int:
 def cmd_session_hint(args: argparse.Namespace) -> int:
     """SessionStart hook text for vNext workspaces; silent anywhere else.
 
-    Silence outside `.kb-next/` lets the classic kb-lifecycle hook govern, so a
-    workspace never receives two conflicting NOW.md instructions.
+    The text carries what `session-start` and `.kb-next/memory/NOW.md` give an
+    agent, so a session begins without a call. Silence outside `.kb-next/` lets
+    the classic kb-lifecycle hook govern, so a workspace never receives two
+    conflicting default reads. Its only write is the best-effort read telemetry
+    of `session-start`; when enabled, the hook also fires on resume, clear and compact.
     """
     try:
         root = project_root(args)
         config = load_config_or_fail(root)
-        wiki_on = bool((config.get("wiki") or {}).get("enabled")) and wiki_dormancy(root, config) is None
+        wiki = wiki_alignment(root, config)
+        wiki_on = hint_wiki_active(wiki)
         gate = config.get("write_gate")
         gate_on = not (isinstance(gate, dict) and gate.get("enabled") is False)
         runtime = runtime_command(root)
         skew = runtime_skew_line(root)
+        lines = session_context_lines(root, config, wiki, wiki_on)
     except Exception:
         return 0
-    lines = [
-        "KB/Wiki vNext workspace detected.",
-        f"Run the vnext-session-start command (shell: `{runtime} session-start --json`) "
-        "and read only `.kb-next/memory/NOW.md` by default.",
-        "Classic `.kb/` stays canonical: read it with `lookup` (below) or `python .kb/kb.py search`; "
-        "classic NOW/HOT/INDEX are on demand, not a default preload.",
-    ]
     if skew:
         lines.append(skew)
+    try:
+        overdue = curation_overdue_line(root, config, runtime)
+    except Exception:
+        overdue = None
+    if overdue:
+        lines.append(overdue)
     if gate_on:
         lines.append(
             "Canonical records change only after the user approves: a record the user approved in chat takes one "
@@ -6453,18 +6530,245 @@ def cmd_session_hint(args: argparse.Namespace) -> int:
             "`init --seed`, `raw-query --allow-write` and demotions (`lifecycle scheduled-maintenance`, "
             "`--apply-demotions`)."
         )
-    lines += command_sheet(runtime)
-    if wiki_on:
-        lines.append(
-            "KB + Wiki is active: at session end run the vnext-wiki-drafts plugin command "
-            "(runtime `wiki-draft-status`) for topics that need drafts."
+    lines += command_sheet(runtime, wiki_on)
+    try:
+        append_telemetry(
+            root,
+            "session-start",
+            {
+                "activation_mode": config["activation"]["sponsor_decision"],
+                "wiki_status": wiki["status"],
+                "via": "session-hint",
+            },
         )
+    except Exception:
+        pass
     print("\n".join(lines))
     return 0
 
 
-def command_sheet(runtime: str) -> list[str]:
+# The hint quotes files that people can edit, so each read and quote is capped.
+HINT_TRUNCATED = " [truncated]"
+CLASSIC_NOW_READ_BYTES = 8_192
+CLASSIC_NOW_MAX_ITEMS = 4
+CLASSIC_NOW_ITEM_CHARS = 120
+# A generated vNext NOW is about 1 KB; a larger file was written by hand.
+GENERATED_NOW_MAX_BYTES = 8_192
+
+
+def _read_head(path: Path, limit: int) -> tuple[str, bool] | None:
+    """The first `limit` bytes of a file as text, and whether the file is longer."""
+    try:
+        with path.open("rb") as handle:
+            data = handle.read(limit + 1)
+    except OSError:
+        return None
+    return data[:limit].decode("utf-8", errors="replace"), len(data) > limit
+
+
+def _clip(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - len(HINT_TRUNCATED)].rstrip() + HINT_TRUNCATED
+
+
+def classic_now_status(classic_root: Path) -> str | None:
+    """The header bullets of classic NOW.md (project, open items) with its timestamp, capped."""
+    head = _read_head(classic_root / "memory" / "NOW.md", CLASSIC_NOW_READ_BYTES)
+    if head is None:
+        return None
+    text, longer = head
+    items: list[str] = []
+    generated = None
+    truncated = longer
+    for line in text.splitlines()[1:]:
+        if line.startswith("## "):
+            truncated = False
+            break
+        if line.startswith("- Generated:"):
+            generated = _clip(line[len("- Generated:"):].strip(), 40)
+        elif line.startswith("- "):
+            if len(items) == CLASSIC_NOW_MAX_ITEMS:
+                truncated = True
+                break
+            items.append(_clip(line[2:].strip(), CLASSIC_NOW_ITEM_CHARS))
+    if not items:
+        return None
+    status = "; ".join(items)
+    if truncated and not status.endswith(HINT_TRUNCATED):
+        status += HINT_TRUNCATED
+    return f"classic NOW of {generated}: {status}" if generated else f"classic NOW: {status}"
+
+
+def vnext_now_curated(root: Path) -> bool:
+    """True when `.kb-next/memory/NOW.md` was written by people, so the hint cannot stand in for it."""
+    head = _read_head(now_path(root), GENERATED_NOW_MAX_BYTES)
+    if head is None:
+        return False
+    text, longer = head
+    return longer or not is_generated_now(text)
+
+
+# Telemetry rotates at TELEMETRY_MAX_BYTES, so one generation fits this window.
+CURATION_SCAN_BYTES = 2 * TELEMETRY_MAX_BYTES
+
+
+def _tail_lines(path: Path, limit: int) -> list[str]:
+    """The lines in the last `limit` bytes of a file, a cut first line dropped."""
+    try:
+        with path.open("rb") as handle:
+            size = handle.seek(0, os.SEEK_END)
+            handle.seek(max(0, size - limit))
+            data = handle.read(limit)
+    except OSError:
+        return []
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    return lines[1:] if size > limit else lines
+
+
+def _parse_utc(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def last_curation_at(root: Path) -> datetime | None:
+    """Newest curation evidence: a read-only check (state file or telemetry) or an oplog write pass.
+
+    A linked worktree that shares the main checkout's KB also reads that
+    checkout, where the weekly run curates; one scoped local keeps its own.
+    """
+    bases = [root]
+    classic = classic_kb_root(root)
+    if classic != root / ".kb":
+        bases.append(classic.parent)
+    newest: datetime | None = None
+    for base in bases:
+        telemetry = telemetry_path(base)
+        state = _read_head(telemetry.with_name(CURATION_CHECK_STATE_NAME), 8_192)
+        if state is not None:
+            try:
+                payload = json.loads(state[0])
+            except ValueError:
+                payload = None
+            when = _parse_utc(payload.get("happened_at")) if isinstance(payload, dict) else None
+            if when is not None:
+                newest = when if newest is None else max(newest, when)
+        sources = (
+            (telemetry, CURATION_CHECK_EVENT),
+            (telemetry.with_name(TELEMETRY_ROTATED_NAME), CURATION_CHECK_EVENT),
+            (operations_path(base), "semantic-hygiene"),
+        )
+        for path, event in sources:
+            marker = f'"event": "{event}"'
+            for line in reversed(_tail_lines(path, CURATION_SCAN_BYTES)):
+                if marker not in line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except ValueError:
+                    continue
+                when = _parse_utc(payload.get("happened_at")) if isinstance(payload, dict) else None
+                if when is not None:
+                    newest = when if newest is None else max(newest, when)
+                    break
+    return newest
+
+
+def curation_overdue_line(root: Path, config: dict[str, Any], runtime: str, now: datetime | None = None) -> str | None:
+    """One line when no curation ran in the last CURATION_STALE_DAYS days, else None.
+
+    A project activated within that window gets no line before its first run.
+    """
+    now = now or datetime.now(timezone.utc)
+    window = timedelta(days=CURATION_STALE_DAYS)
+    last = last_curation_at(root)
+    if last is not None:
+        if now - last <= window:
+            return None
+        found = f"the last `semantic-hygiene` check here ran {(now - last).days} days ago"
+    else:
+        activated = _parse_utc((config.get("activation") or {}).get("decided_at"))
+        if activated is not None and now - activated <= window:
+            return None
+        found = "no `semantic-hygiene` check is recorded here"
+    return f"Curation overdue: {found}; run the weekly maintenance run or `{runtime} semantic-hygiene --json` by hand."
+
+
+def hint_wiki_active(wiki: dict[str, Any]) -> bool:
+    """An enabled wiki that is neither dormant nor missing its classic config."""
+    return bool(wiki["vnext_wiki_enabled"]) and wiki["status"] not in ("dormant", "classic_config_missing")
+
+
+def session_context_lines(root: Path, config: dict[str, Any], wiki: dict[str, Any], wiki_on: bool) -> list[str]:
+    """What `session-start` and vNext NOW.md tell an agent, in a few lines."""
+    classic = classic_kb_root(root)
+    local = classic == root / ".kb"
+    kb_dir = ".kb/" if local else f"{classic.as_posix()}/"
+    where = "" if local else f" (main checkout `{classic.parent.as_posix()}`)"
+    status = classic_now_status(classic)
+    if vnext_now_curated(root):
+        first = ("KB/Wiki vNext workspace detected. This text replaces `session-start`; "
+                 "`.kb-next/memory/NOW.md` was written by the team: read it before you begin.")
+    else:
+        first = ("KB/Wiki vNext workspace detected. This text replaces `session-start` and "
+                 "`.kb-next/memory/NOW.md`: begin without running or reading them.")
+    mode = _clip(str(config["activation"]["sponsor_decision"]), 40)
+    lines = [
+        first,
+        f"- Mode `{mode}`. Classic KB `.kb`{where} is canonical and read-only to agents"
+        + (f"; {status}." if status else "."),
+    ]
+    dormant = wiki.get("dormant")
+    if dormant:
+        lines.append(
+            f"- Wiki: dormant until `{dormant['min_sourced_records']}` active records cite a registered source "
+            f"(now `{dormant['sourced_records']}`); it starts by itself. Work as in KB alone."
+        )
+    elif wiki["status"] == "classic_config_missing":
+        lines.append(
+            f"- Wiki: unknown, because `{kb_dir}kb.config.json` is missing or unreadable; tell the user and "
+            "recommend the existing-project-diagnose command."
+        )
+    elif wiki["status"] == "classic_wiki_off":
+        lines.append(
+            "- Wiki: KB + Wiki is active but the classic wiki is off; tell the user and recommend the "
+            "existing-project-configure-vnext command with `kb-wiki`."
+        )
+    elif wiki_on:
+        line = f"- Wiki: active; pages in `{kb_dir}wiki/live`, index `.kb-next/wiki/index.md`."
+        try:
+            counts = build_wiki_draft_status(root, config)["counts"]
+        except Exception:
+            counts = None
+        if counts:
+            line += (
+                f" Drafts: `{counts['needs_synthesis']}` to synthesize, `{counts['needs_review']}` to review, "
+                f"`{counts['stale']}` stale of `{counts['topics']}` topics"
+            )
+            pending = counts["needs_synthesis"] + counts["needs_review"] + counts["stale"]
+            line += "; mention the vnext-wiki-drafts command, do not start it unprompted." if pending else "."
+        lines.append(line)
+    else:
+        independent = wiki["classic_wiki_enabled"] is True
+        lines.append("- Wiki: off (KB alone)" + ("; the classic wiki runs on its own." if independent else "."))
+    lines.append(
+        f"- On demand only: `lookup` (below); classic `NOW.md` (status), `HOT.md` (working set) and `INDEX.md` "
+        f"(map) in `{kb_dir}memory/`; historical artifacts only for rationale, source, provenance, historical heuristic "
+        "or exact wording."
+    )
+    return lines
+
+
+def command_sheet(runtime: str, wiki_on: bool = False) -> list[str]:
     """Exact commands for the agent's frequent tasks, so a session needs no `--help` to find flags."""
+    close = "`python .kb/kb.py lifecycle session-end --json`"
+    if wiki_on:
+        close += f", then `{runtime} wiki-draft-status --json`"
     return [
         "Commands (each <...> is one value):",
         f"- Look up: `{runtime} lookup --facet <{'|'.join(MEMORY_FACETS)}> --query \"<terms>\" --json`",
@@ -6474,8 +6778,8 @@ def command_sheet(runtime: str) -> list[str]:
         "--confidence <0-1> --source-id <source-id> --approval-note \"<who approved, in their words>\" "
         "--actor <approver> --actor-runtime <claude-code|codex> --json` (no source: `--record-id <record-id>`)",
         "- Replace a record: the same call with `--supersedes <record-id>`",
-        "- Close the session: run the vnext-session-end plugin command, which runs "
-        "`python .kb/kb.py lifecycle session-end --json`",
+        f"- Close the session: the vnext-session-end plugin command files approved records first, then runs "
+        f"{close}; curation runs weekly, not here",
     ]
 
 
@@ -6512,7 +6816,7 @@ def runtime_skew_line(root: Path) -> str | None:
         return None
     local_key, plugin_key = _runtime_version_key(local_version), _runtime_version_key(RUNTIME_VERSION)
     versions = (
-        f"Runtime skew: `.kb-next/runtime/kb_next.py` is {local_version or 'unknown'}, "
+        f"Runtime skew: `.kb-next/runtime/kb_next.py` is {_clip(local_version or 'unknown', 40)}, "
         f"the kb-wiki-vnext plugin is {RUNTIME_VERSION}."
     )
     if local_key and plugin_key and local_key > plugin_key:
@@ -6798,7 +7102,7 @@ def build_parser() -> argparse.ArgumentParser:
 # `--help` lists the commands an agent uses day to day; `--help-all` prints
 # the full help with every command. Subcommands and their help are unchanged.
 AGENT_COMMANDS = {
-    "session-start": "session contract; then read .kb-next/memory/NOW.md only",
+    "session-start": "session contract where no SessionStart hook printed it; then read .kb-next/memory/NOW.md",
     "lookup": "targeted read: lookup --facet <facet> --query \"<terms>\" --json",
     "semantic-lookup": "lookup ranked by your judgment (--judgment)",
     "approved-filing": "file a record the user approved in chat (--supersedes replaces one)",

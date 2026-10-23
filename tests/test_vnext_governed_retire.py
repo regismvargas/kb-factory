@@ -14,6 +14,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import importlib.util
 import shutil
 import sqlite3
@@ -344,15 +345,27 @@ def test_a_hygiene_supersede_names_its_target_through_the_proposal(vnext: Path) 
 
 def test_session_gate_end_keeps_demotions_out_of_vnext_workspaces() -> None:
     command = (ROOT / "plugins" / "session-gate" / "commands" / "gate-session-end.md").read_text(encoding="utf-8")
-    classic_part, vnext_part = command.split("vNext workspace (`vnext.found == true`)", 1)
+    vnext_part = command.split("## Step 2: KB/Wiki vNext closeout", 1)[1].split("\n## ", 1)[0]
+    classic_part = command.split("## Step 3: KB-lifecycle closeout", 1)[1].split("\n## ", 1)[0]
 
     assert "python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json" in classic_part
     assert "--apply-demotions --json" not in vnext_part
-    assert "python <resolved-runtime-path> --project-root <vnext.details.project_root> semantic-hygiene --json" in vnext_part
+    # The default vNext close is the vnext-session-end close; curation runs in the weekly run.
+    default_steps, on_request = vnext_part.split("Full maintenance on request", 1)
+    assert re.findall(r"`(python [^`]+)`", default_steps) == [
+        "python .kb/kb.py lifecycle session-end --json",
+        "python <resolved-runtime-path> --project-root <vnext.details.project_root> wiki-draft-status --json",
+    ]
+    assert "weekly maintenance run, not at session end" in " ".join(default_steps.split())
+    # A full maintenance pass the user asks for runs the skill's Curation, proposals only.
+    assert "Curation section of the kb-wiki-vnext skill" in " ".join(on_request.split())
+    assert "python .kb/kb.py hygiene-audit --json" in on_request
+    assert "python <resolved-runtime-path> --project-root <vnext.details.project_root> semantic-hygiene --json" in on_request
     assert (
         "python <resolved-runtime-path> --project-root <vnext.details.project_root> semantic-hygiene "
         "--judgment @hygiene-judgment.json --write-proposals --json"
-    ) in vnext_part
+    ) in on_request
+    assert "--apply-demotions --json" not in on_request and "proposal-apply" not in on_request
 
 
 def test_the_classic_skill_routes_vnext_projects_to_proposals() -> None:

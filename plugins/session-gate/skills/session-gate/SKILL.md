@@ -74,6 +74,13 @@ session commands.
 - Use the `gate-session-start` plugin/slash command before substantive work begins when Session Gate is
   the intended wrapper.
 - Use the `gate-session-end` plugin/slash command before the session closes or compacts.
+- In a vNext workspace where the kb-wiki-vnext SessionStart hook text says
+  it replaces `session-start`, `gate-session-start` runs nothing and reads
+  `.kb-next/memory/NOW.md` only when that text asks for it, and
+  `gate-session-end` is the close of the `vnext-session-end` plugin command
+  (one call with KB alone, two with an active wiki); curation runs in the
+  weekly maintenance run. Older hook text asking for the plugin's
+  `vnext-session-start` command is not a start.
 - Use the namespaced `vnext-session-start` plugin command directly for KB/Wiki
   vNext sessions when Session Gate is not needed. Do not present it as a
   shell/PATH executable.

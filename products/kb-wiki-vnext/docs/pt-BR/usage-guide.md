@@ -10,10 +10,10 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.7` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.7`,
-  KB Lifecycle `0.2.7`, container de plugin `0.2.3`, runtime incluído `0.2.3`,
-  Session Gate `0.2.9` e marketplace `0.3.14`.
+- KB/Wiki vNext `0.2.0-rc.8` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.8`,
+  KB Lifecycle `0.2.8`, container de plugin `0.2.4`, runtime incluído `0.2.4`,
+  Session Gate `0.2.10` e marketplace `0.3.15`.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
@@ -24,7 +24,7 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 `.kb-next/` é a camada de trabalho. Ela guarda decisões de ativação, pistas de sessão, propostas semânticas, manifests de inferência, drafts de wiki, superfícies materializadas de revisão, exports de adapters e evidência operacional. Ela existe para ajudar agentes a trabalhar com contexto fino e revisável, sem carregar todo o histórico por padrão.
 
-Comandos descritos como read-only são read-only contra o `.kb/` canônico. `.kb-next/operations.jsonl` é a trilha de governança e é versionado com o projeto: registra mutações e decisões (ativação e sincronização clássica, propostas, `proposal-apply`, revisão e materialização da wiki, exports, instalação e upgrade do clássico). Comandos de leitura (`session-start`, `lookup`, `semantic-lookup`) e o build derivado do `dense-index` anexam seus eventos em `.kb-next/telemetry/events.jsonl`; o `semantic-lookup` continua gravando seu manifest e sua proposta de resposta em `.kb-next/`. O diretório de telemetria se ignora pelo próprio `.kb-next/telemetry/.gitignore`, que o `activation-wizard` ou o primeiro append de telemetria grava uma única vez; o `.gitignore` do projeto nunca é editado. O arquivo gira para `events.1.jsonl` ao atingir 1 MiB e mantém uma geração anterior (cerca de 2 MiB em disco enquanto a rotação funciona); uma falha na rotação ou na gravação da telemetria nunca derruba o comando de leitura. A partir do runtime 0.2.2 os dois arquivos são gravados com fim de linha LF em qualquer plataforma; as linhas gravadas por runtimes anteriores, incluindo eventos de leitura e finais CRLF, ficam na trilha como histórico.
+Comandos descritos como read-only são read-only contra o `.kb/` canônico. `.kb-next/operations.jsonl` é a trilha de governança e é versionado com o projeto: registra mutações e decisões (ativação e sincronização clássica, propostas, `proposal-apply`, revisão e materialização da wiki, exports, instalação e upgrade do clássico). Comandos de leitura (`session-start` e sua forma de hook `session-hint`, `lookup`, `semantic-lookup`, a checagem somente leitura do `semantic-hygiene`) e o build derivado do `dense-index` anexam seus eventos em `.kb-next/telemetry/events.jsonl`; o `semantic-lookup` continua gravando seu manifest e sua proposta de resposta em `.kb-next/`. O diretório de telemetria se ignora pelo próprio `.kb-next/telemetry/.gitignore`, que o `activation-wizard` ou o primeiro append de telemetria grava uma única vez; o `.gitignore` do projeto nunca é editado. O arquivo gira para `events.1.jsonl` ao atingir 1 MiB e mantém uma geração anterior (cerca de 2 MiB em disco enquanto a rotação funciona); uma falha na rotação ou na gravação da telemetria nunca derruba o comando de leitura. A partir do runtime 0.2.2 os dois arquivos são gravados com fim de linha LF em qualquer plataforma; as linhas gravadas por runtimes anteriores, incluindo eventos de leitura e finais CRLF, ficam na trilha como histórico.
 
 Resumo de mutações:
 
@@ -32,8 +32,8 @@ Resumo de mutações:
 |---|---|---|
 | `bootstrap` | sem mudança | instala apenas `runtime/kb_next.py` |
 | `install-classic`, `upgrade-classic` | `install-classic` cria a `.kb/` ausente a partir do scaffold clássico e roda o `init` clássico; `upgrade-classic` substitui apenas `kb.py` e `runtime/*.py` | append de evidência operacional |
-| `compliance-preflight`, `source-linkage-audit`, `semantic-hygiene` padrão, `wiki-draft-status`, `session-hint`, `subagent-hint` | read-only | sem escrita |
-| `session-start`, `lookup` | read-only | append de telemetria de leitura em `.kb-next/telemetry/events.jsonl` |
+| `compliance-preflight`, `source-linkage-audit`, `wiki-draft-status`, `subagent-hint` | read-only | sem escrita |
+| `session-start`, `session-hint`, `lookup`, `semantic-hygiene` padrão | read-only | append de telemetria de leitura em `.kb-next/telemetry/events.jsonl` |
 | ativação, semântica, propostas, export e wiki | read-only, exceto `activation-wizard`: `--choice kb-wiki` grava as chaves da wiki clássica em `.kb/kb.config.json` e roda o primeiro `wiki-sync` (publica `.kb/wiki/live`); `--disable-classic-wiki` desliga a wiki clássica | escreve config, manifests, propostas, drafts, exports ou evidência operacional governada |
 | `proposal-apply` aprovado | muta apenas por `.kb/kb.py` | escreve evidência de apply e operações |
 
@@ -75,7 +75,12 @@ próprio runtime já existente no workspace.
 
 ## Daily Conversation Workflow / Fluxo Diário De Conversa
 
-Comece toda conversa nova de forma fina:
+Comece toda conversa nova de forma fina. No Claude Code, e no Codex depois
+que o usuário confia nos hooks do plugin, o hook SessionStart (runtime
+`session-hint`) é o início da sessão: imprime o modo de ativação, o estado da
+wiki, as linhas de status do NOW clássico, as leituras sob demanda e os
+comandos exatos, e o agente começa sem nenhuma chamada. Onde nenhum hook roda,
+comece com:
 
 ```powershell
 python .kb-next\runtime\kb_next.py session-start --json
@@ -83,7 +88,7 @@ python .kb-next\runtime\kb_next.py session-start --json
 
 Depois leia apenas `.kb-next/memory/NOW.md` por padrão. Peça ao agente para ampliar contexto somente quando a tarefa exigir.
 
-Bom prompt de conversa:
+Bom prompt de conversa, para clientes onde nenhum hook roda:
 
 ```text
 Use a superfície KB/Wiki vNext deste cliente. No Claude Code rode `/kb-wiki-vnext:vnext-session-start`; no Codex invoque o skill `kb-wiki-vnext`. Leia apenas .kb-next/memory/NOW.md por padrão e responda via lookup antes de abrir histórico mais amplo.
@@ -97,6 +102,13 @@ Use vNext lookup para encontrar a decisão atual sobre ativação da wiki. Não 
 
 Pare e peça aprovação explícita quando a ação criar proposta, escrever draft, materializar revisão ou aplicar memória canônica.
 
+Feche a sessão com o comando `vnext-session-end`. Ele registra primeiro o
+que o usuário aprovou (o passo `KB candidates` só quando subagentes rodaram),
+depois roda uma chamada (`python .kb/kb.py lifecycle session-end --json`) em
+KB alone, mais o runtime `wiki-draft-status --json` quando KB + Wiki está
+ativo e não dormente. A curadoria roda na manutenção semanal, não no fim da
+sessão.
+
 ## Project Lifecycle Workflows / Fluxos Do Ciclo De Vida Do Projeto
 
 Projeto novo:
@@ -108,8 +120,8 @@ Projeto novo:
 
 Projeto existente:
 
-1. Rode `python <caminho-do-runtime> session-start --json`.
-2. Leia `.kb-next/memory/NOW.md`.
+1. Comece pelo texto do hook SessionStart. Sem ele, rode `python <caminho-do-runtime> session-start --json`.
+2. Sem o texto do hook, leia `.kb-next/memory/NOW.md`.
 3. Use `compliance-preflight` antes de planejamento, packaging, release ou desenvolvimento.
 4. Use `proposal-apply` apenas depois de aprovação humana.
 
@@ -321,7 +333,7 @@ Propósito: imprimir o texto do hook SessionStart para um workspace vNext.
 Use quando: configurar ou conferir um hook SessionStart do cliente; o hook
 SessionStart do plugin chama este subcomando onde hooks são suportados.
 
-Não use quando: você precisa do contrato de startup em si; use o runtime `session-start`.
+Não use quando: nenhum hook rodou e você precisa do contrato de startup em JSON; use o runtime `session-start`.
 
 Exemplo no repositório:
 
@@ -335,11 +347,27 @@ Exemplo stand-alone:
 python runtime\kb_next.py session-hint
 ```
 
-Saída esperada: texto simples. Em workspace vNext ele aponta o agente para o
-startup vNext e apenas para `.kb-next/memory/NOW.md`; com KB + Wiki acrescenta
-o lembrete de `wiki-draft-status` para o fim da sessão. Fora de workspace vNext
-não imprime nada, e o hook clássico do kb-lifecycle governa. O comando
-`session-start` impresso usa `.kb-next/runtime/kb_next.py` quando o arquivo
+Saída esperada: texto simples. Em workspace vNext ele é o início da sessão,
+no lugar de `session-start` e de `.kb-next/memory/NOW.md`: o modo de ativação;
+a raiz da KB clássica (o checkout principal num worktree vinculado) com as
+linhas de cabeçalho do `.kb/memory/NOW.md` clássico (projeto, pendências
+abertas); o estado da wiki (desligada, dormente com o limiar, ativa com o
+backlog de drafts, ou a wiki clássica desligada); as leituras sob demanda; a
+regra de escrita; e uma folha de comandos cuja linha de fechamento cita
+`lifecycle session-end` e, com wiki ativa, `wiki-draft-status`. Quando o
+`.kb-next/memory/NOW.md` não é o template gerado (a equipe o escreveu, ou ele
+passa de 8 KiB), a primeira linha pede ao agente que o leia. Um
+`.kb/kb.config.json` ausente ou ilegível é nomeado, com
+`existing-project-diagnose`, no lugar do estado da wiki. A citação do NOW
+clássico mantém o horário `Generated` e fica limitada a quatro bullets de 120
+caracteres dos primeiros 8 KiB, marcada `[truncated]` quando cortada. Quando
+a última checagem do `semantic-hygiene` (ou uma passagem de escrita no oplog)
+tem mais de 7 dias, ou nenhuma está registrada e o projeto foi ativado há mais
+de 7 dias, uma linha `Curation overdue` cita a manutenção semanal e o comando
+para rodar à mão; um worktree vinculado que compartilha a KB do checkout
+principal também lê o registro dele, e um com escopo local lê só o próprio. Fora de
+workspace vNext não imprime nada, e o hook clássico do kb-lifecycle governa.
+Os comandos impressos usam `.kb-next/runtime/kb_next.py` quando o arquivo
 existe e, se não existe, o runtime que imprimiu o hint, com `--project-root`.
 Quando o `RUNTIME_VERSION` do runtime local difere do runtime do hint, uma
 linha `Runtime skew` nomeia as duas versões: runtime local mais antigo (comum
@@ -347,8 +375,13 @@ em worktree cortado antes de um commit de upgrade) aponta para o main atual ou
 `existing-project-upgrade-vnext`; runtime local mais novo aponta para atualizar
 o plugin, porque `bootstrap` instalaria o runtime mais antigo por cima.
 
-Riscos: não escreve nada. O suporte a hooks depende do cliente; onde hooks
-estiverem desativados, inicie a sessão manualmente.
+Riscos: a única escrita é uma linha de telemetria de leitura `session-start`
+(`"via": "session-hint"`) em `.kb-next/telemetry/events.jsonl`. O hook também
+dispara em resume, clear e compact, e cada um conta como início de sessão. O
+suporte a hooks depende do cliente; onde hooks estiverem desativados, inicie a
+sessão com `session-start` e o NOW.md. Um worktree vinculado ativado só no
+checkout principal não recebe hint, porque o hook lê a config da pasta onde
+roda.
 
 ### `subagent-hint`
 
@@ -657,10 +690,16 @@ duas passagens veem no máximo `--limit` records ativos (HOT primeiro), e a de
 escrita pula um record fora do próprio limite; para chegar a records WARM
 antigos, acrescente o mesmo `--limit 500` às duas.
 
-A curadoria automática roda as duas passagens em todo `vnext-session-end` e na
-manutenção semanal agendada (uma sessão de agente, porque a segunda passagem
-pede julgamento), ao lado do clássico somente leitura
-`python .kb/kb.py hygiene-audit --json`. A saída traz `review_budget`: as
+A curadoria automática roda as duas passagens na manutenção semanal que o
+usuário agenda (uma sessão de agente, porque a segunda passagem pede
+julgamento), ao lado do clássico somente leitura
+`python .kb/kb.py hygiene-audit --json`; o fim da sessão não roda nenhuma das
+duas, e sem a manutenção semanal agendada nenhuma curadoria acontece. A
+passagem de detecção anexa uma linha `semantic-hygiene-check` a
+`.kb-next/telemetry/events.jsonl` e guarda a data dela em
+`.kb-next/telemetry/curation-check.json`, que a rotação do log não toca; o
+hint de sessão sinaliza curadoria com mais de 7 dias a partir dela, porque
+uma rodada limpa não grava proposta. A saída traz `review_budget`: as
 propostas de higiene válidas dos últimos 7 dias que não foram aplicadas nem
 ficaram obsoletas (`open`, `open_count`), o `weekly_limit` e o `room` que
 sobra. A passagem de escrita pula um alvo que já tem proposta aberta

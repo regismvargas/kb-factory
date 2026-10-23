@@ -12,6 +12,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -229,16 +230,26 @@ def test_the_weekly_limit_is_configurable_and_validated(project: Path) -> None:
     assert code != 0 and "weekly_hygiene_proposals" in err
 
 
-def test_session_end_and_the_skill_describe_the_two_step_curation() -> None:
+def test_curation_runs_weekly_and_the_session_end_stays_lean() -> None:
     plugin = ROOT / "plugins" / "kb-wiki-vnext"
     session_end = (plugin / "commands" / "vnext-session-end.md").read_text(encoding="utf-8")
     skill = (plugin / "skills" / "kb-wiki-vnext" / "SKILL.md").read_text(encoding="utf-8")
+    curation = skill.split("## Curation", 1)[1].split("\n## ", 1)[0]
 
-    for text in (session_end, skill):
-        assert "python .kb/kb.py hygiene-audit --json" in text
-        assert "python <resolved-runtime-path> semantic-hygiene --json" in text
-        assert (
-            "python <resolved-runtime-path> semantic-hygiene --judgment @hygiene-judgment.json "
-            "--write-proposals --json"
-        ) in text
+    assert "python .kb/kb.py hygiene-audit --json" in curation
+    assert "python <resolved-runtime-path> semantic-hygiene --json" in curation
+    assert (
+        "python <resolved-runtime-path> semantic-hygiene --judgment @hygiene-judgment.json "
+        "--write-proposals --json"
+    ) in curation
+    assert "weekly maintenance run, not at session end" in curation
+
+    # The close is lifecycle session-end, the KB candidates of subagents and the wiki draft check.
+    commands = re.findall(r"`(python [^`]+)`", session_end)
+    assert "python .kb/kb.py lifecycle session-end --json" in commands
+    assert "python <resolved-runtime-path> wiki-draft-status --json" in commands
+    for command in commands:
+        assert "hygiene" not in command, command
     assert "--apply-demotions" not in session_end
+    assert "weekly maintenance run, not at session end" in session_end
+    assert "never apply its proposals at session end" in session_end

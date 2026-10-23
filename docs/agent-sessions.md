@@ -34,8 +34,12 @@ Once a plugin is installed (see [installation.md](installation.md)):
   `.kb/memory/NOW.md` *before* assuming anything. If the project has also
   activated vNext (a `.kb-next/kb-next.config.json` is present), the hook
   defers to vNext instead: it does not ask the agent to read `.kb/memory/NOW.md`,
-  and the agent reads `.kb-next/memory/NOW.md` by default. Cowork doesn't do
-  this automatically. That's what `session-gate` is for.
+  and the agent reads `.kb-next/memory/NOW.md` by default. From kb-wiki-vnext
+  0.2.4 the vNext hook prints the session start itself (activation mode, the
+  NOW header, wiki state, on-demand reads and a command sheet), so the agent
+  makes no start call and reads `.kb-next/memory/NOW.md` only when the hint
+  says the team wrote it. Cowork doesn't do this automatically. That's what
+  `session-gate` is for.
 - **(vNext projects) a write gate.** With `kb-wiki-vnext` installed and vNext
   active, the agent files new records and supersessions only after you
   approve: in one `approved-filing` call when you approve in chat, or through a
@@ -80,9 +84,11 @@ Cowork does **not** auto-fire hooks, so start the session explicitly:
    its skill.)
 2. **Work the same way** as above — ask the agent to record decisions/facts and
    to answer from the KB.
-3. **Close with the `gate-session-end` plugin command** (optionally with a
-   session id, such as `S14`), or say "wrap up". It runs the pre-close audit
-   and the matching closeout.
+3. **Close with the `gate-session-end` plugin command**, or say "wrap up".
+   It files what you approved and runs the matching closeout: in a vNext
+   workspace one `lifecycle session-end`, plus `wiki-draft-status` when the
+   wiki is active. Curation runs in the weekly maintenance run, or when you
+   ask for a full maintenance pass.
 
 ## The conversational workflow (both platforms)
 
@@ -115,8 +121,10 @@ Every conversational action is just a CLI call the plugin makes for you:
 In a project with KB/Wiki vNext active, the "record" and "supersede" rows go
 through `approved-filing` once you approve in chat, or through
 `filing-proposal` and, after your approval, `proposal-apply` instead;
-the write gate denies the direct commands, and the session starts with the
-vNext startup. See [KB/Wiki vNext runtime](commands.md#kbwiki-vnext-runtime).
+the write gate denies the direct commands, and the session starts from the
+vNext hook's hint (or `vnext-session-start` where no hook runs) and closes
+with one `lifecycle session-end`, plus `wiki-draft-status` with an active
+wiki. See [KB/Wiki vNext runtime](commands.md#kbwiki-vnext-runtime).
 
 Full command reference (slash **and** CLI): [commands.md](commands.md).
 

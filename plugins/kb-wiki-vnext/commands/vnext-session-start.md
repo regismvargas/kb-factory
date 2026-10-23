@@ -8,6 +8,16 @@ Run KB/Wiki vNext session start for the current workspace.
 Use this explicit command instead of a generic `/session-start` alias so
 vNext, Session Gate, and classic KB lifecycle commands cannot collide.
 
+Where the plugin's SessionStart hook ran (runtime `session-hint`; its text
+says it replaces `session-start`), steps 1 to 5 are done: that text carries
+the activation mode, the wiki state, the classic NOW status, the on-demand
+reads and the runtime commands. Read `.kb-next/memory/NOW.md` only when that
+text asks for it (a NOW the team wrote). Steps 7 to 9 still apply: run
+`compliance-preflight` (step 7) with the runtime the hook printed, follow
+step 8 in HOT overflow sessions, and take step 9's wiki state from the hook's
+`Wiki:` line. Run all steps when that text is absent or the user asks for
+this command.
+
 1. Resolve the vNext runtime. Check these paths in order (Glob or a file
    existence check) and use the first that exists:
    - `.kb-next/runtime/kb_next.py` (runtime installed in the workspace)

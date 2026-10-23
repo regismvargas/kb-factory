@@ -44,7 +44,7 @@ tiers** are `HOT` (always surfaced at session start), `WARM` (the default), and
 `COLD` (archived). Use [`update`](#update) only for *routing metadata* (tier,
 tags, review dates); when *meaning* changes, use [`supersede`](#supersede).
 
-> **Getting the CLI:** install the `v0.2.3` GitHub release wheel (see
+> **Getting the CLI:** install the `v0.2.4` GitHub release wheel (see
 > [installation.md](installation.md)), then `kb-factory init` scaffolds
 > a project's `.kb/` (and `kb-factory update` refreshes it later). After that, the
 > commands on this page run as `python .kb/kb.py <command>` from the project root.
@@ -79,7 +79,7 @@ in every client.
 
   | Command(s) | Does |
   |---|---|
-  | `vnext-session-start`, `vnext-session-end` | start a thin session / close it |
+  | `vnext-session-start`, `vnext-session-end` | start a thin session where no hook runs / close it with one `lifecycle session-end` |
   | `new-project-wizard`, `new-project-init-kb-alone`, `new-project-init-kb-wiki`, `new-project-verify-install` | bootstrap a new project |
   | `existing-project-diagnose`, `existing-project-activate-vnext`, `existing-project-configure-vnext`, `existing-project-verify-install`, `existing-project-upgrade-vnext`, `existing-project-rollback-vnext` | set up / migrate an existing project |
   | `vnext-wiki-drafts` | draft and review vNext wiki pages for topics that need them |
@@ -514,6 +514,9 @@ start:
 ```bash
 python .kb-next/runtime/kb_next.py session-start --json
 ```
+
+Where the plugin's SessionStart hook runs, its `session-hint` already prints
+that start (from kb-wiki-vnext 0.2.4), so the agent skips the call.
 
 `.kb/` stays canonical. The vNext runtime reads it and writes only under
 `.kb-next/`, except for an approved `approved-filing` or `proposal-apply` and

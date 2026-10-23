@@ -20,13 +20,13 @@ Build:
 
 ```powershell
 python tools\build_agent_packages.py --scope vnext
-python tools\build_vnext_standalone.py --version 0.2.0-rc.7
+python tools\build_vnext_standalone.py --version 0.2.0-rc.8
 ```
 
 Validação:
 
 ```powershell
-python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.7-standalone.zip
+python tools\validate_vnext_product.py --json --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.8-standalone.zip
 python tools\sync_vnext_runtime.py --check
 python -m pytest -p no:cacheprovider tests -q
 ```
@@ -34,7 +34,7 @@ python -m pytest -p no:cacheprovider tests -q
 Auditoria de hashes:
 
 ```powershell
-Get-FileHash dist\vnext\kb-wiki-vnext-0.2.0-rc.7-standalone.zip -Algorithm SHA256
+Get-FileHash dist\vnext\kb-wiki-vnext-0.2.0-rc.8-standalone.zip -Algorithm SHA256
 Get-ChildItem dist\agent-packages\*vnext*.zip,dist\agent-packages\session-gate-*.zip | Get-FileHash -Algorithm SHA256
 ```
 

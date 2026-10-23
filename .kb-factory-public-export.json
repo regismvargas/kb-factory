@@ -1,16 +1,16 @@
 {
   "schema_version": 2,
   "record_type": "controlled-source-to-public-release",
-  "source_sha": "93f9c5043092bf312e6a45a15fd2622c6ec0f97e",
-  "baseline_public_sha": "a1ecb358bb53f38849aad61e30cc742ae733e248",
+  "source_sha": "bdcc39b5f968d71d71ba53c0b5c6338ee879319e",
+  "baseline_public_sha": "a8c151f939dd626b02d2ff207b5d9fe40639f0b4",
   "policy_version": "2026-09-23.1",
-  "export_stage_file_count": 264,
-  "final_public_file_count": 269,
+  "export_stage_file_count": 270,
+  "final_public_file_count": 275,
   "omitted_source_files": [
     "core/templates/kb/runtime/conformance.json"
   ],
   "final_integrity_binding": {
-    "git_ref": "refs/tags/v0.2.3",
+    "git_ref": "refs/tags/v0.2.4",
     "scope": "all tracked files in the tagged public commit",
     "release_assets": "SHA256SUMS.txt"
   },
@@ -42,13 +42,13 @@
     "missing": 0,
     "extra_exported_paths": 0,
     "extra_public_only_paths": [
-      "tests/test_export_churn.py",
-      "tests/test_help_tiers.py",
-      "tests/test_vnext_governed_retire.py",
-      "tests/test_vnext_session_hint.py"
+      "kb_factory/_scaffold/.gitattributes",
+      "tests/test_session_gate_evals.py",
+      "tests/test_source_line_endings.py",
+      "tests/test_vnext_session_ceremony.py"
     ],
     "hardened_files_differing": 14,
-    "public_only_files_edited": 37
+    "public_only_files_edited": 26
   },
   "verification_contract": [
     "claude plugin validate .",

@@ -324,13 +324,16 @@ current; only an export pack you uploaded elsewhere goes stale.
 
 **In Claude Code**, that's enough — the agent runs the close-out, consolidates,
 and refreshes the exports. **In Cowork**, end explicitly with
-`/gate-session-end` (you can pass a session label, e.g. `/gate-session-end S14`),
-which runs a quick pre-close check and the matching close-out.
+`/gate-session-end`, which runs the matching close-out (in a KB/Wiki vNext
+project, one `lifecycle session-end` plus `wiki-draft-status` when the wiki
+is active).
 
 If you've recorded a lot, or it's been a while, you can ask the agent to do a
 light health pass at close — *"close the session and check if anything HOT has
 gone stale."* That's the gentle edge of the maintenance story covered in
-[keeping memory healthy](how-it-works.md).
+[keeping memory healthy](how-it-works.md). In a KB/Wiki vNext project that
+pass writes proposals for you to approve; the routine curation runs in the
+weekly maintenance run.
 
 <details><summary>Under the hood / for the CLI</summary>
 

@@ -3,8 +3,8 @@
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
 classic `kb-lifecycle` and `session-gate`.
 
-Release-candidate identities: plugin `0.2.3`, bundled runtime `0.2.3`, product
-`0.2.0-rc.7`, Session Gate companion `0.2.9`, and marketplace `0.3.14`.
+Release-candidate identities: plugin `0.2.4`, bundled runtime `0.2.4`, product
+`0.2.0-rc.8`, Session Gate companion `0.2.10`, and marketplace `0.3.15`.
 
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
@@ -17,8 +17,11 @@ Prerequisites:
 
 ## Capabilities
 
-- Starts sessions with the explicit vNext `vnext-session-start` command.
-- Loads only `.kb-next/memory/NOW.md` by default.
+- Starts sessions from the SessionStart hook text, which says it replaces
+  `session-start`; where no hook runs, with the explicit vNext
+  `vnext-session-start` command.
+- Loads `.kb-next/memory/NOW.md` only when that text asks for it (a NOW the
+  team wrote) or when no hook ran.
 - Uses `lookup` or `semantic-lookup` before opening broad memory surfaces.
 - Reviews `.kb-next` evidence, manifests, proposals, and wiki drafts.
 - Runs semantic hygiene proposal flows without direct `.kb/` mutation.
@@ -32,8 +35,12 @@ Prerequisites:
   `.kb-next/operations.jsonl`.
 - `wiki-draft-status` and the `vnext-wiki-drafts` command drive vNext draft
   synthesis and review; `session-start` reports the backlog.
-- The SessionStart hook prints vNext guidance only in vNext workspaces, so the
-  classic hook never gives a conflicting default read.
+- When enabled, the SessionStart hook (runtime `session-hint`) prints the session start
+  itself in vNext workspaces: the activation mode, the wiki state, the classic
+  NOW status, the on-demand reads and the exact commands, so a session begins
+  with no call. When the team wrote `.kb-next/memory/NOW.md`, the hint asks
+  the agent to read it. It prints nothing elsewhere, so the classic hook never gives a
+  conflicting default read.
 - The SubagentStart hook (runtime `subagent-hint`) shows every subagent in a
   vNext workspace the no-write rule, the `KB candidates` report section and a
   lookup command; the KB records themselves come from the main agent's brief.
@@ -61,9 +68,15 @@ Prerequisites:
 - HOT overflow governance starts with read-only `hygiene-audit`.
 - `semantic-hygiene --write-proposals` writes only governed `.kb-next`
   proposal evidence, at most `semantic_curation.weekly_hygiene_proposals`
-  (default 5) open proposals per 7 days; `vnext-session-end` and the weekly
-  maintenance run detect automatically and leave every correction to an
-  approved `proposal-apply`.
+  (default 5) open proposals per 7 days. Curation runs in the weekly
+  maintenance run that the user schedules, not at session end, and leaves
+  every correction to an approved `proposal-apply`. The session hint prints
+  one `Curation overdue` line when the last `semantic-hygiene` check is more
+  than 7 days old.
+- The `vnext-session-end` plugin command is one call with KB alone
+  (`python .kb/kb.py lifecycle session-end --json`) and two with an active
+  wiki (plus runtime `wiki-draft-status`); the `KB candidates` step runs only
+  when subagents ran.
 - Only approved `new`, `supersede`, `demote_hot`, `resolve` and `retire`
   proposals may apply through the classic runtime; `retire` needs classic
   runtime 0.2.7 (`supersede --replacement-id`).
@@ -72,9 +85,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.2.3.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/`, `scripts/` |
-| `kb-wiki-vnext-claude-plugin-0.2.3.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
-| `kb-wiki-vnext-cowork-plugin-0.2.3.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-plugin-0.2.4.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-claude-plugin-0.2.4.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-cowork-plugin-0.2.4.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.
@@ -86,10 +99,11 @@ python tools\build_agent_packages.py --scope vnext
 python -m pytest -p no:cacheprovider tests\test_build_agent_packages.py -q
 ```
 
-After installation, invoke the client-specific plugin/slash or skill-based
-`vnext-session-start` surface
-and confirm it tells the agent to read only `.kb-next/memory/NOW.md` by
-default. Claude Code uses `/kb-wiki-vnext:vnext-session-start`; Codex uses the
+After installation, open a session in a vNext workspace and confirm the
+SessionStart hook text begins `KB/Wiki vNext workspace detected.` and names
+the activation mode. Where no hook runs, invoke the client-specific
+plugin/slash or skill-based `vnext-session-start` surface and confirm it tells
+the agent to read only `.kb-next/memory/NOW.md` by default. Claude Code uses `/kb-wiki-vnext:vnext-session-start`; Codex uses the
 embedded skill; Cowork uses the action exposed by its UI or the skill in
 natural language. Existing and new project setup commands ship under explicit
 `existing-project-*` and `new-project-*` names.

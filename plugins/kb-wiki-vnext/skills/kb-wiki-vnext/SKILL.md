@@ -1,6 +1,6 @@
 ---
 name: kb-wiki-vnext
-description: Use for KB/Wiki vNext sessions, targeted memory lookup, approved proposal review/apply, wiki draft review, packaging pilots, and release compliance. Start thin with NOW.md and keep classic .kb canonical.
+description: Use for KB/Wiki vNext sessions, targeted memory lookup, approved proposal review/apply, wiki draft review, packaging pilots, and release compliance. Start from the SessionStart hook text (else NOW.md) and keep classic .kb canonical.
 ---
 
 # KB/Wiki vNext
@@ -12,8 +12,15 @@ release gates.
 
 ## Session Contract
 
-1. Start with the vNext `vnext-session-start` command when available. If the
-   client does not expose commands, resolve the runtime in this order:
+1. Where the plugin's SessionStart hook ran (runtime `session-hint`; its text
+   says it replaces `session-start`), the session has started: the text
+   carries the activation mode, the wiki state, the classic NOW status, the
+   on-demand reads and the exact commands. Run nothing more to begin, and
+   read `.kb-next/memory/NOW.md` only when that text asks for it (a NOW the
+   team wrote). Step 6 (`compliance-preflight` for vNext development) still
+   applies. Without that text, run the vNext
+   `vnext-session-start` command when available. If the client does not
+   expose commands, resolve the runtime in this order:
    `.kb-next/runtime/kb_next.py`,
    `${CLAUDE_PLUGIN_ROOT}/runtime/kb_next.py`, an installed client-plugin path
    matching `**/kb-wiki-vnext/runtime/kb_next.py`, then
@@ -22,16 +29,17 @@ release gates.
    resolves but `.kb-next/memory/NOW.md` exists, read it directly and report
    degraded data-only mode; use classic `.kb/kb.py lifecycle session-start`
    only as the lifecycle fallback, not as the vNext `NOW.md` source.
-2. Read only `.kb-next/memory/NOW.md` by default.
+2. Without the hook text, read only `.kb-next/memory/NOW.md` by default.
 3. Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
    artifacts only when the task needs them.
 4. Use `lookup` for deterministic targeted retrieval and `semantic-lookup`
    when external LLM judgment is available; add `--domain` to scope either.
-   If `session-start` reports `wiki.status` = `classic_wiki_off`, recommend
-   re-running `activation-wizard --choice kb-wiki`; if it reports pending
-   `wiki_drafts`, point to the `vnext-wiki-drafts` command. `dormant` means a
-   new KB + Wiki waits for `wiki.dormant.min_sourced_records` records that
-   cite a source; work as in KB alone, nothing to do for the wiki.
+   If the hook's `Wiki:` line or `session-start` `wiki.status` says the
+   classic wiki is off (`classic_wiki_off`), recommend re-running
+   `activation-wizard --choice kb-wiki`; if it reports pending drafts, point
+   to the `vnext-wiki-drafts` command. `dormant` means a new KB + Wiki waits
+   for `wiki.dormant.min_sourced_records` records that cite a source; work as
+   in KB alone, nothing to do for the wiki.
 5. Widen a `lookup` query with the words a record might use instead.
    `lookup` ORs the words of a query, matches words of three or more letters
    as prefixes, and ranks records that match more words first. Keep the
@@ -150,12 +158,19 @@ KB. The main agent stays its only writer.
 
 ## Curation
 
-Detection runs by itself; corrections are proposals the user approves.
+Curation runs in the weekly maintenance run, not at session end; corrections
+are proposals the user approves. A session end only reports the `audit`
+flags of `lifecycle session-end` (`hot_over_limit`, `stale_hot`,
+`expired_premises`) for that run. Run the steps below in a working session
+only when the user asks.
 
-1. At every session end (`vnext-session-end`) and in the weekly maintenance
-   run, detect with `python .kb/kb.py hygiene-audit --json` and
+1. In the weekly maintenance run, detect with
+   `python .kb/kb.py hygiene-audit --json` and
    `python <resolved-runtime-path> semantic-hygiene --json`. Neither changes
-   `.kb/` or writes a proposal.
+   `.kb/` or writes a proposal; `semantic-hygiene` appends one
+   `semantic-hygiene-check` telemetry line and keeps its date in
+   `.kb-next/telemetry/curation-check.json`, and the session hint prints a
+   `Curation overdue` line when the newest is more than 7 days old.
 2. When `review_budget.room` is above zero, classify at most that many
    candidates that are not in `review_budget.open`, taken from the records
    `semantic-hygiene` returned (it drops others), and write the batch with
@@ -185,9 +200,11 @@ Detection runs by itself; corrections are proposals the user approves.
    `--actor <id>` unless `proposal_apply.default_actor` names the approver.
    A proposal leaves the queue when it is applied, when its target changed by
    other means, or after 7 days; detection may then propose it again.
-5. The weekly maintenance run is an agent session (a scheduled Claude Code or
-   Codex task in the project), because step 2 needs judgment; a plain
-   scheduler can only run step 1. In a vNext project it uses
+5. The weekly maintenance run is an agent session that the user schedules
+   (a scheduled Claude Code, Cowork or Codex task in the project, or one task
+   over several projects), because step 2 needs judgment; a plain scheduler
+   can only run step 1. Without such a task no curation runs: the plugin does
+   not schedule one. In a vNext project it uses
    `python .kb/kb.py lifecycle session-end --json` for exports and the wiki,
    not `lifecycle scheduled-maintenance`, whose default config demotes stale
    HOT records without a proposal (classic runtime 0.2.6 and later skip
