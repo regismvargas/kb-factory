@@ -13,9 +13,9 @@ Admins de workspace, leads técnicos e maintainers que instalam o pacote para ou
 - Artefato de release limpo, gerado a partir deste repositório.
 - Acesso ao cliente de destino: Codex, Claude Code, Claude Cowork ou workspace com Python.
 - Alinhamento com o dono do workspace de que `.kb/` segue canônico e `.kb-next/` é a camada vNext.
-- A identidade de release registra separadamente produto `0.2.0-rc.7`, KB
-  Lifecycle `0.2.7`, plugin `0.2.3`, runtime incluído `0.2.3`, Session Gate
-  `0.2.9` e marketplace `0.3.14`.
+- A identidade de release registra separadamente produto `0.2.0-rc.8`, KB
+  Lifecycle `0.2.8`, plugin `0.2.4`, runtime incluído `0.2.4`, Session Gate
+  `0.2.10` e marketplace `0.3.15`.
 
 ## Passos
 
@@ -23,13 +23,13 @@ Gere todos os distribuíveis KB afetados e o bundle stand-alone:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.7
+python tools\build_vnext_standalone.py --version 0.2.0-rc.8
 ```
 
 Valide antes de compartilhar:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.7-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.8-standalone.zip
 ```
 
 Distribua apenas o artefato correspondente:
@@ -38,9 +38,13 @@ Distribua apenas o artefato correspondente:
 - Usuários Claude Code recebem o ZIP de plugin Claude Code.
 - Usuários Claude Cowork recebem o ZIP Cowork e instruções explícitas de
   startup manual com `vnext-session-start`.
-- Usuários Session Gate recebem o artefato `session-gate-*-0.2.9.zip`
+- Usuários Session Gate recebem o artefato `session-gate-*-0.2.10.zip`
   correspondente e usam `gate-session-start` / `gate-session-end`.
 - Admins que criam workspace novo recebem o bundle stand-alone.
+- A curadoria de memória não roda mais no fim da sessão. Agende uma sessão de
+  agente semanal por projeto (uma tarefa agendada do Claude Code, do Cowork ou
+  do Codex) que siga a seção Curation do skill kb-wiki-vnext; sem ela nenhuma
+  curadoria roda.
 
 O Codex CLI gerencia plugins pela linha de comando (verificado no codex-cli
 0.156.1). Adicione o marketplace público uma vez e depois instale o plugin:

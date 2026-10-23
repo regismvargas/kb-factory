@@ -63,6 +63,75 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrade Para 0.2.4 (Runtime 0.2.4)
+
+Esta versão encurta o início e o fim de toda sessão e preserva os bytes das
+fontes sob qualquer configuração de fim de linha. Sai com KB Lifecycle 0.2.8
+e Session Gate 0.2.10. Não muda dados nem schema. A recusa de escrita no
+motor clássico (E3.4) não está nesta versão.
+
+Início e fim de sessão enxutos:
+
+- Com o hook SessionStart, o `session-hint` é o início da sessão: traz o modo
+  de ativação, a raiz da KB clássica, o cabeçalho do NOW clássico com o
+  horário `Generated`, o estado da wiki, as leituras sob demanda e a folha de
+  comandos. O agente lê `.kb-next/memory/NOW.md` só quando o hint diz que a
+  equipe o escreveu. Clientes sem o hook (Codex antes da confiança no hook,
+  Cowork) seguem com `vnext-session-start` ou `gate-session-start`.
+- `vnext-session-end` e `gate-session-end` registram o que o usuário aprovou,
+  rodam `python .kb/kb.py lifecycle session-end --json` uma vez e depois
+  `wiki-draft-status` quando KB + Wiki está ativa e não dormente: uma chamada
+  só com KB, duas com wiki ativa. A curadoria roda na manutenção semanal; uma
+  manutenção completa pedida pelo usuário no fechamento continua gravando só
+  propostas.
+- O `session-hint` acrescenta uma linha `Curation overdue` quando a checagem
+  somente leitura mais recente do `semantic-hygiene` tem mais de 7 dias. Um
+  runtime anterior ao 0.2.4 não registra a checagem, então a linha aparece até
+  o `bootstrap` do runtime do projeto e a próxima rodada semanal.
+
+Fontes preservam os bytes:
+
+- O `.kb/.gitattributes` do template traz `sources/** -text`, então o Git não
+  converte mais o fim de linha das fontes, qualquer que seja o `text=auto`,
+  o `eol=lf` ou o `core.autocrlf` do repositório. O SHA-256 que a KB guarda de
+  cada fonte continua valendo em qualquer clone.
+
+1. Instale o plugin vNext 0.2.4, o KB Lifecycle 0.2.8 e o Session Gate 0.2.10
+   (ZIPs ou entradas do marketplace) e reinicie o cliente.
+2. Onde o projeto fixa um runtime local, atualize-o:
+   `python <runtime-novo> --project-root . bootstrap --json`
+   (espere `runtime_version` `0.2.4`).
+3. Acrescente a regra das fontes: `python .kb-next/runtime/kb_next.py upgrade-classic --json`
+   (espere `gitattributes_updated` `true` uma vez). Os arquivos do motor
+   clássico não mudam nesta versão.
+4. Guarde os bytes das fontes que a KB hasheou. Primeiro confira que
+   `git status -- .kb/sources` está vazio: faça commit ou separe qualquer
+   mudança que você mesmo fez ali, para que o passo seguinte só prepare fins de
+   linha. O cache de stat do Git esconde a mudança que a regra provoca, então
+   rode `git add --renormalize -- .kb/sources`. Antes do commit, confira que
+   `git diff --cached --ignore-cr-at-eol -- .kb/sources` não mostra nada: as
+   fontes preparadas só diferem da cópia do Git no fim de linha. Se mostrar
+   algo, pare, rode `git restore --staged -- .kb/sources` e revise esses
+   arquivos. Do contrário, faça commit do `.kb/.gitattributes` com as fontes
+   preparadas e com os arquivos de runtime atualizados.
+5. Confira os hashes: `python .kb/kb.py source-verify --json`. A regra evita
+   conversões novas; não repara uma fonte que um checkout já converteu. Para um
+   `hash_mismatch` que reste numa fonte de texto, guarde uma cópia do arquivo,
+   converta-o para o outro fim de linha (CRLF para LF ou LF para CRLF) e rode o
+   `source-verify` de novo. Se a divergência sumir, esses são os bytes que a KB
+   registrou na ingestão: faça commit deles. Se continuar, devolva a cópia. A
+   causa fica indeterminada (a fonte pode ter fins de linha mistos, ou o
+   conteúdo mudou): compare com o arquivo original ou com um backup antes de
+   mexer no record.
+6. Rode `python .kb-next/runtime/kb_next.py session-start --json` uma vez e
+   confira que o `git status` não lista mudança nova em `.kb-next/`.
+
+Rollback: reinstale os plugins da v0.2.3 (kb-wiki-vnext 0.2.3, KB Lifecycle
+0.2.7, Session Gate 0.2.9) a partir do release público v0.2.3 e rode o
+`bootstrap` do runtime 0.2.3. Os comandos de sessão voltam ao início e ao fim
+mais longos. O `.kb/.gitattributes` pode ficar: removê-lo deixa o Git converter
+de novo o fim de linha das fontes. Nada mais a desfazer em `.kb/`.
+
 ## Upgrade Para 0.2.3 (Runtime 0.2.3)
 
 Esta versão traz a decisão 12 de 2026-10-21 (gate de escrita e aposentadoria

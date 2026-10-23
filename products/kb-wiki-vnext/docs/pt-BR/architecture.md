@@ -21,11 +21,11 @@ Mapa de plataforma:
 
 | Plataforma | Artefato | Estrutura interna | Capacidades principais |
 | --- | --- | --- | --- |
-| Codex | `kb-wiki-vnext-plugin-0.2.3.zip` | `.codex-plugin`, skills, comandos e runtime `0.2.3` | `vnext-session-start`, comandos de setup, lookup, compliance preflight, propostas |
-| Claude Code | `kb-wiki-vnext-claude-plugin-0.2.3.zip` | manifesto Claude, skills, comandos/hooks e runtime `0.2.3` | fluxos guiados de memória e comandos explícitos |
-| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.2.3.zip` | pacote Cowork, runtime `0.2.3` e orientação de sessão manual | `vnext-session-start` manual, comandos de setup, sem depender de hooks automáticos |
-| Session Gate | `session-gate-*-0.2.9.zip` | detector de plugin mais comandos `gate-session-*` | rotear `.kb-next/` primeiro, depois `.kb/` clássico quando presente |
-| Stand-alone | `kb-wiki-vnext-0.2.0-rc.7-standalone.zip` | runtime, template clássico, plugin source, docs, tools | bootstrap e distribuição controlada por admin |
+| Codex | `kb-wiki-vnext-plugin-0.2.4.zip` | `.codex-plugin`, skills, comandos e runtime `0.2.4` | `vnext-session-start`, comandos de setup, lookup, compliance preflight, propostas |
+| Claude Code | `kb-wiki-vnext-claude-plugin-0.2.4.zip` | manifesto Claude, skills, comandos/hooks e runtime `0.2.4` | fluxos guiados de memória e comandos explícitos |
+| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.2.4.zip` | pacote Cowork, runtime `0.2.4` e orientação de sessão manual | `vnext-session-start` manual, comandos de setup, sem depender de hooks automáticos |
+| Session Gate | `session-gate-*-0.2.10.zip` | detector de plugin mais comandos `gate-session-*` | rotear `.kb-next/` primeiro, depois `.kb/` clássico quando presente |
+| Stand-alone | `kb-wiki-vnext-0.2.0-rc.8-standalone.zip` | runtime, template clássico, plugin source, docs, tools | bootstrap e distribuição controlada por admin |
 
 Plugin instala capacidades no cliente. Skills descrevem comportamento do agente. Commands expõem workflows chamáveis. Hooks são conveniências específicas de plataforma e não são assumidos no Cowork.
 
@@ -37,12 +37,12 @@ As linhas de versão são identidades independentes de componentes:
 
 | Componente | Versão |
 |---|---|
-| Release candidate do produto | `0.2.0-rc.7` |
-| KB Lifecycle | `0.2.7` |
-| Container do plugin vNext | `0.2.3` |
-| Engine `kb_next.py` incluído | `0.2.3` |
-| Session Gate | `0.2.9` |
-| Marketplace | `0.3.14` |
+| Release candidate do produto | `0.2.0-rc.8` |
+| KB Lifecycle | `0.2.8` |
+| Container do plugin vNext | `0.2.4` |
+| Engine `kb_next.py` incluído | `0.2.4` |
+| Session Gate | `0.2.10` |
+| Marketplace | `0.3.15` |
 
 O engine incluído faz bootstrap de uma cópia estável em
 `.kb-next/runtime/kb_next.py`. Sessões normais usam essa cópia. Upgrade e
@@ -53,7 +53,8 @@ Usar o runtime atual do workspace como sua própria origem retorna
 `action: self` e não prova transição de versão.
 
 Escritas operacionais em `.kb-next/` não são escritas canônicas.
-`session-start` e `lookup` anexam telemetria de leitura ao
+`session-start` (e sua forma de hook SessionStart `session-hint`) e `lookup`
+anexam telemetria de leitura ao
 `.kb-next/telemetry/events.jsonl`, ignorado pelo Git e fora da trilha de governança
 versionada `.kb-next/operations.jsonl`; comandos semânticos e
 de wiki podem escrever manifests, propostas, drafts ou materializações. Apenas

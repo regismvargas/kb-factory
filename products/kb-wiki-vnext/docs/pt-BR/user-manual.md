@@ -18,14 +18,14 @@ Usuários de projeto que recebem o ZIP de plugin ou o bundle stand-alone de um m
 
 Escolha o pacote certo para o cliente:
 
-- Codex: `kb-wiki-vnext-plugin-0.2.3.zip`
-- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.3.zip`
-- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.3.zip`
-- Stand-alone: `kb-wiki-vnext-0.2.0-rc.7-standalone.zip`
+- Codex: `kb-wiki-vnext-plugin-0.2.4.zip`
+- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.4.zip`
+- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.4.zip`
+- Stand-alone: `kb-wiki-vnext-0.2.0-rc.8-standalone.zip`
 
 Produto, KB Lifecycle, container de plugin, runtime incluído, Session Gate e
-marketplace têm linhas de versão separadas: `0.2.0-rc.7`, `0.2.7`, `0.2.3`,
-`0.2.3`, `0.2.9` e `0.3.14`. Registre todos os valores aplicáveis durante
+marketplace têm linhas de versão separadas: `0.2.0-rc.8`, `0.2.8`, `0.2.4`,
+`0.2.4`, `0.2.10` e `0.3.15`. Registre todos os valores aplicáveis durante
 instalação ou upgrade.
 
 Em instalação por plugin, use `existing-project-activate-vnext` para resolver o
@@ -61,7 +61,15 @@ stand-alone com `--project-root <workspace> bootstrap --json` e use depois
 
 Use `proposal-apply` apenas quando uma proposta preparada for aprovada de propósito. Não edite `.kb/kb.db` diretamente.
 
-Os workflows instalados usam nomes lógicos explícitos. Claude Code invoca
+No Claude Code, e no Codex depois que o usuário confia nos hooks do plugin,
+o hook SessionStart inicia a sessão: o texto traz o modo, o estado da wiki, o
+status do NOW clássico, as leituras sob demanda e os comandos, e o agente não
+roda nada para começar. A sessão fecha com uma chamada em KB alone e duas com
+wiki ativa; a curadoria de memória roda numa sessão de manutenção semanal que
+você agenda (veja o guia de uso).
+
+Os workflows instalados usam nomes lógicos explícitos. Onde nenhum hook roda,
+o Claude Code invoca
 `/kb-wiki-vnext:vnext-session-start`; Codex usa o skill embutido
 `kb-wiki-vnext` como superfície principal; Cowork usa a ação namespaced
 realmente exposta pela UI ou o skill em linguagem natural. As famílias lógicas
@@ -72,7 +80,9 @@ Para exemplos de runtime e padrões seguros de conversa, use o [guia de uso deta
 
 ## Verification / Verificação
 
-O runtime `session-start` deve informar o modo ativo e apontar para
+O texto do hook SessionStart deve começar com
+`KB/Wiki vNext workspace detected.` e nomear o modo ativo. O runtime
+`session-start` deve informar o modo ativo e apontar para
 `.kb-next/memory/NOW.md`. O basename lógico é `vnext-session-start`; a
 invocação depende do cliente. `lookup`
 pode retornar zero registros em um workspace novo e anexa telemetria de leitura

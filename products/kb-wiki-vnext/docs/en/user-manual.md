@@ -18,14 +18,14 @@ Project users who receive the plugin ZIP or stand-alone bundle from a maintainer
 
 Choose the package that matches your client:
 
-- Codex: `kb-wiki-vnext-plugin-0.2.3.zip`
-- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.3.zip`
-- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.3.zip`
-- Stand-alone: `kb-wiki-vnext-0.2.0-rc.7-standalone.zip`
+- Codex: `kb-wiki-vnext-plugin-0.2.4.zip`
+- Claude Code: `kb-wiki-vnext-claude-plugin-0.2.4.zip`
+- Claude Cowork: `kb-wiki-vnext-cowork-plugin-0.2.4.zip`
+- Stand-alone: `kb-wiki-vnext-0.2.0-rc.8-standalone.zip`
 
 The product, KB Lifecycle, plugin container, bundled runtime, Session Gate, and
-marketplace have separate version lines: `0.2.0-rc.7`, `0.2.7`, `0.2.3`,
-`0.2.3`, `0.2.9`, and `0.3.14`, respectively. Record all applicable values
+marketplace have separate version lines: `0.2.0-rc.8`, `0.2.8`, `0.2.4`,
+`0.2.4`, `0.2.10`, and `0.3.15`, respectively. Record all applicable values
 during install or upgrade.
 
 For a plugin installation, use `existing-project-activate-vnext` to resolve the
@@ -61,7 +61,15 @@ For a persistent workspace runtime, run the stand-alone engine once with
 
 Use `proposal-apply` only when you intentionally approve a prepared proposal. Do not edit `.kb/kb.db` directly.
 
-Installed plugin workflows use explicit logical names. Claude Code invokes
+In Claude Code, and in Codex once the user trusts the plugin's hooks, the
+SessionStart hook starts the session: its text gives the mode, the wiki
+state, the classic NOW status, the on-demand reads and the commands, and the
+agent runs nothing to begin. A session closes with one call with KB alone and
+two with an active wiki; memory curation runs in a weekly maintenance session
+that you schedule (see the usage guide).
+
+Installed plugin workflows use explicit logical names. Where no hook runs,
+Claude Code invokes
 `/kb-wiki-vnext:vnext-session-start`; Codex uses the embedded
 `kb-wiki-vnext` skill as its primary surface; Cowork uses the namespaced action
 actually exposed by its UI or the skill in natural language. The logical
@@ -72,8 +80,9 @@ For runtime examples and safe conversation patterns, use the [detailed usage gui
 
 ## Verification
 
-The runtime `session-start` should report the active mode and point you to
-`.kb-next/memory/NOW.md`. The logical plugin basename is
+The SessionStart hook text should begin `KB/Wiki vNext workspace detected.`
+and name the active mode. The runtime `session-start` should report the
+active mode and point you to `.kb-next/memory/NOW.md`. The logical plugin basename is
 `vnext-session-start`; invocation is client-specific. `lookup`
 may return no records in a new workspace and appends read telemetry to
 `.kb-next/telemetry/events.jsonl`, but it must not change canonical `.kb/` or publish

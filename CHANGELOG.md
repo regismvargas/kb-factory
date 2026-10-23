@@ -7,6 +7,47 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-23
+
+Every vNext session now starts with no call and closes with one or two, and
+source snapshots keep their bytes under any line-ending setting. See
+"Upgrading To 0.2.4" in `products/kb-wiki-vnext/docs/en/upgrade-rollback.md`
+(Portuguese: `products/kb-wiki-vnext/docs/pt-BR/upgrade-rollback.md`).
+
+### Changed
+- Session start. With the SessionStart hook, `session-hint` is the start: the
+  activation mode, the classic KB root, the classic NOW header with its
+  `Generated` time, the wiki state, the on-demand reads and the command
+  sheet. The agent reads `.kb-next/memory/NOW.md` only when the hint says
+  the team wrote it. `vnext-session-start` and `gate-session-start` stay for
+  clients without the hook, and `compliance-preflight` still applies.
+- Session close. `vnext-session-end` and the vNext part of `gate-session-end`
+  file what the user approved, then run `lifecycle session-end` once, then
+  `wiki-draft-status` when KB + Wiki is active and not dormant: one call with
+  KB alone, two with an active wiki, down from four to seven.
+  `gate-session-end` drops the `git status` audit, the consistency step and
+  the session-id prompt.
+- Curation runs in the weekly maintenance run, never at session end; a full
+  maintenance pass the user asks for at close writes proposals only.
+  `session-hint` adds a `Curation overdue` line when the newest read-only
+  `semantic-hygiene` check is more than 7 days old.
+
+### Fixed
+- Source snapshots keep their bytes. The KB stores each source's SHA-256 at
+  ingest, and a repository-wide `* text=auto`, `eol=lf` or `core.autocrlf`
+  converted snapshot line endings on commit or checkout, which broke that
+  check. The classic template (kb-lifecycle 0.2.8) ships `.kb/.gitattributes`
+  with `sources/** -text`; `upgrade-classic` adds the rule to existing
+  projects and keeps it at the end of the file. The upgrade notes give the
+  `git add --renormalize` step that stores the hashed bytes and a recovery
+  check for a snapshot a checkout already converted.
+
+### Documentation
+- Public docs describe the 0.2.4 session start and close.
+- Release lines: Python package `0.2.4`, catalog `0.3.15`, kb-lifecycle
+  `0.2.8`, kb-wiki-vnext `0.2.4`, session-gate `0.2.10`, vNext runtime `0.2.4`,
+  stand-alone product `0.2.0-rc.8`.
+
 ## [0.2.3] - 2026-10-22
 
 0.2.2 was cut before the write-gate and governed-close work of 2026-10-21

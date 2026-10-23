@@ -5,8 +5,14 @@ explicitly piloting KB/Wiki vNext.
 
 Session start is thin:
 
-- Invoke the explicit vNext `vnext-session-start` plugin/slash command when
-  the client exposes it. When working in a shell, resolve the runtime —
+- When the plugin's SessionStart hook text (it says it replaces
+  `session-start`) is in your context, the session has started: it carries
+  the activation mode, the wiki state, the classic NOW status, the on-demand
+  reads and the exact commands, so run nothing more to begin and read
+  `.kb-next/memory/NOW.md` only when that text asks for it (a NOW the team
+  wrote). Codex runs that hook only after the user trusts it.
+- Without that text, invoke the explicit vNext `vnext-session-start` plugin/slash
+  command when the client exposes it. When working in a shell, resolve the runtime —
   `.kb-next/runtime/kb_next.py`, else the plugin-bundled `runtime/kb_next.py`,
   else `core/versions/kb-wiki-vnext/runtime/kb_next.py` (KB Factory authoring
   monorepo) — and run `python <resolved-runtime-path> session-start --json`;
@@ -16,7 +22,7 @@ Session start is thin:
   it appends read telemetry to the git-ignored
   `.kb-next/telemetry/events.jsonl` (older project runtimes append it to
   `.kb-next/operations.jsonl`).
-- Read only `.kb-next/memory/NOW.md` by default.
+- Without the hook text, read only `.kb-next/memory/NOW.md` by default.
 - Load `.kb/memory/HOT.md`, `.kb/memory/INDEX.md`, wiki pages, and historical
   artifacts only on demand.
 - Use targeted `lookup` or `semantic-lookup` before opening broad memory;
@@ -25,12 +31,12 @@ Session start is thin:
   use instead: the original words first, at most six words in total, synonyms
   in the language of the records before translations, and no broad words when
   you want one item or the most recent one.
-- When KB + Wiki is active, `session-start` reports `wiki.status` and the
-  `wiki_drafts` backlog. `classic_wiki_off` means the classic wiki must be
+- When KB + Wiki is active, the hook's `Wiki:` line or `session-start`
+  (`wiki.status`, `wiki_drafts`) reports the wiki state and the draft backlog. `classic_wiki_off` means the classic wiki must be
   re-synced with `activation-wizard --choice kb-wiki`; pending drafts go
   through the `vnext-wiki-drafts` command.
 - For any planning or execution of vNext development until vNext is 100% developed,
-  run runtime `compliance-preflight` after thin vNext session-start and before
+  run runtime `compliance-preflight` after the hook text or `session-start` and before
   planning or editing. Simple operational use does not require the development
   preflight unless it is part of a development round.
 

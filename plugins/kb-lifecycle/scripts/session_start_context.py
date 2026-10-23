@@ -12,13 +12,14 @@ def main() -> int:
 
     if (cwd / ".kb-next" / "kb-next.config.json").is_file():
         # KB/Wiki vNext owns session start here; its own hook prints the
-        # startup contract. Emitting the classic NOW.md instruction as well
+        # startup context. Emitting the classic NOW.md instruction as well
         # would give the agent two conflicting default reads.
         print(
             "\n".join(
                 [
                     "KB Factory classic KB detected alongside KB/Wiki vNext.",
-                    "Follow the vNext session-start contract (default read: `.kb-next/memory/NOW.md`).",
+                    "When enabled, the KB/Wiki vNext SessionStart hook text is the session start; without it, "
+                    "read `.kb-next/memory/NOW.md`.",
                     "Classic `.kb/` stays canonical: `python .kb/kb.py search \"<term>\"` and "
                     "`python .kb/kb.py pending` for targeted reads; do not preload `.kb/memory/NOW.md`.",
                 ]

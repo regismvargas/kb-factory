@@ -36,7 +36,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirmar pacote de produto:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.7-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.8-standalone.zip
 ```
 
 Para exemplos de runtime e prompts seguros de conversa, veja o [guia de uso detalhado](usage-guide.md).
@@ -47,7 +47,8 @@ Um workspace saudável roda a superfície de startup do cliente ou o
 `session-start` do runtime, lê `.kb-next/memory/NOW.md` e conclui `lookup` ou
 `semantic-hygiene` padrão sem mudar `.kb/kb.db`. `lookup` e `session-start`
 anexam telemetria de leitura a `.kb-next/telemetry/events.jsonl`; `semantic-hygiene`
-padrão não escreve. O Session
+padrão anexa ali uma linha `semantic-hygiene-check`, guarda a data dela em
+`curation-check.json` ao lado e não escreve mais nada. O Session
 Gate deve rotear `.kb-next/` antes do `.kb/` clássico.
 
 ## Troubleshooting / Solução De Problemas

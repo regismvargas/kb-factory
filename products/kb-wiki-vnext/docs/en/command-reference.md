@@ -23,8 +23,8 @@ clients. Session Gate follows the same distinction with the logical basename
 
 | Command | Project type | Platforms | Runtime or instruction | Mutation behavior |
 |---|---|---|---|---|
-| `vnext-session-start` | general vNext session | Codex, Claude Code, Claude Cowork | `python ./.kb-next/runtime/kb_next.py session-start --json` after bootstrap | no canonical write; appends read telemetry to the git-ignored `.kb-next/telemetry/events.jsonl` |
-| `vnext-session-end` | general vNext session | Codex, Claude Code, Claude Cowork | summarize vNext evidence; collect subagent `KB candidates`; run `python .kb/kb.py lifecycle session-end` and, with KB + Wiki, the runtime `wiki-draft-status`; refresh the dense index when `retrieval.dense.enabled` is on and records changed; curation: read-only `hygiene-audit` and `semantic-hygiene`, then a judged batch within `review_budget` | classic session-end refreshes exports and the enabled wiki; filing and hygiene proposals go to `.kb-next/` only; no canonical record write |
+| `vnext-session-start` | general vNext session where no SessionStart hook ran | Codex, Claude Code, Claude Cowork | `python ./.kb-next/runtime/kb_next.py session-start --json` after bootstrap, then read `.kb-next/memory/NOW.md` | no canonical write; appends read telemetry to the git-ignored `.kb-next/telemetry/events.jsonl` |
+| `vnext-session-end` | general vNext session | Codex, Claude Code, Claude Cowork | run `python .kb/kb.py lifecycle session-end --json`; with KB + Wiki active and not dormant, the runtime `wiki-draft-status`; collect subagent `KB candidates` only when subagents ran; refresh the dense index only when `retrieval.dense.enabled` is on and records changed. Curation runs in the weekly maintenance run, not here | classic session-end refreshes exports and the enabled wiki; filing proposals go to `.kb-next/` only; no canonical record write |
 | `vnext-wiki-drafts` | KB + Wiki session | Codex, Claude Code, Claude Cowork | `wiki-draft-status`, then per topic `wiki-synthesis-plan` with agent judgment and `wiki-draft-review --materialize` | writes `.kb-next/wiki/` drafts, manifests and pages; no canonical write |
 | `existing-project-diagnose` | existing/legacy | Codex, Claude Code, Claude Cowork | inspect `.kb/`, `.kb-next/`, runtime, and `NOW.md` | no canonical write; appends read telemetry if it runs `session-start` |
 | `existing-project-activate-vnext` | existing/legacy | Codex, Claude Code, Claude Cowork | `activation-wizard --mode short --choice kb-alone` by default | writes `.kb-next/`; with `kb-wiki` also enables the classic wiki keys in `.kb/kb.config.json` and syncs `.kb/wiki/live` |
@@ -36,8 +36,8 @@ clients. Session Gate follows the same distinction with the logical basename
 | `new-project-init-kb-alone` | new project | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-alone` | creates `.kb/` when absent and configures `.kb-next/` |
 | `new-project-init-kb-wiki` | new project | Codex, Claude Code, Claude Cowork | `install-classic`, `bootstrap`, `activation-wizard --mode short --choice kb-wiki` | creates `.kb/` when absent and `.kb-next/`; `--scope` files the user's scope as one HOT `DECISAO`; the classic wiki stays dormant until 10 active records cite a registered source (`--wiki-min-sourced-records`, `0` for at once), then publishes `.kb/wiki/live` by itself; vNext drafts are never copied there |
 | `new-project-verify-install` | new project | Codex, Claude Code, Claude Cowork | `session-start` plus deterministic `lookup` | no canonical write; appends read telemetry to the git-ignored `.kb-next/telemetry/events.jsonl` |
-| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | detect `.kb-next/` and `.kb/`; route vNext first | no canonical write; vNext route appends read telemetry to `.kb-next/telemetry/events.jsonl` |
-| `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | detect systems and summarize closeout; a full maintenance pass runs `scheduled-maintenance --apply-demotions` only in a classic-only workspace and the vNext curation step in a vNext workspace | no canonical write by default; vNext curation writes `.kb-next/` hygiene proposals only |
+| `gate-session-start` | Session Gate | Codex, Claude Code, Claude Cowork | no call when the kb-wiki-vnext plugin's SessionStart hook text is present; otherwise detect `.kb-next/` and `.kb/` and route vNext first | no canonical write; vNext route appends read telemetry to `.kb-next/telemetry/events.jsonl` |
+| `gate-session-end` | Session Gate | Codex, Claude Code, Claude Cowork | in a vNext workspace, the `vnext-session-end` close (detector only when no hook text is present); a full maintenance pass runs `scheduled-maintenance --apply-demotions` only in a classic-only workspace | no canonical write by default |
 
 Runtime-only commands:
 
@@ -45,9 +45,9 @@ Runtime-only commands:
 |---|---|---|
 | `bootstrap` | atomically install the executing artifact runtime at `<project>/.kb-next/runtime/kb_next.py` | replaces byte drift, reports source/installed SHA-256, rejects unsafe targets; `action: self` is not upgrade proof |
 | `install-classic` | copy the classic scaffold (kb-lifecycle plugin, stand-alone bundle, authoring repo or `--template`) into `.kb/` and run classic `init --name --slug --domains` | creates `.kb/`; refuses an existing or non-empty `.kb/` |
-| `upgrade-classic` | refresh only `.kb/kb.py` and `.kb/runtime/*.py` from the discovered scaffold | engine files only; never `kb.db`, data or `kb.config.json` |
+| `upgrade-classic` | refresh only `.kb/kb.py` and `.kb/runtime/*.py` from the discovered scaffold, and keep the source rule in `.kb/.gitattributes` | engine files, a missing `.kb/.gitignore` and the `sources/** -text` rule (`gitattributes_updated`); never `kb.db`, data or `kb.config.json` |
 | `wiki-draft-status` | list wiki topics that need synthesis, review or refresh | read-only |
-| `session-hint` | SessionStart hook text for vNext workspaces | read-only; prints nothing outside vNext workspaces |
+| `session-hint` | SessionStart hook text for vNext workspaces, when enabled: the session start itself (mode, wiki state, classic NOW status, on-demand reads, commands) | read-only; appends one `session-start` read-telemetry line; prints nothing outside vNext workspaces |
 | `subagent-hint` | SubagentStart hook JSON for vNext workspaces: the subagent KB contract and a lookup command | read-only; prints nothing outside vNext workspaces |
 
 Agent-facing runtime subcommands that changed in 0.2.x (details in
@@ -59,7 +59,7 @@ Agent-facing runtime subcommands that changed in 0.2.x (details in
 | `dense-index` | build or refresh the optional local dense index; `--fetch-model` downloads the pinned model, `--rebuild` embeds every active record again | writes `.kb-next/index/` and one telemetry line in `.kb-next/telemetry/events.jsonl`, both ignored by Git; needs the dense extra; reports an advisory for `potion-multilingual-128M`, which is not recommended |
 | `proposal-apply` | apply an approved proposal to `.kb/`; needs `--approve`, `--approval-note`, `--actor-runtime` (`claude-code`, `codex`, `cowork` or `human`) and an approver from `--actor` or `proposal_apply.default_actor` | one of the two canonical write paths for agents in a vNext project; with no approver it exits 2 before reading the proposal |
 | `approved-filing` | file one record the user approved in chat: `--category`, `--domain`, `--title`, `--content`, `--confidence`, `--source-id` or `--record-id`, optional `--supersedes`, plus `--approval-note` and the approver pair of `proposal-apply` | writes `.kb/` through `.kb/kb.py`, one manifest under `.kb-next/manifests/approved-filing/` and one oplog line; a blocked call writes nothing and exits 1 |
-| `semantic-hygiene` | detect demotion, resolution and supersede candidates; with `--judgment` and `--write-proposals`, write a judged batch, including `retire` items (`replacement_id` names the existing ATIVO record that replaces the target) | writes `.kb-next/` proposals only, and only with `--write-proposals`; reports `review_budget` (`semantic_curation.weekly_hygiene_proposals`, default 5 open proposals per project per 7 days), skips targets that already have an open proposal and lists the overflow under `deferred` |
+| `semantic-hygiene` | detect demotion, resolution and supersede candidates; with `--judgment` and `--write-proposals`, write a judged batch, including `retire` items (`replacement_id` names the existing ATIVO record that replaces the target) | writes `.kb-next/` proposals only, and only with `--write-proposals`; without it appends one `semantic-hygiene-check` telemetry line, which the session hint reads to flag curation older than 7 days; reports `review_budget` (`semantic_curation.weekly_hygiene_proposals`, default 5 open proposals per project per 7 days), skips targets that already have an open proposal and lists the overflow under `deferred` |
 
 Plugin hooks, as registered in `hooks/hooks.json`. Claude Code runs all three.
 Codex runs plugin hooks only after the user trusts that file and has no
@@ -67,7 +67,7 @@ subagent hook; its main agent follows the subagent protocol in `AGENTS.md`.
 
 | Hook | Runs | Behavior |
 |---|---|---|
-| `SessionStart` | runtime `session-hint` | prints the vNext startup instruction in vNext workspaces |
+| `SessionStart` | runtime `session-hint` | prints the session start in vNext workspaces, so the agent begins without a call |
 | `SubagentStart` | runtime `subagent-hint` | gives each Claude Code subagent the no-write rule and the `KB candidates` report section |
 | `PreToolUse` on shell calls | `scripts/write_gate.py` | denies `.kb/kb.py create`, `file`, `supersede`, `update`, `resolve`, `bulk-import`, `init --seed`, `raw-query --allow-write`, `lifecycle scheduled-maintenance` and `--apply-demotions` or `--apply-cold-demotions` in a vNext project and points to `approved-filing`, `filing-proposal`, `semantic-hygiene` and `proposal-apply`; `"write_gate": {"enabled": false}` in `.kb-next/kb-next.config.json` turns it off |
 

@@ -13,10 +13,11 @@ PLUGIN_ROOT = ROOT / "plugins" / "session-gate"
 EVAL_ROOT = ROOT / ".tmp" / "session-gate-eval" / "session-gate-workspace"
 STARTUP_EVALS = EVAL_ROOT / "evals" / "evals.json"
 STARTUP_BASELINE = EVAL_ROOT / "iteration-1" / "benchmark.json"
+# gate-session-end takes no session id and runs no git audit since the lean close.
 SESSION_END_EVALS = [
-    (10, "mock-full", "S14"),
-    (11, "mock-kb-only", "S14"),
-    (12, "mock-empty", "S14"),
+    (10, "mock-full"),
+    (11, "mock-kb-only"),
+    (12, "mock-empty"),
 ]
 
 
@@ -54,14 +55,6 @@ def run(args: list[str], cwd: Path) -> tuple[bool, str]:
     return proc.returncode == 0, (proc.stdout.strip() or proc.stderr.strip())
 
 
-def git_summary(cwd: Path) -> str:
-    ok, out = run(["git", "rev-parse", "--is-inside-work-tree"], cwd)
-    if not ok or "true" not in out.lower():
-        return "Git audit unavailable: workspace is not a git repository."
-    _, status = run(["git", "status", "--short"], cwd)
-    return status or "Working tree clean."
-
-
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip()
 
@@ -97,7 +90,6 @@ def startup_executor(workspace: Path, with_skill: bool):
         "hot": False,
         "pending": [],
         "action": "",
-        "git": "",
     }
     lines = ["# Session Gate Output", ""]
     if not data["kb"]:
@@ -139,7 +131,7 @@ def startup_executor(workspace: Path, with_skill: bool):
     return "\n".join(lines), data
 
 
-def closeout_executor(workspace: Path, session_id: str, with_skill: bool):
+def closeout_executor(workspace: Path, with_skill: bool):
     detect = DETECTOR.detect(workspace)
     data = {
         "kb": detect["kb"]["found"],
@@ -149,14 +141,12 @@ def closeout_executor(workspace: Path, session_id: str, with_skill: bool):
         "hot": False,
         "pending": [],
         "action": "",
-        "git": git_summary(workspace),
     }
     lines = ["# Session Gate Closeout", ""]
     if not data["kb"]:
         lines += ["## Workspace detected", "No KB-lifecycle artifacts were found in this workspace.", "", "## Safe to close", "Yes. No lifecycle closeout surfaces were available, and nothing was fabricated."]
         return "\n".join(lines), data
-    lines += ["## Workspace detected", "KB-lifecycle detected."]
-    lines += ["", "## Pre-close audit", "- KB audit: only verified workspace state was used.", f"- Git audit: {data['git']}", ""]
+    lines += ["## Workspace detected", "KB-lifecycle detected.", ""]
     ok, out = run([sys.executable, ".kb/kb.py", "lifecycle", "session-end", "--json"], workspace)
     info = jload(out) if ok else {}
     _, pend = run([sys.executable, ".kb/kb.py", "pending"], workspace)
@@ -195,7 +185,7 @@ def grade(mode: str, eval_id: int, with_skill: bool, output: str, data: dict):
         return [
             ("Detected KB", data["kb"]),
             ("Ran kb.py lifecycle session-end", data["kb_end"]),
-            ("Handled git audit without inventing repository state", "not a git repository" in data["git"].lower()),
+            ("Did not ask for a session id or audit git", "Pre-close audit" not in output and "Git audit" not in output),
         ]
     if eval_id == 11:
         return [
@@ -215,7 +205,7 @@ def run_mode(mode: str):
         evals = json.loads(STARTUP_EVALS.read_text(encoding="utf-8"))["evals"]
         out_dir = EVAL_ROOT / "iteration-2"
     else:
-        evals = [{"id": eid, "workspace": ws, "session_id": sid} for eid, ws, sid in SESSION_END_EVALS]
+        evals = [{"id": eid, "workspace": ws} for eid, ws in SESSION_END_EVALS]
         out_dir = EVAL_ROOT / "session-end-iteration-1"
     clean_dir(out_dir)
     runs = []
@@ -230,7 +220,7 @@ def run_mode(mode: str):
                 output, data = startup_executor(workspace, with_skill)
                 output_name = "briefing.md"
             else:
-                output, data = closeout_executor(workspace, spec["session_id"], with_skill)
+                output, data = closeout_executor(workspace, with_skill)
                 output_name = "closeout.md"
             elapsed = round(time.perf_counter() - start, 4)
             checks = grade(mode, spec["id"], with_skill, output, data)

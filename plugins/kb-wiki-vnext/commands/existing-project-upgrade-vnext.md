@@ -28,8 +28,15 @@ classic `.kb/` as canonical memory.
    `python .kb-next/runtime/kb_next.py upgrade-classic --json`
    It copies only `kb.py` and `runtime/*.py` from the installed kb-lifecycle
    scaffold (never `kb.db`, `memory/`, `sources/`, `wiki/` or
-   `kb.config.json`). If no classic template resolves, report it and continue
-   with the vNext upgrade only.
+   `kb.config.json`), adds a missing `.kb/.gitignore`, and keeps the
+   `sources/** -text` rule at the end of `.kb/.gitattributes`
+   (`gitattributes_updated`). Then store the snapshot bytes: only when
+   `git status -- .kb/sources` was empty before, run
+   `git add --renormalize -- .kb/sources`, and commit what it stages with that
+   file only if `git diff --cached --ignore-cr-at-eol -- .kb/sources` prints
+   nothing; otherwise unstage with `git restore --staged -- .kb/sources` and
+   report the files to the user. If no classic template resolves, report it
+   and continue with the vNext upgrade only.
 7. Re-apply the recorded activation mode so the classic config is aligned
    (read `sponsor_decision` from `.kb-next/decisions/activation-decision.json`):
    `python .kb-next/runtime/kb_next.py activation-wizard --mode short --choice kb-wiki --json`

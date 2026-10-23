@@ -2,7 +2,7 @@
 
 Cross-tool distribution package for KB Factory memory lifecycle and derived wiki workflows.
 
-Release-candidate version: `0.2.7`.
+Release-candidate version: `0.2.8`.
 
 ## Purpose
 
@@ -82,10 +82,10 @@ This builds:
 
 By default the artifacts are saved under:
 
-- `dist/agent-packages/kb-lifecycle-plugin-0.2.7.zip`
-- `dist/agent-packages/kb-lifecycle-claude-plugin-0.2.7.zip`
-- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.2.7.zip`
-- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.7.zip`
+- `dist/agent-packages/kb-lifecycle-plugin-0.2.8.zip`
+- `dist/agent-packages/kb-lifecycle-claude-plugin-0.2.8.zip`
+- `dist/agent-packages/kb-lifecycle-cowork-plugin-0.2.8.zip`
+- `dist/agent-packages/kb-wiki-maintainer-skill-0.2.8.zip`
 
 The version in `.claude-plugin/plugin.json` is the package authority. Rebuilds
 at the same version refresh source-controlled artifacts but do not force an

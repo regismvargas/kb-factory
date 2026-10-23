@@ -13,9 +13,9 @@ Workspace admins, technical leads, and maintainers who install the package for o
 - A clean release artifact built from this repository.
 - Access to the target client: Codex, Claude Code, Claude Cowork, or a Python-capable workspace.
 - The target workspace owner understands that `.kb/` remains canonical and `.kb-next/` is the vNext layer.
-- Release identity records product `0.2.0-rc.7`, KB Lifecycle `0.2.7`, plugin
-  `0.2.3`, bundled runtime `0.2.3`, Session Gate `0.2.9`, and marketplace
-  `0.3.14` separately.
+- Release identity records product `0.2.0-rc.8`, KB Lifecycle `0.2.8`, plugin
+  `0.2.4`, bundled runtime `0.2.4`, Session Gate `0.2.10`, and marketplace
+  `0.3.15` separately.
 
 ## Steps
 
@@ -23,13 +23,13 @@ Build all affected KB plugin distributables and the stand-alone bundle:
 
 ```powershell
 python tools\build_agent_packages.py --scope kb
-python tools\build_vnext_standalone.py --version 0.2.0-rc.7
+python tools\build_vnext_standalone.py --version 0.2.0-rc.8
 ```
 
 Validate the product before sharing:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.7-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.8-standalone.zip
 ```
 
 Distribute only the artifact that matches the recipient:
@@ -38,10 +38,14 @@ Distribute only the artifact that matches the recipient:
 - Claude Code users receive the Claude Code plugin ZIP.
 - Claude Cowork users receive the Cowork ZIP and explicit
   `vnext-session-start` manual startup instructions.
-- Session Gate users receive the matching `session-gate-*-0.2.9.zip` artifact
+- Session Gate users receive the matching `session-gate-*-0.2.10.zip` artifact
   and use `/gate-session-start` / `/gate-session-end` in clients that expose
   slash commands.
 - Admins bootstrapping a fresh workspace receive the stand-alone bundle.
+- Memory curation no longer runs at session end. Schedule one weekly agent
+  session per project (a Claude Code, Cowork or Codex scheduled task) that
+  follows the Curation section of the kb-wiki-vnext skill; without it no
+  curation runs.
 
 The Codex CLI manages plugins from the command line (checked on codex-cli
 0.156.1). Add the public marketplace once, then install the plugin:

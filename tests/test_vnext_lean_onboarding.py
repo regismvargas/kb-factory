@@ -115,6 +115,9 @@ def test_new_kb_wiki_starts_dormant_with_scope_only(new_project: Path) -> None:
     assert start["wiki"]["hint"] is None
     assert "wiki_drafts" not in start
     assert "dormant" in vnext_json(new_project, "wiki-draft-status")["note"]
+    # The session hint states the dormant wiki and leaves the draft check out of the close.
+    assert "- Wiki: dormant until `10` active records cite a registered source (now `0`)" in hint
+    assert "wiki-draft-status" not in hint
     assert not list((new_project / ".kb" / "wiki").rglob("*.md"))
 
 
@@ -145,6 +148,8 @@ def test_dormant_wiki_wakes_at_the_sourced_record_threshold(new_project: Path) -
     assert "vnext-wiki-drafts" in vnext(new_project, "session-hint").stdout
     # The third filing crossed the threshold; its lifecycle sync published the first page.
     assert (new_project / ".kb" / "wiki" / "live" / "research" / "overview.md").is_file()
+    woke = vnext(new_project, "session-hint").stdout
+    assert "- Wiki: active;" in woke and "wiki-draft-status --json" in woke
 
 
 def test_wiki_now_and_enabled_wikis_skip_dormancy(new_project: Path) -> None:
