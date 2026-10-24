@@ -158,6 +158,24 @@ def test_detection_is_read_only_and_reports_the_review_budget(project: Path) -> 
     assert not (project / ".kb-next" / "proposals" / "hygiene").exists()
 
 
+def test_stale_hot_records_count_toward_the_excess_before_overflow_picks(project: Path) -> None:
+    config_path = project / ".kb" / "kb.config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["hot_session_limit"] = 5
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    with contextlib.closing(sqlite3.connect(project / ".kb" / "kb.db")) as conn:
+        conn.execute("UPDATE records SET review_after = '9999-12-31' WHERE tier = 'HOT'")
+        conn.execute("UPDATE records SET review_after = '2020-01-01' WHERE id IN ('HOT-1', 'HOT-2', 'HOT-3')")
+        conn.commit()
+
+    groups = kb_next_json(project, "semantic-hygiene")["groups"]
+
+    # 8 HOT over a limit of 5: the 3 stale records already cover the excess.
+    assert sorted(item["record_id"] for item in groups["demote_candidate"]) == ["HOT-1", "HOT-2", "HOT-3"]
+    assert {item["reason"] for item in groups["demote_candidate"]} == {"stale_hot_review_after_elapsed"}
+    assert len(groups["keep_hot"]) == 5
+
+
 def test_writes_stop_at_the_weekly_limit_and_never_duplicate_an_open_proposal(project: Path) -> None:
     before = kb_sha(project)
     first = write_proposals(project, judgment(HOT_IDS[1:]))

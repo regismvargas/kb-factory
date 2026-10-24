@@ -60,6 +60,31 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrading To 0.2.5 (Runtime 0.2.5)
+
+This release fixes integrity defects found in the review of 2026-10-23. It
+ships with KB Lifecycle 0.2.9 (classic engine and skill); Session Gate stays
+0.2.10. It changes no data and no schema.
+
+- A repeated `proposal-apply` of an applied proposal returns
+  `already_applied` and writes nothing, also when it runs from another
+  checkout of the same KB or at the same time as the first: classic
+  `create --if-source-absent` checks and inserts in one transaction, and
+  `supersede` takes only an ATIVO record. A run that stopped mid-apply is safe
+  to retry.
+- Classic `supersede` refuses a record that is not ATIVO. Run
+  `upgrade-classic` (or the rollout) so the project's `.kb/runtime/` gets the
+  0.2.9 engine.
+- `approved-filing`, `proposal-apply` and wiki materialization refuse a
+  confidence that is not a finite number in [0, 1].
+- A supersede cannot change the domain; file a new record in the new domain
+  and retire the old one instead.
+- HOT curation proposes fewer demotions when stale records already cover the
+  excess.
+
+Rollback: reinstall the 0.2.4 plugins and run `bootstrap` and
+`upgrade-classic` from them; no data migration is involved.
+
 ## Upgrading To 0.2.4 (Runtime 0.2.4)
 
 This release shortens every session's start and close and keeps source

@@ -9,13 +9,13 @@ The coordinated release has independent version lines:
 
 | Surface | Version |
 |---|---:|
-| GitHub/Python release | `0.2.4` |
-| Marketplace metadata | `0.3.15` |
-| kb-lifecycle | `0.2.8` |
-| kb-wiki-vnext plugin | `0.2.4` |
+| GitHub/Python release | `0.2.5` |
+| Marketplace metadata | `0.3.16` |
+| kb-lifecycle | `0.2.9` |
+| kb-wiki-vnext plugin | `0.2.5` |
 | session-gate | `0.2.10` |
-| vNext runtime | `0.2.4` |
-| vNext stand-alone product | `0.2.0-rc.8` |
+| vNext runtime | `0.2.5` |
+| vNext stand-alone product | `0.2.0-rc.9` |
 
 ## 1. Validate the source tree
 
@@ -60,9 +60,9 @@ python tools/organize_agent_packages.py --check
 ## 3. Build and validate the stand-alone product
 
 ```bash
-python tools/build_vnext_standalone.py --version 0.2.0-rc.8
+python tools/build_vnext_standalone.py --version 0.2.0-rc.9
 python tools/validate_vnext_product.py --json \
-  --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.8-standalone.zip
+  --bundle dist/vnext/kb-wiki-vnext-0.2.0-rc.9-standalone.zip
 ```
 
 The bundle contains the public product docs, plugin, runtime, classic template,
@@ -74,18 +74,18 @@ writes a SHA-256 sidecar.
 
 ```bash
 python -m build
-python -m twine check dist/kb_factory-0.2.4*
+python -m twine check dist/kb_factory-0.2.5*
 ```
 
 Inspect the wheel and source distribution before publication. They must include
 `kb_factory/_scaffold/kb.py`, the classic runtime mirror, and
 `kb_factory/_scaffold_vnext/runtime/kb_next.py`.
 
-For `v0.2.4`, attach the wheel and source distribution to the GitHub release.
+For `v0.2.5`, attach the wheel and source distribution to the GitHub release.
 The supported install command is:
 
 ```bash
-pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.4/kb_factory-0.2.4-py3-none-any.whl
+pip install https://github.com/regismvargas/kb-factory/releases/download/v0.2.5/kb_factory-0.2.5-py3-none-any.whl
 ```
 
 PyPI is optional. Upload only when a project token or trusted-publishing flow is
@@ -103,16 +103,16 @@ Prepare and validate the release commit in a detached worktree, then push it
 as the release branch:
 
 ```bash
-git push origin HEAD:refs/heads/release/v0.2.4
+git push origin HEAD:refs/heads/release/v0.2.5
 ```
 
-1. Open a pull request from `release/v0.2.4` to `main` and wait for the 10
+1. Open a pull request from `release/v0.2.5` to `main` and wait for the 10
    checks to pass on it.
 2. Merge with **rebase and merge**, so `main` gets the validated tree without a
    merge commit. After `git fetch origin`, confirm that
    `git rev-parse 'origin/main^{tree}'` equals `git rev-parse 'HEAD^{tree}'` in
    the release worktree.
-3. Create and push tag `v0.2.4` on the commit that the rebase merge put on
+3. Create and push tag `v0.2.5` on the commit that the rebase merge put on
    `main`.
 4. Create the GitHub release from `CHANGELOG.md`.
 5. Attach the nine plugin ZIPs, platform manifest, stand-alone ZIP and checksum,

@@ -15,17 +15,17 @@ Admins, developers, reviewers, and maintainers evaluating the RC package.
 
 ## Operating Model
 
-`.kb/` is canonical memory. `.kb-next/` is evidence, proposals, drafts, materialization, and operational memory for vNext workflows. The vNext runtime may read `.kb/` through supported surfaces, but canonical record mutation must go through `proposal-apply`, which delegates to `.kb/kb.py`.
+`.kb/` is canonical memory. `.kb-next/` is evidence, proposals, drafts, materialization, and operational memory for vNext workflows. The vNext runtime may read `.kb/` through supported surfaces, but canonical record mutation must go through `proposal-apply` (an approved proposal) or `approved-filing` (a record the user approved in chat), both of which delegate to `.kb/kb.py`.
 
 Platform map:
 
 | Platform | Artifact | Internal structure | Primary capabilities |
 | --- | --- | --- | --- |
-| Codex | `kb-wiki-vnext-plugin-0.2.4.zip` | `.codex-plugin`, skills, commands, and runtime `0.2.4` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
-| Claude Code | `kb-wiki-vnext-claude-plugin-0.2.4.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.2.4` | guided memory workflows and explicit commands |
-| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.2.4.zip` | Cowork plugin package, runtime `0.2.4`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
+| Codex | `kb-wiki-vnext-plugin-0.2.5.zip` | `.codex-plugin`, skills, commands, and runtime `0.2.5` | `vnext-session-start`, setup commands, lookup, compliance preflight, proposal workflows |
+| Claude Code | `kb-wiki-vnext-claude-plugin-0.2.5.zip` | Claude plugin manifest, skills, commands/hooks, and runtime `0.2.5` | guided memory workflows and explicit commands |
+| Claude Cowork | `kb-wiki-vnext-cowork-plugin-0.2.5.zip` | Cowork plugin package, runtime `0.2.5`, and manual session boundary guidance | manual `vnext-session-start`, setup commands, no dependency on automatic hooks |
 | Session Gate | `session-gate-*-0.2.10.zip` | plugin detector plus `gate-session-*` commands | route `.kb-next/` first, then classic `.kb/` when present |
-| Stand-alone | `kb-wiki-vnext-0.2.0-rc.8-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
+| Stand-alone | `kb-wiki-vnext-0.2.0-rc.9-standalone.zip` | runtime, classic template, plugin source, docs, tools | bootstrap and controlled admin distribution |
 
 Plugin packaging installs client capabilities. Skills describe agent behavior. Commands expose callable workflows. Hooks are platform-specific convenience surfaces and are not assumed for Cowork.
 
@@ -37,12 +37,12 @@ The version lines are independent component identities, not alternatives:
 
 | Component | Version |
 |---|---|
-| Product release candidate | `0.2.0-rc.8` |
-| KB Lifecycle | `0.2.8` |
-| vNext plugin container | `0.2.4` |
-| Bundled `kb_next.py` engine | `0.2.4` |
+| Product release candidate | `0.2.0-rc.9` |
+| KB Lifecycle | `0.2.9` |
+| vNext plugin container | `0.2.5` |
+| Bundled `kb_next.py` engine | `0.2.5` |
 | Session Gate | `0.2.10` |
-| Marketplace | `0.3.15` |
+| Marketplace | `0.3.16` |
 
 The bundled engine bootstraps a stable workspace copy at
 `.kb-next/runtime/kb_next.py`. Normal sessions use the workspace copy. Upgrade

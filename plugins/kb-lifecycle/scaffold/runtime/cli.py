@@ -46,6 +46,12 @@ def build_parser(command_handlers: dict[str, object]) -> argparse.ArgumentParser
     create.add_argument("--observed-at", dest="observed_at")
     create.add_argument("--source-id", dest="source_id")
     create.add_argument("--no-auto-lifecycle", dest="no_auto_lifecycle", action="store_true")
+    create.add_argument(
+        "--if-source-absent",
+        dest="if_source_absent",
+        action="store_true",
+        help="return the record that already has this --source instead of adding another",
+    )
     create.add_argument("--json", action="store_true")
     create.set_defaults(func=command_handlers["create"])
 

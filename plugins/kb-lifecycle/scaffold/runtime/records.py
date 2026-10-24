@@ -177,7 +177,7 @@ def base_record_from_args(args: argparse.Namespace) -> dict:
     }
 
 
-def insert_record(conn: sqlite3.Connection, data: dict, action: str = "create") -> dict:
+def insert_record(conn: sqlite3.Connection, data: dict, action: str = "create", *, commit: bool = True) -> dict:
     validate_record(data)
     sid = data.get("source_id")
     if sid is not None and not source_exists(conn, sid):
@@ -221,7 +221,8 @@ def insert_record(conn: sqlite3.Connection, data: dict, action: str = "create") 
     log_action(conn, data["id"], action, {"title": data["title"], "status": data["status"]})
     if sid is not None:
         update_source_record_ids(conn, sid, data["id"])
-    conn.commit()
+    if commit:
+        conn.commit()
     return data
 
 
@@ -326,6 +327,19 @@ def cmd_init(args: argparse.Namespace, *, emit, bulk_import_fn=None, lifecycle_h
 def cmd_create(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> None:
     conn = connect()
     data = base_record_from_args(args)
+    if getattr(args, "if_source_absent", False):
+        # Check and insert in one write transaction: a retry, or a concurrent
+        # run from any checkout of this KB, gets the first record back.
+        if conn.in_transaction:
+            conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute(
+            "SELECT * FROM records WHERE source = ? ORDER BY created_at LIMIT 1", (data["source"],)
+        ).fetchone()
+        if existing is not None:
+            conn.rollback()
+            emit({**row_to_dict(existing), "existing": True}, args.json)
+            return
     result = insert_record(conn, data)
     _run_lifecycle_hook(lifecycle_hook, "record-filed", args)
     emit(result, args.json)
@@ -510,12 +524,31 @@ SUPERSEDE_VERSION_FLAGS = (
 )
 
 
+def _mark_superseded(conn: sqlite3.Connection, record_id: str, replacement_id: str, changed_at: str) -> None:
+    """Mark the old record SUPERSEDIDO only if it is still ATIVO, in the caller's transaction.
+
+    The status read happens before the write lock, so a concurrent supersede of
+    the same record can pass that check; the conditional update rolls it back.
+    """
+    cursor = conn.execute(
+        "UPDATE records SET status = 'SUPERSEDIDO', replacement_id = ?, updated_at = ?, status_changed_at = ? "
+        "WHERE id = ? AND status = 'ATIVO'",
+        (replacement_id, changed_at, changed_at, record_id),
+    )
+    if cursor.rowcount != 1:
+        conn.rollback()
+        raise SystemExit(f"Only an ATIVO record can be superseded: {record_id} changed during this supersede.")
+
+
 def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> None:
     conn = connect()
     old_row = conn.execute("SELECT * FROM records WHERE id = ?", (args.record_id,)).fetchone()
     if old_row is None:
         raise SystemExit(f"Record not found: {args.record_id}")
     old = row_to_dict(old_row)
+    # A second supersede of the same record would leave two ATIVO successors.
+    if old["status"] != "ATIVO":
+        raise SystemExit(f"Only an ATIVO record can be superseded: {old['id']} is {old['status']}.")
     replacement_id = getattr(args, "replacement_id", None)
     if replacement_id:
         # Retire into an existing record: several records may point at one
@@ -526,8 +559,6 @@ def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> Non
         given = [flag for flag, dest in SUPERSEDE_VERSION_FLAGS if getattr(args, dest, None) is not None]
         if given:
             raise SystemExit(f"--replacement-id names an existing record; drop {', '.join(given)}.")
-        if old["status"] != "ATIVO":
-            raise SystemExit(f"Only an ATIVO record can be superseded: {old['id']} is {old['status']}.")
         if replacement_id == old["id"]:
             raise SystemExit("A record cannot replace itself.")
         replacement = conn.execute("SELECT status FROM records WHERE id = ?", (replacement_id,)).fetchone()
@@ -536,10 +567,7 @@ def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> Non
         if replacement["status"] != "ATIVO":
             raise SystemExit(f"The replacement must be ATIVO: {replacement_id} is {replacement['status']}.")
         changed_at = now_iso()
-        conn.execute(
-            "UPDATE records SET status = 'SUPERSEDIDO', replacement_id = ?, updated_at = ?, status_changed_at = ? WHERE id = ?",
-            (replacement_id, changed_at, changed_at, old["id"]),
-        )
+        _mark_superseded(conn, old["id"], replacement_id, changed_at)
         upsert_fts(conn, old["id"])
         log_action(conn, old["id"], "superseded", {"replacement_id": replacement_id, "existing_replacement": True})
         conn.commit()
@@ -573,11 +601,10 @@ def cmd_supersede(args: argparse.Namespace, *, emit, lifecycle_hook=None) -> Non
         "resolved_at": None,
         "source_id": getattr(args, "source_id", None) or old.get("source_id"),
     }
-    insert_record(conn, new_data, action="supersede_create")
-    conn.execute(
-        "UPDATE records SET status = 'SUPERSEDIDO', replacement_id = ?, updated_at = ?, status_changed_at = ? WHERE id = ?",
-        (new_data["id"], now_iso(), now_iso(), old["id"]),
-    )
+    # One transaction: the successor, its FTS row, audit row and source link
+    # roll back with the status update when another supersede won the race.
+    insert_record(conn, new_data, action="supersede_create", commit=False)
+    _mark_superseded(conn, old["id"], new_data["id"], now_iso())
     upsert_fts(conn, old["id"])
     log_action(conn, old["id"], "superseded", {"replacement_id": new_data["id"]})
     conn.commit()

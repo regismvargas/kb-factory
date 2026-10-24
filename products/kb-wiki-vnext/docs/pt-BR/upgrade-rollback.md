@@ -63,6 +63,31 @@ python .\.kb-next\runtime\kb_next.py --project-root . session-start --json
 python .\.kb-next\runtime\kb_next.py --project-root . semantic-hygiene --scope hot-overflow --json
 ```
 
+## Upgrade Para 0.2.5 (Runtime 0.2.5)
+
+Esta versão corrige defeitos de integridade achados na revisão de
+2026-10-23. Sai com KB Lifecycle 0.2.9 (motor clássico e skill); o Session
+Gate segue em 0.2.10. Não muda dados nem schema.
+
+- Repetir o `proposal-apply` de uma proposta já aplicada retorna
+  `already_applied` e não grava nada, também quando roda de outro checkout da
+  mesma KB ou ao mesmo tempo que o primeiro: o `create --if-source-absent`
+  clássico confere e insere numa só transação, e o `supersede` só aceita um
+  record ATIVO. Uma execução que parou no meio pode ser repetida com
+  segurança.
+- O `supersede` clássico recusa um record que não esteja ATIVO. Rode o
+  `upgrade-classic` (ou o rollout) para o `.kb/runtime/` do projeto receber o
+  motor 0.2.9.
+- `approved-filing`, `proposal-apply` e a materialização da wiki recusam
+  confiança que não seja número finito em [0, 1].
+- Um supersede não muda o domínio; registre um record novo no domínio novo e
+  aposente o antigo.
+- A curadoria de HOT propõe menos rebaixamentos quando os records vencidos já
+  cobrem o excesso.
+
+Rollback: reinstale os plugins 0.2.4 e rode `bootstrap` e `upgrade-classic`
+a partir deles; não há migração de dados.
+
 ## Upgrade Para 0.2.4 (Runtime 0.2.4)
 
 Esta versão encurta o início e o fim de toda sessão e preserva os bytes das

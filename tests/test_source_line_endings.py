@@ -50,7 +50,7 @@ def test_a_crlf_source_round_trips_under_repo_wide_eol_lf(tmp_path: Path) -> Non
     source.write_bytes(snapshot)
     (repo / ".kb" / "memory" / "NOW.md").write_bytes(b"# NOW\r\n")
     _git(repo, "add", "-A")
-    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "snapshot")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t", "commit", "-qm", "snapshot")
 
     assert _git(repo, "show", "HEAD:.kb/sources/SRC-1/notes.md") == snapshot
     assert _git(repo, "show", "HEAD:.kb/memory/NOW.md") == b"# NOW\n"  # other KB text still normalizes

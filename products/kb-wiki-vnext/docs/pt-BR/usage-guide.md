@@ -10,17 +10,17 @@ Usuários, admins e maintainers que precisam ir além da instalação: quando us
 
 ## Prerequisites / Pré-requisitos
 
-- KB/Wiki vNext `0.2.0-rc.8` instalado por ZIP de plugin ou bundle stand-alone.
-- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.8`,
-  KB Lifecycle `0.2.8`, container de plugin `0.2.4`, runtime incluído `0.2.4`,
-  Session Gate `0.2.10` e marketplace `0.3.15`.
+- KB/Wiki vNext `0.2.0-rc.9` instalado por ZIP de plugin ou bundle stand-alone.
+- Identidade de componentes registrada pelo maintainer: produto `0.2.0-rc.9`,
+  KB Lifecycle `0.2.9`, container de plugin `0.2.5`, runtime incluído `0.2.5`,
+  Session Gate `0.2.10` e marketplace `0.3.16`.
 - Workspace com `.kb/` disponível como memória canônica.
 - Python disponível como `python`.
 - Acordo de que `.kb-next/` é memória operacional, evidência de proposta e materialização de drafts, não fonte canônica.
 
 ## Mental Model / Modelo Mental
 
-`.kb/` permanece canônico. Ele guarda a memória durável do projeto e é a única camada que deve ser tratada como fonte de verdade. KB/Wiki vNext lê `.kb/` por caminhos suportados do runtime, e apenas `proposal-apply` pode levar uma proposta aprovada de volta para `.kb/` por meio de `.kb/kb.py`.
+`.kb/` permanece canônico. Ele guarda a memória durável do projeto e é a única camada que deve ser tratada como fonte de verdade. KB/Wiki vNext lê `.kb/` por caminhos suportados do runtime, e apenas `proposal-apply` (proposta aprovada) e `approved-filing` (registro que o usuário aprovou no chat) podem gravar em `.kb/` por meio de `.kb/kb.py`.
 
 `.kb-next/` é a camada de trabalho. Ela guarda decisões de ativação, pistas de sessão, propostas semânticas, manifests de inferência, drafts de wiki, superfícies materializadas de revisão, exports de adapters e evidência operacional. Ela existe para ajudar agentes a trabalhar com contexto fino e revisável, sem carregar todo o histórico por padrão.
 

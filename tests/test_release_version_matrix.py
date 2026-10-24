@@ -7,8 +7,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_VERSIONS = {
-    "kb-lifecycle": "0.2.8",
-    "kb-wiki-vnext": "0.2.4",
+    "kb-lifecycle": "0.2.9",
+    "kb-wiki-vnext": "0.2.5",
     "session-gate": "0.2.10",
 }
 RUNTIME_PATHS = (
@@ -25,15 +25,15 @@ def _json(relative: str) -> dict[str, object]:
 def test_public_release_version_matrix_is_coherent() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     project_version = re.search(r'^version = "([^"]+)"$', pyproject, re.MULTILINE)
-    assert project_version is not None and project_version.group(1) == "0.2.4"
-    assert '__version__ = "0.2.4"' in (ROOT / "kb_factory/__init__.py").read_text(
+    assert project_version is not None and project_version.group(1) == "0.2.5"
+    assert '__version__ = "0.2.5"' in (ROOT / "kb_factory/__init__.py").read_text(
         encoding="utf-8"
     )
 
     marketplace = _json(".claude-plugin/marketplace.json")
     assert set(marketplace) == {"name", "metadata", "owner", "plugins"}
     assert marketplace["name"] == "kb-factory-tools"
-    assert marketplace["metadata"]["version"] == "0.3.15"
+    assert marketplace["metadata"]["version"] == "0.3.16"
     catalog = {item["name"]: item["version"] for item in marketplace["plugins"]}
     assert catalog == PLUGIN_VERSIONS
 
@@ -44,15 +44,15 @@ def test_public_release_version_matrix_is_coherent() -> None:
             assert manifest["version"] == expected
 
     product = _json("products/kb-wiki-vnext/product.json")
-    assert product["version"] == "0.2.0-rc.8"
+    assert product["version"] == "0.2.0-rc.9"
     assert product["component_versions"] == {
-        "product": "0.2.0-rc.8",
-        "python": "0.2.4",
-        "marketplace": "0.3.15",
-        "kb_lifecycle": "0.2.8",
-        "kb_wiki_vnext": "0.2.4",
+        "product": "0.2.0-rc.9",
+        "python": "0.2.5",
+        "marketplace": "0.3.16",
+        "kb_lifecycle": "0.2.9",
+        "kb_wiki_vnext": "0.2.5",
         "session_gate": "0.2.10",
-        "runtime": "0.2.4",
+        "runtime": "0.2.5",
     }
 
 
@@ -60,15 +60,15 @@ def test_runtime_copies_and_release_provenance_are_bound() -> None:
     payloads = [path.read_bytes() for path in RUNTIME_PATHS]
     assert payloads[1:] == payloads[:-1]
     match = re.search(rb'^RUNTIME_VERSION = "([^"]+)"$', payloads[0], re.MULTILINE)
-    assert match is not None and match.group(1) == b"0.2.4"
+    assert match is not None and match.group(1) == b"0.2.5"
 
     provenance = _json(".kb-factory-public-export.json")
-    assert provenance["source_sha"] == "bdcc39b5f968d71d71ba53c0b5c6338ee879319e"
-    assert provenance["baseline_public_sha"] == "a8c151f939dd626b02d2ff207b5d9fe40639f0b4"
+    assert provenance["source_sha"] == "15df2d45e2b46120bfa5440580577f5f141d7638"
+    assert provenance["baseline_public_sha"] == "e64b8c9f4c44f15cec3b744d48618faa53e26fb3"
     assert provenance["policy_version"] == "2026-09-23.1"
     assert provenance["final_public_file_count"] == 275
     assert provenance["final_integrity_binding"] == {
-        "git_ref": "refs/tags/v0.2.4",
+        "git_ref": "refs/tags/v0.2.5",
         "scope": "all tracked files in the tagged public commit",
         "release_assets": "SHA256SUMS.txt",
     }
@@ -87,4 +87,4 @@ def test_public_product_does_not_require_private_surfaces() -> None:
         assert forbidden not in serialized
 
     builder = (ROOT / "tools/build_vnext_standalone.py").read_text(encoding="utf-8")
-    assert 'DEFAULT_VERSION = "0.2.0-rc.8"' in builder
+    assert 'DEFAULT_VERSION = "0.2.0-rc.9"' in builder
