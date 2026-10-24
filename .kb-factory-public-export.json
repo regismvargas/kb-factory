@@ -1,16 +1,19 @@
 {
   "schema_version": 2,
   "record_type": "controlled-source-to-public-release",
-  "source_sha": "bdcc39b5f968d71d71ba53c0b5c6338ee879319e",
-  "baseline_public_sha": "a8c151f939dd626b02d2ff207b5d9fe40639f0b4",
+  "source_sha": "15df2d45e2b46120bfa5440580577f5f141d7638",
+  "baseline_public_sha": "e64b8c9f4c44f15cec3b744d48618faa53e26fb3",
+  "pre_export_public_edits": {
+    "tests/test_source_line_endings.py": "commit identity without an email literal; the export scan rejected the published baseline"
+  },
   "policy_version": "2026-09-23.1",
-  "export_stage_file_count": 270,
+  "export_stage_file_count": 274,
   "final_public_file_count": 275,
   "omitted_source_files": [
     "core/templates/kb/runtime/conformance.json"
   ],
   "final_integrity_binding": {
-    "git_ref": "refs/tags/v0.2.4",
+    "git_ref": "refs/tags/v0.2.5",
     "scope": "all tracked files in the tagged public commit",
     "release_assets": "SHA256SUMS.txt"
   },
@@ -38,17 +41,12 @@
     "products/kb-wiki-vnext/product.json"
   ],
   "reexport_comparison": {
-    "method": "re-export of source_sha into a clean checkout of baseline_public_sha, compared file by file with the release tree",
+    "method": "re-export of source_sha into a clean checkout of baseline_public_sha plus the pre-export edit, compared file by file with the release tree",
     "missing": 0,
     "extra_exported_paths": 0,
-    "extra_public_only_paths": [
-      "kb_factory/_scaffold/.gitattributes",
-      "tests/test_session_gate_evals.py",
-      "tests/test_source_line_endings.py",
-      "tests/test_vnext_session_ceremony.py"
-    ],
+    "extra_public_only_paths": [],
     "hardened_files_differing": 14,
-    "public_only_files_edited": 26
+    "public_only_files_edited": 23
   },
   "verification_contract": [
     "claude plugin validate .",

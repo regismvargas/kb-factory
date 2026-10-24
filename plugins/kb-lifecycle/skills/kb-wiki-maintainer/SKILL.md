@@ -46,9 +46,12 @@ shares one KB. `python .kb/kb.py doctor --json` shows the resolution under
 Use the bootstrap mode that matches the session purpose. When in doubt, start thin.
 
 In a KB/Wiki vNext workspace (`.kb-next/kb-next.config.json` exists), defer to
-vNext: use the plugin command `vnext-session-start` (runtime equivalent:
+vNext. Where the kb-wiki-vnext SessionStart hook text is present (it says it
+replaces the vNext session start), the session has already started: run nothing more
+to begin and follow that text. Without it, use the plugin command
+`vnext-session-start` (runtime equivalent:
 `python .kb-next/runtime/kb_next.py session-start --json`) and read only
-`.kb-next/memory/NOW.md` by default. Classic NOW, HOT, and INDEX then become
+`.kb-next/memory/NOW.md`. Classic NOW, HOT, and INDEX then become
 on-demand reads; the modes below apply to workspaces without vNext.
 
 `python .kb/kb.py lifecycle session-start --json` reports the resolved memory
@@ -111,7 +114,10 @@ These surfaces are always available during the conversation but are not preloade
 
 In a project with `.kb-next/kb-next.config.json`, records change only through
 a proposal the user approves, so the record writes in the workflows below do
-not run there. A new record or a content change starts with
+not run there. A record the user already approved in chat takes one
+`python .kb-next/runtime/kb_next.py approved-filing ... --json` call (the
+hook text has the exact flags). Otherwise a new record or a content change
+starts with
 `python .kb-next/runtime/kb_next.py filing-proposal --input @candidate.json --category FATO --domain operations --judgment @judgment.json --json`
 (use one of the domains in `.kb/kb.config.json`).
 A HOT demotion, a resolved open item or a retired record starts with
@@ -348,7 +354,12 @@ fresh clone. For KBs created before 0.2.4, run
 
 ## Session End
 
-If shell access is available:
+In a KB/Wiki vNext project, use the plugin command `vnext-session-end`: it
+files approved records, runs `lifecycle session-end` and, with the wiki on,
+`wiki-draft-status`. Curation (`semantic-hygiene` proposals) runs in the
+weekly maintenance run, not at session end, and demotions are denied there.
+
+Elsewhere, if shell access is available:
 
 1. Run `python .kb/kb.py lifecycle session-end --json`. When the wiki is
    enabled this also syncs `.kb/wiki/live`.
@@ -356,8 +367,6 @@ If shell access is available:
    `python .kb/kb.py hygiene-audit --json` before any maintenance action.
 3. If the project needs a stronger retention pass, run
    `python .kb/kb.py lifecycle scheduled-maintenance --apply-demotions --json`.
-   In a KB/Wiki vNext project, write `semantic-hygiene` proposals instead
-   (see KB/Wiki vNext Projects above).
 
 If shell access is not available:
 

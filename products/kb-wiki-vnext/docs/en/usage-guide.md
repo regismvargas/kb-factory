@@ -10,17 +10,17 @@ Project users, admins, and maintainers who need more than install instructions: 
 
 ## Prerequisites
 
-- KB/Wiki vNext `0.2.0-rc.8` installed through a plugin ZIP or the stand-alone bundle.
-- Component identity recorded by the maintainer: product `0.2.0-rc.8`, KB
-  Lifecycle `0.2.8`, plugin container `0.2.4`, bundled runtime `0.2.4`, Session
-  Gate `0.2.10`, and marketplace `0.3.15`.
+- KB/Wiki vNext `0.2.0-rc.9` installed through a plugin ZIP or the stand-alone bundle.
+- Component identity recorded by the maintainer: product `0.2.0-rc.9`, KB
+  Lifecycle `0.2.9`, plugin container `0.2.5`, bundled runtime `0.2.5`, Session
+  Gate `0.2.10`, and marketplace `0.3.16`.
 - A workspace with `.kb/` available as canonical memory.
 - Python available as `python`.
 - Agreement that `.kb-next/` is operational memory, proposal evidence, and draft materialization, not the canonical source of truth.
 
 ## Mental Model
 
-`.kb/` remains canonical. It stores durable project memory and is the only place that should be treated as the source of truth. KB/Wiki vNext reads `.kb/` through supported runtime paths, and only `proposal-apply` may bridge an approved proposal back through `.kb/kb.py`.
+`.kb/` remains canonical. It stores durable project memory and is the only place that should be treated as the source of truth. KB/Wiki vNext reads `.kb/` through supported runtime paths, and only `proposal-apply` (an approved proposal) and `approved-filing` (a record the user approved in chat) may write back through `.kb/kb.py`.
 
 `.kb-next/` is the working layer. It stores activation decisions, session hints, semantic proposals, inference manifests, wiki drafts, materialized review surfaces, adapter exports, and operational evidence. It is designed to help agents work thinly and reviewably without loading the whole project history by default.
 

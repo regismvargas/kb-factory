@@ -7,6 +7,48 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-10-23
+
+Integrity fixes from the review of 2026-10-23. No data or schema change. See
+"Upgrading To 0.2.5" in `products/kb-wiki-vnext/docs/en/upgrade-rollback.md`
+(Portuguese: `products/kb-wiki-vnext/docs/pt-BR/upgrade-rollback.md`).
+
+### Fixed
+- A repeated `proposal-apply` of a proposal already applied returns
+  `already_applied` with the record it wrote and writes nothing. Before, a
+  retry after a lost answer left two ATIVO successors (supersede) or a
+  duplicate record (new). Classic `create --if-source-absent` checks for the
+  proposal's record and inserts in one transaction, so a retry or a
+  concurrent run from any checkout of the same KB gets the first record back.
+- Classic `supersede` takes only an ATIVO record on both paths. The successor
+  and the status change commit together or not at all, so a retry or a
+  concurrent run cannot fork a lineage. `proposal-apply` blocks a supersede
+  whose target is no longer ATIVO.
+- `approved-filing`, `proposal-apply` and wiki materialization refuse a
+  confidence that is NaN, infinite or outside [0, 1]; `proposal-apply`
+  checks the draft's confidence too, which is the value the KB stores.
+- A supersede that names another domain than its target is refused; it used
+  to report success while the record kept the old domain.
+- HOT curation counts stale records toward the excess before it picks
+  overflow candidates, so it no longer proposes extra demotions.
+
+### Known limitations
+- Accepted in the final review because they only block conservatively:
+  two concurrent applies of the same supersede proposal leave
+  the second `blocked` (the classic ATIVO guard refuses it) instead of
+  `already_applied`; a `retire` apply killed after the classic write and
+  before its manifest makes the retry report `invalid_retire_target`. Neither
+  writes twice. If the classic engine's help fails while `proposal-apply`
+  probes for `--if-source-absent`, the apply is blocked instead of running an
+  unguarded `create`.
+
+### Changed
+- The kb-lifecycle skill follows the vNext hook text at session start and
+  sends the vNext close to `vnext-session-end`. The product docs name
+  `approved-filing` beside `proposal-apply` as the governed write paths.
+- Lines: KB Lifecycle 0.2.9, KB/Wiki vNext plugin and runtime 0.2.5, Session
+  Gate 0.2.10 (unchanged), marketplace 0.3.16, product 0.2.0-rc.9.
+
 ## [0.2.4] - 2026-10-23
 
 Every vNext session now starts with no call and closes with one or two, and

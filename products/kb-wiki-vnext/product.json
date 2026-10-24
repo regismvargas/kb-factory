@@ -1,16 +1,16 @@
 {
   "name": "kb-wiki-vnext",
-  "version": "0.2.0-rc.8",
+  "version": "0.2.0-rc.9",
   "status": "release-candidate",
   "summary": "Public KB/Wiki vNext product package for controlled team and admin distribution.",
   "component_versions": {
-    "product": "0.2.0-rc.8",
-    "python": "0.2.4",
-    "marketplace": "0.3.15",
-    "kb_lifecycle": "0.2.8",
-    "kb_wiki_vnext": "0.2.4",
+    "product": "0.2.0-rc.9",
+    "python": "0.2.5",
+    "marketplace": "0.3.16",
+    "kb_lifecycle": "0.2.9",
+    "kb_wiki_vnext": "0.2.5",
     "session_gate": "0.2.10",
-    "runtime": "0.2.4"
+    "runtime": "0.2.5"
   },
   "source_paths": [
     "core/versions/kb-wiki-vnext/runtime/kb_next.py",
@@ -29,10 +29,10 @@
     "tests/test_vnext_runtime_shipping.py"
   ],
   "distribution_channels": {
-    "codex_plugin_zip": "dist/agent-packages/kb-wiki-vnext-plugin-0.2.4.zip",
-    "claude_code_plugin_zip": "dist/agent-packages/kb-wiki-vnext-claude-plugin-0.2.4.zip",
-    "claude_cowork_plugin_zip": "dist/agent-packages/kb-wiki-vnext-cowork-plugin-0.2.4.zip",
-    "standalone_bundle": "dist/vnext/kb-wiki-vnext-0.2.0-rc.8-standalone.zip"
+    "codex_plugin_zip": "dist/agent-packages/kb-wiki-vnext-plugin-0.2.5.zip",
+    "claude_code_plugin_zip": "dist/agent-packages/kb-wiki-vnext-claude-plugin-0.2.5.zip",
+    "claude_cowork_plugin_zip": "dist/agent-packages/kb-wiki-vnext-cowork-plugin-0.2.5.zip",
+    "standalone_bundle": "dist/vnext/kb-wiki-vnext-0.2.0-rc.9-standalone.zip"
   },
   "required_checks": [
     "python tools\\gate.py",

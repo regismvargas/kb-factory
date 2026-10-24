@@ -37,7 +37,7 @@ python .\.kb-next\runtime\kb_next.py session-start --json
 Confirm product package:
 
 ```powershell
-python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.8-standalone.zip
+python tools\validate_vnext_product.py --bundle dist\vnext\kb-wiki-vnext-0.2.0-rc.9-standalone.zip
 ```
 
 For runtime examples and safe conversation prompts, see the [detailed usage guide](usage-guide.md).

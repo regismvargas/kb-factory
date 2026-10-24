@@ -3,8 +3,8 @@
 Purpose: package the KB/Wiki vNext thin-memory harness separately from
 classic `kb-lifecycle` and `session-gate`.
 
-Release-candidate identities: plugin `0.2.4`, bundled runtime `0.2.4`, product
-`0.2.0-rc.8`, Session Gate companion `0.2.10`, and marketplace `0.3.15`.
+Release-candidate identities: plugin `0.2.5`, bundled runtime `0.2.5`, product
+`0.2.0-rc.9`, Session Gate companion `0.2.10`, and marketplace `0.3.16`.
 
 Audience: users installing the pilot, agents running vNext sessions, and
 maintainers validating package shape before distribution.
@@ -85,9 +85,9 @@ Prerequisites:
 
 | Platform artifact | Manifest | Components |
 |---|---|---|
-| `kb-wiki-vnext-plugin-0.2.4.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/`, `scripts/` |
-| `kb-wiki-vnext-claude-plugin-0.2.4.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
-| `kb-wiki-vnext-cowork-plugin-0.2.4.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-plugin-0.2.5.zip` | `.codex-plugin/plugin.json` plus `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/` with Codex UI metadata, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-claude-plugin-0.2.5.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
+| `kb-wiki-vnext-cowork-plugin-0.2.5.zip` | `.claude-plugin/plugin.json` | `AGENTS.md`, `skills/`, `commands/`, `hooks/`, `runtime/`, `scripts/` |
 
 The Claude Code and Cowork ZIPs use the same root-level plugin layout. They do
 not contain an extra `kb-wiki-vnext/` wrapper directory.

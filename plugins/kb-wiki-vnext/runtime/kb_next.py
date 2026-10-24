@@ -58,7 +58,7 @@ WIKI_MATERIALIZATION_MIN_CONFIDENCE = 0.8
 ADAPTERS_REL = Path(".kb-next") / "adapters"
 OBSIDIAN_ADAPTER = "obsidian_static_markdown"
 OBSIDIAN_DESIGN_VERSION = "obsidian_static_markdown_design_v1"
-RUNTIME_VERSION = "0.2.4"
+RUNTIME_VERSION = "0.2.5"
 # Classic lifecycle events that keep an enabled classic wiki current. Mirrors
 # WIKI_SYNC_EVENTS in the classic runtime (core/runtime/wiki.py).
 CLASSIC_WIKI_SYNC_EVENTS = ("record_filed", "source_ingest", "session_end", "scheduled_maintenance")
@@ -4100,7 +4100,8 @@ def build_mechanical_hygiene_groups(root: Path, records: list[dict[str, Any]]) -
                 }
             )
 
-    overflow_needed = max(0, len(hot_records) - hot_limit)
+    # Stale candidates already count toward the excess; only the rest needs overflow picks.
+    overflow_needed = max(0, len(hot_records) - hot_limit - len(demote_ids))
     for record in sorted(
         hot_records,
         key=lambda item: (
@@ -4308,6 +4309,63 @@ def applied_proposal_ids(root: Path) -> set[str]:
         if isinstance(manifest, dict) and manifest.get("status") == "applied" and manifest.get("proposal_id"):
             applied.add(str(manifest["proposal_id"]))
     return applied
+
+
+def canonical_apply_roots(root: Path) -> list[Path]:
+    """Apply manifests of this checkout and, in a linked worktree that shares the main KB, of the main checkout."""
+    roots = [proposal_apply_manifests_root(root)]
+    owner = classic_kb_root(root).parent / PROPOSAL_APPLY_MANIFESTS_REL
+    if owner.resolve() != roots[0].resolve():
+        roots.append(owner)
+    return roots
+
+
+def prior_proposal_apply(root: Path, proposal_id: str) -> dict[str, Any] | None:
+    """An earlier apply of this proposal, for a clear `already_applied`.
+
+    Best effort only: the classic write itself refuses a second record
+    (`create --if-source-absent`, the ATIVO guard of `supersede`).
+    """
+    for directory in canonical_apply_roots(root):
+        for path in sorted(directory.glob("*.json")):
+            try:
+                manifest = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if (
+                isinstance(manifest, dict)
+                and manifest.get("status") == "applied"
+                and str(manifest.get("proposal_id") or "") == proposal_id
+            ):
+                return manifest
+    try:
+        return canonical_record_from_proposal(root, proposal_id)
+    except (OSError, sqlite3.Error):
+        return None
+
+
+def proposal_record_source(proposal_id: str) -> str:
+    return f"kb-wiki-vnext approved proposal {proposal_id}"
+
+
+def canonical_record_from_proposal(root: Path, proposal_id: str) -> dict[str, Any] | None:
+    """The record an earlier apply wrote, read from the canonical KB itself.
+
+    `new` and `supersede` store the proposal's source unless the draft names
+    one, so this finds an apply made from any checkout that writes this KB,
+    including applies older than this check.
+    """
+    conn = open_classic_kb_readonly(root)
+    try:
+        row = conn.execute(
+            "SELECT id FROM records WHERE source = ? ORDER BY created_at LIMIT 1",
+            (proposal_record_source(proposal_id),),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    return {"status": "applied", "apply_id": f"record {row['id']}", "canonical_record_id": row["id"]}
 
 
 def hygiene_target_still_qualifies(action: Any, record: sqlite3.Row | None) -> bool:
@@ -4723,6 +4781,11 @@ def coerce_float(value: Any) -> float | None:
         return None
 
 
+def confidence_out_of_range(value: float | None) -> bool:
+    """True for NaN, an infinity or a value outside [0, 1]: a floor comparison alone lets NaN through."""
+    return value is not None and not (math.isfinite(value) and 0.0 <= value <= 1.0)
+
+
 def first_present(*values: Any) -> Any:
     for value in values:
         if value is not None:
@@ -4862,9 +4925,11 @@ def canonical_create_command(root: Path, proposal_id: str, record_draft: dict[st
             "--tier",
             str(record_draft.get("tier") or "WARM"),
             "--source",
-            str(record_draft.get("source") or f"kb-wiki-vnext approved proposal {proposal_id}"),
+            str(record_draft.get("source") or proposal_record_source(proposal_id)),
         ]
     )
+    if not record_draft.get("source") and classic_supports_option(root, "create", "--if-source-absent", strict=True):
+        cmd.append("--if-source-absent")
     add_optional_cli_arg(cmd, "--tags", tags_arg(record_draft.get("tags")))
     add_optional_cli_arg(cmd, "--tier-reason", record_draft.get("tier_reason"))
     add_optional_cli_arg(cmd, "--review-after", record_draft.get("review_after"))
@@ -4896,7 +4961,7 @@ def canonical_supersede_command(
     add_optional_cli_arg(cmd, "--title", record_draft.get("title"))
     add_optional_cli_arg(cmd, "--content", record_draft.get("content"))
     add_optional_cli_arg(cmd, "--tier", record_draft.get("tier") or "WARM")
-    add_optional_cli_arg(cmd, "--source", record_draft.get("source") or f"kb-wiki-vnext approved proposal {proposal_id}")
+    add_optional_cli_arg(cmd, "--source", record_draft.get("source") or proposal_record_source(proposal_id))
     add_optional_cli_arg(cmd, "--tags", tags_arg(record_draft.get("tags")))
     add_optional_cli_arg(cmd, "--tier-reason", record_draft.get("tier_reason"))
     add_optional_cli_arg(cmd, "--review-after", record_draft.get("review_after"))
@@ -4965,8 +5030,12 @@ def canonical_retire_command(root: Path, target_record_id: str, replacement_id: 
     ]
 
 
-def classic_supports_option(root: Path, subcommand: str, option: str) -> bool:
-    """True when the project's classic engine lists `option` in `kb.py <subcommand> --help`."""
+def classic_supports_option(root: Path, subcommand: str, option: str, *, strict: bool = False) -> bool:
+    """True when the project's classic engine lists `option` in `kb.py <subcommand> --help`.
+
+    `strict` raises when the help itself fails, for an option whose absence
+    would drop a guard: only a help that ran may say the engine lacks it.
+    """
     try:
         script = classic_kb_script(root)
         result = subprocess.run(
@@ -4976,8 +5045,12 @@ def classic_supports_option(root: Path, subcommand: str, option: str) -> bool:
             capture_output=True,
             check=False,
         )
-    except OSError:
+    except OSError as exc:
+        if strict:
+            raise RuntimeError(f"classic engine probe failed: {exc}") from exc
         return False
+    if strict and result.returncode != 0:
+        raise RuntimeError(f"classic engine probe failed: kb.py {subcommand} --help exited {result.returncode}")
     return option in result.stdout
 
 
@@ -4994,6 +5067,14 @@ def supersede_category_change(root: Path, record_draft: dict[str, Any], target: 
     if not classic_supports_option(root, "supersede", "--category"):
         return None, ["unsupported_action:supersede that changes the category needs classic supersede --category; run upgrade-classic"]
     return str(category), []
+
+
+def supersede_domain_problems(record_draft: dict[str, Any], target: Any) -> list[str]:
+    """Classic supersede keeps the target's domain, so a draft naming another one would be reported but not stored."""
+    domain = record_draft.get("domain")
+    if target is None or not domain or str(domain) == str(target["domain"]):
+        return []
+    return [f"invalid_domain_change:{target['domain']}->{domain}"]
 
 
 def run_canonical_command(root: Path, cmd: list[str]) -> dict[str, Any]:
@@ -5016,6 +5097,7 @@ def apply_blocking_warning(warning: str) -> bool:
         or warning == "low_confidence"
         or warning.startswith("low_confidence:")
         or warning.startswith("unknown_")
+        or warning.startswith("inactive_")
         or warning.startswith("invalid_")
         or warning.startswith("record_draft_missing_")
         or warning.startswith("missing_")
@@ -5159,6 +5241,18 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         return finalize_proposal_apply(root, apply_manifest, json_mode=args.json)
 
     proposal_id = str(proposal.get("proposal_id") or proposal_path.stem)
+    # A retry of an applied proposal must not write again: a second supersede
+    # would fork the lineage and a second `new` would duplicate the record.
+    # The classic transaction enforces it; this check only names the outcome.
+    prior = prior_proposal_apply(root, proposal_id)
+    if prior is not None:
+        apply_manifest["status"] = "already_applied"
+        apply_manifest["action"] = prior.get("action")
+        apply_manifest["target_record_id"] = prior.get("target_record_id")
+        apply_manifest["prior_apply_id"] = prior.get("apply_id")
+        apply_manifest["canonical_record_id"] = prior.get("canonical_record_id")
+        apply_manifest["warnings"] = [f"already_applied:{prior.get('apply_id')}"]
+        return finalize_proposal_apply(root, apply_manifest, json_mode=args.json)
     manifest_id = proposal.get("manifest_id")
     apply_manifest["source_llm_manifest_id"] = manifest_id
     if not manifest_id:
@@ -5221,8 +5315,17 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
     apply_manifest["confidence"] = confidence
     if confidence is None:
         warnings.append("missing_confidence")
+    elif confidence_out_of_range(confidence):
+        warnings.append(f"invalid_confidence:{confidence}")
+        apply_manifest["confidence"] = None
     elif confidence < min_confidence:
         warnings.append(f"low_confidence:{confidence}")
+    # The draft's own confidence is what the classic command stores.
+    draft_confidence = record_draft.get("confidence")
+    if draft_confidence is not None:
+        draft_value = coerce_float(draft_confidence)
+        if draft_value is None or confidence_out_of_range(draft_value):
+            warnings.append(f"invalid_confidence:{draft_confidence}")
 
     provenance = proposal.get("provenance") or (source_manifest or {}).get("provenance_pointers") or []
     warnings.extend(provenance_problems(root, provenance))
@@ -5233,12 +5336,14 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         warnings.extend(target_errors)
         if target_record_id:
             target_records = fetch_records_by_ids(root, [target_record_id])
-            if target_record_id not in target_records:
+            target = target_records.get(target_record_id)
+            if target is None:
                 warnings.append(f"unknown_supersede_target:{target_record_id}")
-            category_change, category_errors = supersede_category_change(
-                root, record_draft, target_records.get(target_record_id)
-            )
+            elif target["status"] != "ATIVO":
+                warnings.append(f"inactive_supersede_target:{target_record_id}")
+            category_change, category_errors = supersede_category_change(root, record_draft, target)
             warnings.extend(category_errors)
+            warnings.extend(supersede_domain_problems(record_draft, target))
             apply_manifest["target_record_id"] = target_record_id
     elif action in {"demote_hot", "resolve", "retire"}:
         # The approved proposal names its target; `--target-record-id` may only repeat it.
@@ -5301,9 +5406,15 @@ def cmd_proposal_apply(args: argparse.Namespace) -> int:
         apply_manifest["canonical_command"] = canonical_cmd
         write_json(proposal_apply_manifest_path(root, apply_id), apply_manifest)
         canonical_result = run_canonical_command(root, canonical_cmd)
-        apply_manifest["status"] = "applied"
         apply_manifest["canonical_result"] = canonical_result
         apply_manifest["canonical_record_id"] = canonical_result.get("id") or target_record_id
+        if canonical_result.get("existing"):
+            # A concurrent or earlier apply wrote this proposal's record first.
+            apply_manifest["status"] = "already_applied"
+            warnings.append(f"already_applied:record {apply_manifest['canonical_record_id']}")
+            apply_manifest["warnings"] = dedupe_strings(warnings)
+        else:
+            apply_manifest["status"] = "applied"
     except Exception as exc:
         apply_manifest["status"] = "blocked"
         apply_manifest["warnings"] = dedupe_strings([*warnings, f"canonical_apply_failed:{exc}"])
@@ -5368,7 +5479,9 @@ def cmd_approved_filing(args: argparse.Namespace) -> int:
     record_draft, warnings = validate_record_draft(record_draft)
     if not args.approval_note or not args.approval_note.strip():
         warnings.append("missing_approval_note")
-    if args.confidence < min_confidence:
+    if confidence_out_of_range(args.confidence):
+        warnings.append(f"invalid_confidence:{args.confidence}")
+    elif args.confidence < min_confidence:
         warnings.append(f"low_confidence:{args.confidence}")
     warnings.extend(provenance_problems(root, provenance))
     category_change: str | None = None
@@ -5381,6 +5494,7 @@ def cmd_approved_filing(args: argparse.Namespace) -> int:
         else:
             category_change, category_errors = supersede_category_change(root, record_draft, target)
             warnings.extend(category_errors)
+            warnings.extend(supersede_domain_problems(record_draft, target))
     duplicates = same_title_records(root, args.title, args.supersedes)
     if duplicates:
         warnings.append("duplicate_title:" + ",".join(duplicates))
@@ -5764,6 +5878,8 @@ def cmd_wiki_draft_review(args: argparse.Namespace) -> int:
 
     if confidence is None:
         warnings.append("missing_confidence")
+    elif confidence_out_of_range(confidence):
+        warnings.append(f"invalid_confidence:{confidence}")
     elif confidence < args.min_confidence:
         warnings.append(f"confidence_below_materialization_threshold:{confidence}")
 

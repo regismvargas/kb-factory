@@ -637,3 +637,254 @@ def test_session_gate_startup_runs_against_the_main_checkout(classic_template: P
     assert (Path(details["project_root"]) / ".kb-next" / "memory" / "NOW.md").is_file()
     assert "python <runtime_ref> --project-root <vnext.details.project_root> session-start --json" in command
     assert "`<vnext.details.project_root>/.kb-next/memory/NOW.md`" in command
+
+
+# ---------------------------------------------------------------------------
+# Review of 2026-10-23: replays, confidence range and domain on supersede
+# ---------------------------------------------------------------------------
+
+
+def approved_filing(root: Path, *argv: str) -> tuple[int, dict]:
+    return run_kb_next(
+        root, "approved-filing", "--category", "FATO", "--content", "Approved in chat.", "--record-id", "DEC-NEW",
+        "--approval-note", "approved in chat", "--actor", "test-approver", "--actor-runtime", "human", *argv,
+    )
+
+
+def new_record_proposal(root: Path, title: str, confidence: float = 0.9, drafted=None) -> str:
+    draft = {"category": "FATO", "domain": "operations", "title": title, "content": f"{title}."}
+    if drafted is not None:
+        draft["confidence"] = drafted
+    judgment = {"action": "new", "record_draft": draft, "confidence": confidence, "rationale": "New fact.",
+                "provenance": [{"record_id": "DEC-NEW"}], "conflicts": []}
+    candidate = {"title": title, "content": f"{title}.", "source": "test"}
+    return kb_next_json(
+        root, "filing-proposal", "--input", json.dumps(candidate), "--category", "FATO", "--domain", "operations",
+        "--judgment", json.dumps(judgment),
+    )["proposal_id"]
+
+
+def test_a_version_supersede_refuses_a_record_already_superseded(classic_only: Path) -> None:
+    first = classic(classic_only, "supersede", "FACT-OLD", "--content", "The release tool is the gate.")
+
+    again = run_classic(classic_only, "supersede", "FACT-OLD", "--content", "A second successor.", "--json")
+
+    assert again.returncode != 0
+    assert "Only an ATIVO record can be superseded: FACT-OLD is SUPERSEDIDO" in again.stderr
+    successors = [r["id"] for r in records(classic_only).values() if r["supersedes_id"] == "FACT-OLD"]
+    assert successors == [first["id"]]
+
+
+def test_a_replayed_supersede_proposal_writes_nothing(vnext: Path) -> None:
+    draft = {"category": "FATO", "domain": "operations", "title": "The release tool is the gate",
+             "content": "Releases run through the gate since CASE was retired."}
+    item = {"record_id": "FACT-OLD", "record_draft": draft, "rationale": "Newer information.", "confidence": 0.9}
+    proposal_id = write_hygiene(vnext, hygiene_judgment([item], ["FACT-OLD"]))["proposal_ids"][0]
+    first = apply(vnext, proposal_id)
+    after_first = records(vnext)
+
+    replay = apply(vnext, proposal_id)
+
+    assert first["status"] == "applied", first["warnings"]
+    assert replay["status"] == "already_applied"
+    assert replay["canonical_record_id"] == first["canonical_record_id"]
+    assert replay["warnings"] == [f"already_applied:{first['apply_id']}"]
+    assert records(vnext) == after_first
+
+
+def test_a_replayed_new_record_proposal_writes_nothing(vnext: Path) -> None:
+    proposal_id = new_record_proposal(vnext, "Releases are tagged after the gate")
+    first = apply(vnext, proposal_id)
+    after_first = records(vnext)
+
+    replay = apply(vnext, proposal_id)
+
+    assert first["status"] == "applied", first["warnings"]
+    assert (replay["status"], replay["canonical_record_id"]) == ("already_applied", first["canonical_record_id"])
+    assert records(vnext) == after_first
+
+
+def test_an_apply_stopped_after_the_classic_write_is_found_in_the_canonical_kb(vnext: Path) -> None:
+    proposal_id = new_record_proposal(vnext, "Releases need a changelog")
+    first = apply(vnext, proposal_id)
+    manifest_path = Path(first["paths"]["apply_manifest"])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["status"] = "applying"  # what a run killed after the classic write leaves behind
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    before = records(vnext)
+
+    replay = apply(vnext, proposal_id)
+
+    assert (replay["status"], replay["canonical_record_id"]) == ("already_applied", first["canonical_record_id"])
+    assert replay["warnings"] == [f"already_applied:record {first['canonical_record_id']}"]
+    assert records(vnext) == before
+
+
+def test_an_old_apply_whose_manifest_stayed_in_another_worktree_is_still_found(
+    vnext_template: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KB_FACTORY_WORKTREE_SCOPE", "shared")
+    main, worktree = linked_pair(vnext_template, tmp_path)
+    proposal_id = new_record_proposal(main, "Releases are mirrored")
+    for part in ("proposals", "manifests"):
+        shutil.copytree(main / ".kb-next" / part, worktree / ".kb-next" / part, dirs_exist_ok=True)
+    first = apply(worktree, proposal_id)  # its manifest stays in the worktree
+    before = records(main)
+
+    replay = apply(main, proposal_id)
+
+    assert (replay["status"], replay["canonical_record_id"]) == ("already_applied", first["canonical_record_id"])
+    assert records(main) == before
+
+
+@pytest.mark.parametrize("applied_in", ["main", "worktree"])
+def test_a_linked_worktree_and_its_main_checkout_share_the_replay_guard(
+    vnext_template: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, applied_in: str
+) -> None:
+    monkeypatch.setenv("KB_FACTORY_WORKTREE_SCOPE", "shared")  # conftest defaults tests to local
+    main, worktree = linked_pair(vnext_template, tmp_path)
+    proposal_id = new_record_proposal(main, "Releases are announced")
+    for part in ("proposals", "manifests"):
+        shutil.copytree(main / ".kb-next" / part, worktree / ".kb-next" / part, dirs_exist_ok=True)
+    first_root, second_root = (main, worktree) if applied_in == "main" else (worktree, main)
+    first = apply(first_root, proposal_id)
+    before = records(main)
+
+    replay = apply(second_root, proposal_id)
+
+    assert first["status"] == "applied", first["warnings"]
+    assert (replay["status"], replay["canonical_record_id"]) == ("already_applied", first["canonical_record_id"])
+    assert records(main) == before
+
+
+def test_two_worktrees_on_a_classic_main_write_one_record_for_one_proposal(
+    classic_template: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("KB_FACTORY_WORKTREE_SCOPE", "shared")
+    main, first_wt = linked_pair(classic_template, tmp_path)
+    second_wt = Path(shutil.copytree(classic_template, tmp_path / "wt2"))
+    gitdir = main / ".git" / "worktrees" / "wt2"
+    gitdir.mkdir(parents=True)
+    (gitdir / "commondir").write_text("../..\n", encoding="utf-8")
+    (second_wt / ".git").write_text(f"gitdir: {gitdir.as_posix()}\n", encoding="utf-8")
+    for worktree in (first_wt, second_wt):
+        kb_next_json(worktree, "activation-wizard", "--mode", "short", "--choice", "kb-alone")
+    proposal_id = new_record_proposal(first_wt, "Releases are reviewed twice")
+    for part in ("proposals", "manifests"):
+        shutil.copytree(first_wt / ".kb-next" / part, second_wt / ".kb-next" / part, dirs_exist_ok=True)
+    first = apply(first_wt, proposal_id)
+    before = records(main)
+    # The second run checked before the first one wrote: only the classic
+    # transaction on the shared KB stands between it and a second record.
+    monkeypatch.setattr(kb_next, "prior_proposal_apply", lambda root, proposal_id: None)
+
+    racing = apply(second_wt, proposal_id)
+
+    assert first["status"] == "applied", first["warnings"]
+    assert (racing["status"], racing["canonical_record_id"]) == ("already_applied", first["canonical_record_id"])
+    assert records(main) == before
+
+
+def test_create_if_source_absent_returns_the_record_with_that_source(classic_only: Path) -> None:
+    argv = ["create", "--category", "FATO", "--domain", "operations", "--title", "Gate first",
+            "--content", "Releases go through the gate.", "--source", "kb-wiki-vnext approved proposal filing-x"]
+    first = classic(classic_only, *argv)
+    before = records(classic_only)
+
+    again = classic(classic_only, *argv[:-1], "kb-wiki-vnext approved proposal filing-x", "--if-source-absent")
+    other = classic(classic_only, *argv[:-1], "kb-wiki-vnext approved proposal filing-y", "--if-source-absent")
+
+    assert (again["id"], again["existing"]) == (first["id"], True)
+    assert "existing" not in other and other["id"] != first["id"]
+    assert set(records(classic_only)) == set(before) | {other["id"]}
+
+
+def test_a_supersede_that_loses_the_race_leaves_no_successor(classic_only: Path) -> None:
+    # Another supersede commits between the status check and this write.
+    script = """
+import argparse, sqlite3, sys
+sys.path.insert(0, ".")
+from runtime import records
+original = records.insert_record
+def racing_insert(conn, data, action="create", **kwargs):
+    other = sqlite3.connect("kb.db")
+    other.execute("UPDATE records SET status = 'SUPERSEDIDO', replacement_id = 'DEC-NEW' WHERE id = 'FACT-OLD'")
+    other.commit()
+    other.close()
+    return original(conn, data, action, **kwargs)
+records.insert_record = racing_insert
+fields = dict.fromkeys(dest for _, dest in records.SUPERSEDE_VERSION_FLAGS)
+fields.update(record_id="FACT-OLD", replacement_id=None, new_id="FACT-RACE", content="The losing successor.", json=True)
+records.cmd_supersede(argparse.Namespace(**fields), emit=lambda *args, **kwargs: None)
+"""
+    result = subprocess.run([sys.executable, "-B", "-c", script], text=True, capture_output=True,
+                            cwd=str(classic_only / ".kb"))
+
+    assert result.returncode != 0
+    assert "FACT-OLD changed during this supersede" in result.stderr
+    after = records(classic_only)
+    assert "FACT-RACE" not in after
+    assert (after["FACT-OLD"]["status"], after["FACT-OLD"]["replacement_id"]) == ("SUPERSEDIDO", "DEC-NEW")
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "1.1", "-0.1"])
+def test_approved_filing_refuses_a_confidence_outside_zero_to_one(vnext: Path, value: str) -> None:
+    before = records(vnext)
+
+    code, payload = approved_filing(vnext, "--domain", "operations", "--title", f"Range {value}", f"--confidence={value}")
+
+    assert code == 1
+    assert payload["status"] == "blocked"
+    assert any(warning.startswith("invalid_confidence:") for warning in payload["warnings"]), payload["warnings"]
+    assert records(vnext) == before
+
+
+@pytest.mark.parametrize(("judged", "drafted"), [(1.5, None), (0.9, 1.5), (0.9, "nan")])
+def test_proposal_apply_refuses_a_confidence_outside_zero_to_one(vnext: Path, judged: float, drafted) -> None:
+    # The judgment's confidence gates the apply; the draft's is what the classic command stores.
+    proposal_id = new_record_proposal(vnext, "Releases need two reviews", confidence=judged, drafted=drafted)
+    before = records(vnext)
+
+    applied = apply(vnext, proposal_id)
+
+    assert applied["status"] == "blocked"
+    assert any(warning.startswith("invalid_confidence:") for warning in applied["warnings"]), applied["warnings"]
+    assert records(vnext) == before
+
+
+def test_a_supersede_that_changes_the_domain_is_refused(vnext: Path) -> None:
+    config_path = vnext / ".kb" / "kb.config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["domains"].append("finance")
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    before = records(vnext)
+
+    code, payload = approved_filing(
+        vnext, "--domain", "finance", "--title", "The release tool is the gate", "--confidence", "0.9",
+        "--supersedes", "FACT-OLD",
+    )
+
+    assert code == 1
+    assert "invalid_domain_change:operations->finance" in payload["warnings"]
+    assert records(vnext) == before
+
+
+def test_a_failed_engine_probe_blocks_the_apply_instead_of_dropping_the_guard(
+    vnext: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proposal_id = new_record_proposal(vnext, "Releases are probed")
+    original = kb_next.subprocess.run
+
+    def failing_help(cmd, *args, **kwargs):
+        if "--help" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, "", "crashed")
+        return original(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(kb_next.subprocess, "run", failing_help)
+    before = records(vnext)
+
+    applied = apply(vnext, proposal_id)
+
+    assert applied["status"] == "blocked"
+    assert any("classic engine probe failed" in warning for warning in applied["warnings"]), applied["warnings"]
+    assert records(vnext) == before
